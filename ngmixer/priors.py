@@ -6,11 +6,22 @@ import fitsio
 def set_priors(conf):
     """
     Sets priors for each model.
+    
     Currently only separable priors can be set.
     """
+
+    from ngmix.joint_prior import PriorSimpleSep
+    from ngmix.priors import ZDisk2D
+
+    g_prior_flat=ZDisk2D(1.0)
     model_pars=conf['model_pars']
+
+    assert 'nband' in conf,'# of bands nband must be in config dic conf when setting priors'
     
+    # set comps
     for model,params in model_pars.iteritems():
+        print("loading prior for:",model)
+        
         set_cen_prior(params)
         set_g_prior(params)
         set_T_prior(params)
@@ -23,25 +34,13 @@ def set_priors(conf):
         if 'fracdev_prior_file' in params:
             set_fracdev_prior(params)
 
-def unpack_priors(conf,nband):    
-    from ngmix.joint_prior import PriorSimpleSep
-    from ngmix.priors import ZDisk2D
-
-    g_prior_flat=ZDisk2D(1.0)
-
-    model_pars=conf['model_pars']
-    
-    for model, params in model_pars.iteritems():
-        print("loading prior for:",model)
-
-        counts_prior_repeat=params.get('counts_prior_repeat',False)
         cp = params['counts_prior']
         if counts_prior_repeat:
-            cp = [cp]*nband
-        else:
-            mess=("counts prior must be length "
-                  "%d, bot %d" % (nband,len(cp)) )
-            assert len(cp)==nband,mess
+            cp = [cp]*conf['nband']
+
+        mess=("counts prior must be length "
+              "%d, got %d" % (conf['nband'],len(cp)) )
+        assert len(cp) == conf['nband'],mess
             
         print("    full")
         prior = PriorSimpleSep(params['cen_prior'],
