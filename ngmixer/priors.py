@@ -4,6 +4,10 @@ import ngmix
 import fitsio
 
 def set_priors(conf):
+    """
+    Sets priors for each model.
+    Currently only separable priors can be set.
+    """
     model_pars=conf['model_pars']
     
     for model,params in model_pars.iteritems():
@@ -12,10 +16,48 @@ def set_priors(conf):
         set_T_prior(params)
         
         counts_prior_repeat=params.get('counts_prior_repeat',False)
+        if counts_prior_repeat:
+            print("repeating counts prior for model '%s'" % model)
         set_counts_prior(params, repeat=counts_prior_repeat)
 
         if 'fracdev_prior_file' in params:
             set_fracdev_prior(params)
+
+def unpack_priors(conf,nband):    
+    from ngmix.joint_prior import PriorSimpleSep
+    from ngmix.priors import ZDisk2D
+
+    g_prior_flat=ZDisk2D(1.0)
+
+    model_pars=conf['model_pars']
+    
+    for model, params in model_pars.iteritems():
+        print("loading prior for:",model)
+
+        counts_prior_repeat=params.get('counts_prior_repeat',False)
+        cp = params['counts_prior']
+        if counts_prior_repeat:
+            cp = [cp]*nband
+        else:
+            mess=("counts prior must be length "
+                  "%d, bot %d" % (nband,len(cp)) )
+            assert len(cp)==nband,mess
+            
+        print("    full")
+        prior = PriorSimpleSep(params['cen_prior'],
+                               params['g_prior'],
+                               params['T_prior'],
+                               cp)
+        
+        # for the exploration, for which we do not apply g prior during
+        print("    gflat")
+        gflat_prior = PriorSimpleSep(params['cen_prior'],
+                                     g_prior_flat,
+                                     params['T_prior'],
+                                     cp)
+        
+        params['prior'] = prior
+        params['gflat_prior'] = gflat_prior
 
 def set_T_prior(params):
     typ=params['T_prior_type']
@@ -60,6 +102,7 @@ def set_counts_prior(params, repeat=False):
 def set_fracdev_prior(params):
     fname=os.path.expanduser( params['fracdev_prior_file'] )
     fname=os.path.expandvars( fname )
+    print("reading fracdev_prior:",fname)
     data = fitsio.read(fname)
     
     weights=data['weights']
