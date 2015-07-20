@@ -16,7 +16,7 @@ def set_priors(conf):
     g_prior_flat=ZDisk2D(1.0)
     model_pars=conf['model_pars']
 
-    assert 'nband' in conf,'# of bands nband must be in config dic conf when setting priors'
+    assert 'nband' in conf,'# of bands nband must be in config dict conf when setting priors'
     
     # set comps
     for model,params in model_pars.iteritems():
