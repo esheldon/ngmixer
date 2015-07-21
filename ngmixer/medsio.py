@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+from __future__ import print_function
+import os
+import numpy
+
+# meds and ngmix imports
+import meds
+from ngmix import Jacobian
+from ngmix import Observation, ObsList, MultiBandObsList
+from .nbrsfofs import get_dummy_fofs
+
+# flagging
+IMAGE_FLAGS_SET=2**0
+IMAGE_FLAGS=2**8
 
 class MEDSImageIO(object):
     """
@@ -15,7 +28,15 @@ class MEDSImageIO(object):
 			    
 	# load meds files and image flags array
 	self._load_meds_files()
-	
+
+        # set extra config
+        self.iband = range(len(self.meds_list))
+	self.conf['nband'] = len(self.meds_list)
+
+        self.conf['reject_outliers'] = self.conf.get('reject_outliers',True) # from cutouts
+        if self.conf['reject_outliers']:
+            print("will reject outliers")
+
 	self.conf['use_mof_fofs'] = self.conf.get('use_mof_fofs',False)
 	if self.conf['use_mof_fofs']:
 	    assert False,"Need to setup FoF reading code!"
@@ -23,12 +44,9 @@ class MEDSImageIO(object):
 	    self.fof_data = get_dummy_fofs(self.meds_list[0]['number'])
 	
 	self._set_and_check_index_lookups()
-	
+        
 	self.psfex_lists = self._get_psfex_lists()
 
-	# some defaults
-	self.iband = range(len(self.meds_list))
-	self.conf['nband'] = len(self.meds_list)
 
     def _set_and_check_index_lookups(self):
 	"""
@@ -60,6 +78,9 @@ class MEDSImageIO(object):
 	issue here, in terms of building the dicts, for large numbers of objects.
 	"""
 
+        # warn the user
+        print('making indexes')
+
 	# first, we error check
 	for band,meds in enumerate(self.meds_list):
 	    assert numpy.array_equal(meds['number'],self.fof_data['number']),"FoF number is not the same as MEDS number for band %d!" % band
@@ -70,7 +91,6 @@ class MEDSImageIO(object):
 
         #build the fof hash
 	self.fofid2mindex = {}
-	self.number2mindex = {}
 	for fofid in self.fofids:
 	    q, = numpy.where(self.fof_data['fofid'] == fofid)
 	    assert len(q) > 0, 'Found zero length FoF! fofid = %ld' % fofid
@@ -180,7 +200,7 @@ class MEDSImageIO(object):
 
             band_flags.append(flags)
 
-        band_flags = np.array(band_flags,dtype='i8')
+        band_flags = numpy.array(band_flags,dtype='i8')
         
         return coadd_obs_list, obs_list, band_flags
 
@@ -263,7 +283,19 @@ class MEDSImageIO(object):
         if w[0].size > 0:
             wt[w] = 0.0
         return wt
-        
+
+    def _convert_jacobian_dict(self, jdict):
+        """
+        Get the jacobian for the input meds index and cutout index
+        """
+        jacob=Jacobian(jdict['row0'],
+                       jdict['col0'],
+                       jdict['dudrow'],
+                       jdict['dudcol'],
+                       jdict['dvdrow'],
+                       jdict['dvdcol'])
+        return jacob
+    
     def _get_jacobian(self, meds, mindex, icut):
         """
         Get a Jacobian object for the requested object
@@ -334,8 +366,9 @@ class MEDSImageIO(object):
 	self.meds_meta_list=[]
 	self.all_image_flags=[]
 
-	for i,f in enumerate(self.meds_files):
-	    print(f)
+	for i,funexp in enumerate(self.meds_files):
+            f = os.path.expandvars(funexp)
+            print(f)
 	    medsi=meds.MEDS(f)
 	    medsi_meta=medsi.get_meta()
 	    image_info=medsi.get_image_info()
@@ -410,6 +443,8 @@ class MEDSImageIO(object):
 
 	    psfpath='/'.join(psfparts)
 
+        return psfpath
+            
     def _get_psfex_objects(self, meds, band):
 	"""
 	Load psfex objects for all images, including coadd
@@ -470,7 +505,7 @@ class SVMOFMEDSImageIO(MEDSImageIO):
 	print('loading WCS')
 	wcs_transforms = {}
 	for band in self.iband:
-	    mname = self.conf.['meds_files_full'][band]
+	    mname = self.conf['meds_files_full'][band]
 	    wcsname = mname.replace('-meds-','-meds-wcs-').replace('.fits.fz','.fits').replace('.fits','.json')
 	    print('loading: %s' % wcsname)
 	    try:

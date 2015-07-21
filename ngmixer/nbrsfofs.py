@@ -6,6 +6,13 @@ import numpy
 import fitsio
 from .util import PBar
 
+def get_dummy_fofs(numbers):
+    nobj = len(numbers)
+    fofs = numpy.zeros(nobj,dtype=[('fofid','i8'),('number','i8')])
+    fofs['fofid'][:] = numpy.arange(nobj)
+    fofs['number'][:] = numbers[:] #subscript should make a copy
+    return fofs
+
 class MedsNbrs(object):
     """
     Gets nbrs of any postage stamp in the MEDS.
