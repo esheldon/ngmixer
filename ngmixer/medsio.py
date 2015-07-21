@@ -102,6 +102,9 @@ class MEDSImageIO(object):
             self.fofindex += 1
             return coadd_mb_obs_lists,se_mb_obs_lists,meta_data
 
+    # python 2
+    next = __next__
+        
     def _get_multi_band_observations(self, mindex):
         """
         Get an ObsList object for the Coadd observations
@@ -111,12 +114,7 @@ class MEDSImageIO(object):
         coadd_mb_obs_list=MultiBandObsList()
         mb_obs_list=MultiBandObsList()
         
-        # number used in each band
-        n_im = numpy.zeros(self.conf['nband'],dtype='i4')
-
-        band_flags = []
-        # only append if good ones found, can use to demand the length is
-        # nband.  But we want to finish to set the psfrec info
+        image_flags = []
         for band in self.iband:
             cobs_list, obs_list, flags = self._get_band_observations(band, mindex)
 
@@ -124,18 +122,16 @@ class MEDSImageIO(object):
                 coadd_mb_obs_list.append(cobs_list)
 
             nme = len(obs_list)
-            n_im[band] = nme
-
+            
             if nme > 0:
                 if self.conf['reject_outliers']:
                     self._reject_outliers(obs_list)
                 mb_obs_list.append(obs_list)
 
-            band_flags.append(flags)
+            image_flags.append(flags)
 
         meta = {}
-        meta['n_im'] = n_im
-        meta['band_flags'] = band_flags
+        meta['image_flags'] = image_flags
         
         return coadd_mb_obs_list, mb_obs_list, meta
     
@@ -167,7 +163,7 @@ class MEDSImageIO(object):
         coadd_obs_list = ObsList()
         obs_list       = ObsList()
 
-        band_flags = np.zeros(ncutout,dtype='i8')
+        band_flags = []
         
         for icut in xrange(ncutout):
             iflags = image_flags[icut]
@@ -181,9 +177,11 @@ class MEDSImageIO(object):
                 else:
                     obs_list.append(obs)
                 flags=0
-            
-            band_flags[icut] = flags
-            
+
+            band_flags.append(flags)
+
+        band_flags = np.array(band_flags,dtype='i8')
+        
         return coadd_obs_list, obs_list, band_flags
 
     def _get_image_flags(self, band, mindex):
