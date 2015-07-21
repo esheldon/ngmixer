@@ -1,17 +1,10 @@
 #!/usr/bin/env python
 
-class BaseImageIO(object):
-    def __init__(self):
-	assert False,"BaseImageIO abstract method '__init__' must be redefined!"
+class MEDSImageIO(object):
+    """
+    Class for MEDS image I/O.
+    """
     
-    def __iter__(self):
-	return self
-
-    def __next__(self):
-	assert False,"BaseImageIO abstract method '__next__' must be redefined!"
-    next = __next__
-
-class MEDSImageIO(BaseImageIO):
     def __init__(self,conf,meds_files):
 	self.conf = conf
 
