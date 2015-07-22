@@ -11,7 +11,10 @@ from .nbrsfofs import get_dummy_fofs
 
 # flagging
 IMAGE_FLAGS_SET=2**0
-IMAGE_FLAGS=2**8
+IMAGE_FLAGS=2**0
+
+# defaults
+DEFVAL = -9999
 
 class MEDSImageIO(object):
     """
@@ -25,7 +28,7 @@ class MEDSImageIO(object):
 	    self.meds_files = [meds_files]
 	else:
 	    self.meds_files =  meds_files
-			    
+
 	# load meds files and image flags array
 	self._load_meds_files()
 
@@ -37,12 +40,6 @@ class MEDSImageIO(object):
         if self.conf['reject_outliers']:
             print("will reject outliers")
 
-	self.conf['use_mof_fofs'] = self.conf.get('use_mof_fofs',False)
-	if self.conf['use_mof_fofs']:
-	    assert False,"Need to setup FoF reading code!"
-	else:
-	    self.fof_data = get_dummy_fofs(self.meds_list[0]['number'])
-	
 	self._set_and_check_index_lookups()
         
 	self.psfex_lists = self._get_psfex_lists()
@@ -80,26 +77,40 @@ class MEDSImageIO(object):
 
         # warn the user
         print('making indexes')
-
+        
+	self.conf['use_mof_fofs'] = self.conf.get('use_mof_fofs',False)
+        read_fofs = False
+        if self.conf['use_mof_fofs']:
+            read_fofs = True
+            assert False,"Need to setup FoF reading code!"
+	else:
+            nobj = len(self.meds_list[0]['number'])
+	    self.fof_data = numpy.zeros(nobj,dtype=[('fofid','i8'),('number','i8')])
+            self.fof_data['fofid'][:] = numpy.arange(nobj)
+            self.fof_data['number'][:] = self.meds_list[0]['number'][:]
+        
 	# first, we error check
 	for band,meds in enumerate(self.meds_list):
 	    assert numpy.array_equal(meds['number'],self.fof_data['number']),"FoF number is not the same as MEDS number for band %d!" % band
 
 	#set some useful stuff here
 	self.fofids = numpy.unique(self.fof_data['fofid'])
+        self.fofids = numpy.sort(self.fofids)
         self.num_fofs = len(self.fofids)
 
-        #build the fof hash
-	self.fofid2mindex = {}
-	for fofid in self.fofids:
-	    q, = numpy.where(self.fof_data['fofid'] == fofid)
-	    assert len(q) > 0, 'Found zero length FoF! fofid = %ld' % fofid
-	    self.fofid2mindex[fofid] = q.copy()
-	    
-	#build the number to mindex hash
-	self.number2mindex = {}
-	for mindex in xrange(self.nobj_tot):
-	    self.number2mindex[self.fof_data['number'][mindex]] = mindex
+        if read_fofs:
+            #build the fof hash
+	    self.fofid2mindex = {}
+	    for fofid in self.fofids:
+	        q, = numpy.where(self.fof_data['fofid'] == fofid)
+	        assert len(q) > 0, 'Found zero length FoF! fofid = %ld' % fofid
+	        self.fofid2mindex[fofid] = q.copy()
+        else:
+            #use a list of lists since is much faster to make
+            self.fofid2mindex = []
+            for fofid in self.fofids:
+                self.fofid2mindex.append([fofid])
+                assert self.fofid2mindex[fofid][0] == fofid
 
     def __iter__(self):
         self.fofindex = 0
@@ -113,18 +124,26 @@ class MEDSImageIO(object):
             mindexes = self.fofid2mindex[fofid]
             coadd_mb_obs_lists = []
             se_mb_obs_lists = []
-            meta_data = []
             for mindex in mindexes:
-                c,se,meta = self._get_multi_band_observations(mindex)
+                c,se = self._get_multi_band_observations(mindex)
                 coadd_mb_obs_lists.append(c)
                 se_mb_obs_lists.append(se)
-                meta_data.append(meta)
             self.fofindex += 1
-            return coadd_mb_obs_lists,se_mb_obs_lists,meta_data
+            return coadd_mb_obs_lists,se_mb_obs_lists
 
     # python 2
     next = __next__
-        
+
+    def _get_meta_row(self,num=1):
+        # build the meta data
+        dt=[('id','i8'),     # could be coadd_objects_id
+            ('number','i4'), # 1-n as in sextractor
+            ]
+        meta_row = numpy.zeros(num,dtype=dt)
+        for tag in meta_row.dtype.names:
+            meta_row[tag][:] = DEFVAL
+        return meta_row
+    
     def _get_multi_band_observations(self, mindex):
         """
         Get an ObsList object for the Coadd observations
@@ -134,39 +153,34 @@ class MEDSImageIO(object):
         coadd_mb_obs_list=MultiBandObsList()
         mb_obs_list=MultiBandObsList()
         
-        image_flags = []
         for band in self.iband:
-            cobs_list, obs_list, flags = self._get_band_observations(band, mindex)
+            cobs_list, obs_list = self._get_band_observations(band, mindex)
+            coadd_mb_obs_list.append(cobs_list)
+            mb_obs_list.append(obs_list)
 
-            if len(cobs_list) > 0:
-                coadd_mb_obs_list.append(cobs_list)
-
-            nme = len(obs_list)
-            
-            if nme > 0:
-                if self.conf['reject_outliers']:
-                    self._reject_outliers(obs_list)
-                mb_obs_list.append(obs_list)
-
-            image_flags.append(flags)
-
-        meta = {}
-        meta['image_flags'] = image_flags
+        meta_row = self._get_meta_row()
+        meta_row['id'][0] = self.meds_list[0]['id'][mindex]
+        meta_row['number'][0] = self.meds_list[0]['number'][mindex]
+        meta = {'meta_row':meta_row}
         
-        return coadd_mb_obs_list, mb_obs_list, meta
+        coadd_mb_obs_list.update_meta_data(meta)
+        mb_obs_list.update_meta_data(meta)
+        
+        return coadd_mb_obs_list, mb_obs_list
     
     def _reject_outliers(self, obs_list):
         imlist=[]
         wtlist=[]
         for obs in obs_list:
-            imlist.append(obs.image)
-            wtlist.append(obs.weight)
+            if obs.meta['flags'] == 0:
+                imlist.append(obs.image)
+                wtlist.append(obs.weight)
             
-            # weight map is modified
-            nreject=meds.reject_outliers(imlist,wtlist)
-            if nreject > 0:
-                print('        rejected:',nreject)
-    
+        # weight map is modified
+        nreject=meds.reject_outliers(imlist,wtlist)
+        if nreject > 0:
+            print('        rejected:',nreject)
+            
     def _get_band_observations(self, band, mindex):
         """
         Get an ObsList for the coadd observations in each band
@@ -183,26 +197,28 @@ class MEDSImageIO(object):
         coadd_obs_list = ObsList()
         obs_list       = ObsList()
 
-        band_flags = []
-        
         for icut in xrange(ncutout):
             iflags = image_flags[icut]
             if iflags != 0:
                 flags = IMAGE_FLAGS
+                obs = Observation(numpy.zeros((0,0)))
             else:
                 obs = self._get_band_observation(band, mindex, icut)
-                
-                if icut==0:
-                    coadd_obs_list.append( obs )
-                else:
-                    obs_list.append(obs)
                 flags=0
 
-            band_flags.append(flags)
+            # set flags
+            meta = {'flags':flags}
+            obs.update_meta_data(meta)
+            
+            if icut==0:
+                coadd_obs_list.append(obs)
+            else:
+                obs_list.append(obs)
 
-        band_flags = numpy.array(band_flags,dtype='i8')
+        if self.conf['reject_outliers'] and len(obs_list) > 0:
+            self._reject_outliers(obs_list)
         
-        return coadd_obs_list, obs_list, band_flags
+        return coadd_obs_list, obs_list
 
     def _get_image_flags(self, band, mindex):
         """
@@ -216,11 +232,26 @@ class MEDSImageIO(object):
         image_flags = self.all_image_flags[band][file_ids]
         
         return image_flags
+
+    def _get_epoch_meta_row(self,num=1):
+        # build the meta data
+        dt=[('id','i8'),     # could be coadd_objects_id
+            ('number','i4'), # 1-n as in sextractor
+            ('band_num','i2'),
+            ('cutout_index','i4'), # this is the index in meds
+            ('orig_row','f8'),
+            ('orig_col','f8'),
+            ('file_id','i4'),   # id in meds file
+            ('image_id','i8'),  # image_id specified in meds creation, e.g. for image table
+            ]
+        meta_row = numpy.zeros(num,dtype=dt)
+        for tag in meta_row.dtype.names:
+            meta_row[tag][:] = DEFVAL
+        return meta_row
     
     def _get_band_observation(self, band, mindex, icut):
         """
         Get an Observation for a single band.
-        GMixMaxIterEM is raised if psf fitting fails
         """
         meds=self.meds_list[band]
 
@@ -241,11 +272,25 @@ class MEDSImageIO(object):
 
         obs.filename=fname
 
+        # fill meta data to be included in output files
+        meta_row = self._get_epoch_meta_row()
+        meta_row['id'][0] = meds['id'][mindex]
+        meta_row['number'][0] = meds['number'][mindex]
+        meta_row['band_num'][0] = band
+        meta_row['cutout_index'][0] = icut
+        meta_row['orig_row'][0] = meds['orig_row'][mindex,icut]
+        meta_row['orig_col'][0] = meds['orig_col'][mindex,icut]
+        file_id  = meds['file_id'][mindex,icut].astype('i4')
+        image_id = meds._image_info[file_id]['image_id']
+        meta_row['file_id'][0]  = file_id
+        meta_row['image_id'][0]  = image_id
+        
         meta={'icut':icut,
               'orig_start_row':meds['orig_start_row'][mindex, icut],
-              'orig_start_col':meds['orig_start_col'][mindex, icut]}
+              'orig_start_col':meds['orig_start_col'][mindex, icut],
+              'meta_row':meta_row}
         obs.update_meta_data(meta)
-
+        
         return obs
 
     def _get_meds_orig_filename(self, meds, mindex, icut):
