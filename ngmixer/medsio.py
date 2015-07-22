@@ -8,14 +8,10 @@ import logging
 import meds
 from ngmix import Jacobian
 from ngmix import Observation, ObsList, MultiBandObsList
-from .nbrsfofs import get_dummy_fofs
 from .defaults import DEFVAL,IMAGE_FLAGS,LOGGERNAME
-# flagging
-IMAGE_FLAGS_SET=2**0
-IMAGE_FLAGS=2**0
 
-# defaults
-DEFVAL = -9999
+# internal flagging
+IMAGE_FLAGS_SET=2**0
 
 # logging
 log = logging.getLogger(LOGGERNAME)
