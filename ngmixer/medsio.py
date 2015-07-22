@@ -532,7 +532,7 @@ class MEDSImageIO(object):
 SVMEDSImageIO = MEDSImageIO
 
 # SV multifit with one-off WCS
-class SVMOFMEDSImageIO(MEDSImageIO):
+class SVMOFMEDSImageIO(SVMEDSImageIO):
     def __init__(self,conf,meds_files):
         super(SVMOFMEDSImageIO,self).__init__(conf,meds_files)
 
