@@ -2,19 +2,23 @@
 from __future__ import print_function
 import os
 import numpy
+import logging
 
 # meds and ngmix imports
 import meds
 from ngmix import Jacobian
 from ngmix import Observation, ObsList, MultiBandObsList
 from .nbrsfofs import get_dummy_fofs
-
+from .defaults import DEFVAL,IMAGE_FLAGS,LOGGERNAME
 # flagging
 IMAGE_FLAGS_SET=2**0
 IMAGE_FLAGS=2**0
 
 # defaults
 DEFVAL = -9999
+
+# logging
+log = logging.getLogger(LOGGERNAME)
 
 class MEDSImageIO(object):
     """
@@ -38,7 +42,7 @@ class MEDSImageIO(object):
 
         self.conf['reject_outliers'] = self.conf.get('reject_outliers',True) # from cutouts
         if self.conf['reject_outliers']:
-            print("will reject outliers")
+            log.info("will reject outliers")
 
 	self._set_and_check_index_lookups()
         
@@ -76,7 +80,7 @@ class MEDSImageIO(object):
 	"""
 
         # warn the user
-        print('making indexes')
+        log.info('making fof indexes')
         
 	self.conf['use_mof_fofs'] = self.conf.get('use_mof_fofs',False)
         read_fofs = False
@@ -179,7 +183,7 @@ class MEDSImageIO(object):
         # weight map is modified
         nreject=meds.reject_outliers(imlist,wtlist)
         if nreject > 0:
-            print('        rejected:',nreject)
+            log.info('        rejected:',nreject)
             
     def _get_band_observations(self, band, mindex):
         """
@@ -378,8 +382,7 @@ class MEDSImageIO(object):
         file_id=meds['file_id'][mindex,icut]
 
         pex=self.psfex_lists[band][file_id]
-        #print("    using psfex from:",pex['filename'])
-
+        
         row=meds['orig_row'][mindex,icut]
         col=meds['orig_col'][mindex,icut]
 
@@ -394,7 +397,7 @@ class MEDSImageIO(object):
 
 	if not hasattr(self,'_replacement_flags'):
 	    fname=os.path.expandvars(self.conf['replacement_flags'])
-	    print("Reading replacement flags:",fname)
+	    log.info("reading replacement flags: %s" % fname)
 	    self._replacement_flags=CombinedImageFlags(fname)
 	
 	default=self.conf['image_flags2check']
@@ -413,8 +416,8 @@ class MEDSImageIO(object):
 
 	for i,funexp in enumerate(self.meds_files):
             f = os.path.expandvars(funexp)
-            print(f)
-	    medsi=meds.MEDS(f)
+            log.info('band %d meds: %s' % (i,f))
+            medsi=meds.MEDS(f)
 	    medsi_meta=medsi.get_meta()
 	    image_info=medsi.get_image_info()
 
@@ -429,7 +432,8 @@ class MEDSImageIO(object):
 	    self.meds_meta_list.append(medsi_meta)
 	    image_flags=image_info['image_flags'].astype('i8')
 	    if self.conf['replacement_flags'] is not None and image_flags.size > 1:
-		image_flags[1:] = \
+                log.info("    replacing image flags")
+                image_flags[1:] = \
 		    self._get_replacement_flags(image_info['image_path'][1:])
 
 	    # now we reduce the flags to zero or IMAGE_FLAGS_SET
@@ -438,7 +442,7 @@ class MEDSImageIO(object):
 
 	    w,=numpy.where( (cimage_flags & self.conf['image_flags2check']) != 0)
 
-	    print("    flags set for: %d/%d" % (w.size,cimage_flags.size))
+	    log.info("    flags set for: %d/%d" % (w.size,cimage_flags.size))
 
 	    cimage_flags[:] = 0
 	    if w.size > 0:
@@ -455,7 +459,7 @@ class MEDSImageIO(object):
 	Load psfex objects for each of the SE images
 	include the coadd so we get  the index right
 	"""
-	print('loading psfex')
+	log.info('loading psfex')
 	desdata=os.environ['DESDATA']
 	meds_desdata=self.meds_list[0]._meta['DESDATA'][0]
 
@@ -513,14 +517,14 @@ class MEDSImageIO(object):
 		psfpath = self._psfex_path_from_image_path(meds, impath)
 
 		if not os.path.exists(psfpath):
-		    print("warning: missing psfex: %s" % psfpath)
+		    log.info("warning: missing psfex: %s" % psfpath)
 		    self.all_image_flags[band][i] |= self.conf['image_flags2check']
 		else:
-		    print("loading:",psfpath)
+		    log.debug("loading: %s" % psfpath)
 		    try:
 			pex=PSFEx(psfpath)
 		    except PSFExError as err:
-			print("	   problem with psfex file:",str(err))
+			log.info("problem with psfex file: %s " % str(err))
 			pex=None
     
 	    psfex_list.append(pex)
