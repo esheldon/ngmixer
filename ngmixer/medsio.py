@@ -21,10 +21,11 @@ class MEDSImageIO(object):
     Class for MEDS image I/O.
     """
     
-    def __init__(self,conf,meds_files):
-	self.conf = conf
+    def __init__(self,*args,**kwargs):
+	self.conf = args[0]
 
-	if not isinstance(meds_files, list):
+        meds_files = args[1]        
+        if not isinstance(meds_files, list):
 	    self.meds_files = [meds_files]
 	else:
 	    self.meds_files =  meds_files
