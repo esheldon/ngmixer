@@ -12,7 +12,7 @@ log = logging.getLogger(defaults.LOGGERNAME)
 log.setLevel(logging.INFO)
 
 # setup image i/o dict
-# each time you create a new image io class, add it to this dict
+# each time you create a new image i/o class, add it to this dict
 IMAGEIO = {}
 IMAGEIO['MEDS'] = medsio.MEDSImageIO
 IMAGEIO['SVMEDS'] = medsio.SVMEDSImageIO
