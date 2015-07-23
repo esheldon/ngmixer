@@ -136,7 +136,7 @@ class MEDSImageIO(ImageIO):
     next = __next__
 
     def get_num_fofs(self):
-        return copy.copy(self.num_fofs)
+        return copy.copy(self.num_fofs - self.fof_start)
     
     def get_num_bands(self):
         """"

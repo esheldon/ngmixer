@@ -59,15 +59,17 @@ class NGMixER(dict):
         Fit all objects in our list
         """
 
+        log.info('doing fits')
+        
         t0=time.time()
         num = 0
         numtot = self.imageio.get_num_fofs()
         
         for coadd_mb_obs_lists,mb_obs_lists in self.imageio:
-            log.info('index: %d:%d' % (self.curr_fofindex+1,self.numtot))
+            log.info('index: %d:%d' % (self.curr_fofindex+1,numtot))
 
             foflen = len(mb_obs_lists)            
-            for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_list):
+            for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
                 if foflen > 1:
                     log.info('    fof obj: %d:%d' % (num,foflen))
 
