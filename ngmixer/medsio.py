@@ -8,6 +8,9 @@ import logging
 import meds
 from ngmix import Jacobian
 from ngmix import Observation, ObsList, MultiBandObsList
+
+# local imports
+from .imageio import ImageIO
 from .defaults import DEFVAL,IMAGE_FLAGS,LOGGERNAME
 
 # internal flagging
@@ -16,13 +19,15 @@ IMAGE_FLAGS_SET=2**0
 # logging
 log = logging.getLogger(LOGGERNAME)
 
-class MEDSImageIO(object):
+class MEDSImageIO(ImageIO):
     """
     Class for MEDS image I/O.
     """
     
     def __init__(self,*args,**kwargs):
-	self.conf = args[0]
+        super(MEDSImageIO, self).__init__()
+        
+        self.conf = args[0]
 
         meds_files = args[1]        
         if not isinstance(meds_files, list):
@@ -44,7 +49,6 @@ class MEDSImageIO(object):
 	self._set_and_check_index_lookups()
         
 	self.psfex_lists = self._get_psfex_lists()
-
 
     def _set_and_check_index_lookups(self):
 	"""
@@ -113,10 +117,6 @@ class MEDSImageIO(object):
                 self.fofid2mindex.append([fofid])
                 assert self.fofid2mindex[fofid][0] == fofid
 
-    def __iter__(self):
-        self.fofindex = 0
-        return self
-        
     def __next__(self):
         if self.fofindex >= self.num_fofs:
             raise StopIteration
@@ -132,9 +132,22 @@ class MEDSImageIO(object):
             self.fofindex += 1
             return coadd_mb_obs_lists,se_mb_obs_lists
 
-    # python 2
     next = __next__
+        
+    def get_num_bands(self):
+        """"
+        returns number of bands for galaxy images
+        """
+        return self.conf['nbands']
+    
+    def get_meta_data_dtype(self):
+        row = self._get_meta_row()        
+        return row.dtype.descr
 
+    def get_epoch_meta_data_dtype(self):
+        row = self._get_epoch_meta_row()
+        return row.dtype.descr
+    
     def _get_meta_row(self,num=1):
         # build the meta data
         dt=[('id','i8'),     # could be coadd_objects_id
