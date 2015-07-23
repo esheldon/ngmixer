@@ -6,7 +6,7 @@ import time
 
 # local imports
 from . import imageio
-from .defaults import NO_ATTEMPT,DEFVAL,LOGGERNAME,_CHECKPOINTS_DEFAULT_MINUTES
+from .defaults import LOGGERNAME,_CHECKPOINTS_DEFAULT_MINUTES
 
 # logging
 log = logging.getLogger(LOGGERNAME)
