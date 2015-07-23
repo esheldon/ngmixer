@@ -138,7 +138,7 @@ class MEDSImageIO(ImageIO):
         """"
         returns number of bands for galaxy images
         """
-        return self.conf['nbands']
+        return self.conf['nband']
     
     def get_meta_data_dtype(self):
         row = self._get_meta_row()        
