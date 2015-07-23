@@ -90,7 +90,7 @@ class NGMixER(dict):
         """
         fits a single object
         """
-        raise NotImplementedError("fit_obj of NGMixER must be defined in subclass.")
+        raise NotImplementedError("fit_obj method of NGMixER must be defined in subclass.")
         
     def _get_epoch_dtype(self):
         """
