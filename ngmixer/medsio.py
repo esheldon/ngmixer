@@ -3,6 +3,7 @@ from __future__ import print_function
 import os
 import numpy
 import logging
+import copy
 
 # meds and ngmix imports
 import meds
@@ -133,20 +134,23 @@ class MEDSImageIO(ImageIO):
             return coadd_mb_obs_lists,se_mb_obs_lists
 
     next = __next__
-        
+
+    def get_num_fofs(self):
+        return copy.copy(self.num_fofs)
+    
     def get_num_bands(self):
         """"
         returns number of bands for galaxy images
         """
-        return self.conf['nband']
+        return copy.copy(self.conf['nband'])
     
     def get_meta_data_dtype(self):
         row = self._get_meta_row()        
-        return row.dtype.descr
+        return copy.copy(row.dtype.descr)
 
     def get_epoch_meta_data_dtype(self):
         row = self._get_epoch_meta_row()
-        return row.dtype.descr
+        return copy.copy(row.dtype.descr)
     
     def _get_meta_row(self,num=1):
         # build the meta data
@@ -175,8 +179,8 @@ class MEDSImageIO(ImageIO):
         meta_row = self._get_meta_row()
         meta_row['id'][0] = self.meds_list[0]['id'][mindex]
         meta_row['number'][0] = self.meds_list[0]['number'][mindex]
-        meta = {'meta_row':meta_row}
-        
+        meta = {'meta_row':meta_row,'meds_index':mindex}
+
         coadd_mb_obs_list.update_meta_data(meta)
         mb_obs_list.update_meta_data(meta)
         

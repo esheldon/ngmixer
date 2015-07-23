@@ -2,6 +2,7 @@
 from __future__ import print_function
 import logging
 import numpy
+import time
 
 # local imports
 from . import imageio
@@ -45,35 +46,52 @@ class NGMixER(dict):
             self.epoch_data_dtype = self._get_epoch_dtype()
 
     def _set_some_defaults(self):
-        self['fit_models'] = list(self['model_pars'].keys())
-        self['max_box_size']=self.get('max_box_size',2048)
-        self['make_plots']=self.get('make_plots',False)
         self['work_dir'] = self.get('work_dir','.')
-        self['fit_coadd_galaxy'] = self.get('fit_coadd_galaxy',False)
-        self['fit_me_galaxy'] = self.get('fit_me_galaxy',True)
-
+                
     def get_data(self):
         return numpy.array(self.data,dtype=self.data_dtype)
 
     def get_epoch_data(self):
         return numpy.array(self.epoch_data,dtype=self.epoch_data_dtype)
-        
-    def _get_all_models(self):
+
+    def do_fits(self):
         """
-        get all model names, includeing the coadd_ ones
-        
-        might be useful for all fitters, but not used here
+        Fit all objects in our list
         """
-        models=[]
+
+        t0=time.time()
+        num = 0
+        numtot = self.imageio.get_num_fofs()
         
-        if self['fit_coadd_galaxy']:
-            models = models + ['coadd_%s' % model for model in self['fit_models']]
+        for coadd_mb_obs_lists,mb_obs_lists in self.imageio:
+            log.info('index: %d:%d' % (self.curr_fofindex+1,self.numtot))
+
+            foflen = len(mb_obs_lists)            
+            for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_list):
+                if foflen > 1:
+                    log.info('    fof obj: %d:%d' % (num,foflen))
+
+                num += 1
+                ti = time.time()
+                self.fit_obj(coadd_mb_obs_list,mb_obs_list)
+                ti = time.time()-ti
+                log.info('    time:',ti)
+
+            self.curr_fofindex += 1
             
-        if self['fit_me_galaxy']:
-            models = models + se;f['fit_models']
+            tm=time.time()-t0                
+            self._try_checkpoint(tm)
+            
+        tm=time.time()-t0
+        log.info("time:",tm)
+        log.info("time per:",tm/num)
 
-        return models
-
+    def fit_obj(self,coadd_mb_obs_list,mb_obs_list):
+        """
+        fits a single object
+        """
+        raise NotImplementedError("fit_obj of NGMixER must be defined in subclass.")
+        
     def _get_epoch_dtype(self):
         """
         makes epoch dtype

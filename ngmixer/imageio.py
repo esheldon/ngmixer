@@ -80,7 +80,13 @@ class ImageIO(object):
     
     def set_fof_start(self,start):
         self.fof_start = start
-         
+
+    def get_num_fofs(self):
+        """
+        returns # of fofs code will yeild
+        """
+        raise NotImplementedError("get_num_fofs method of ImageIO must be defined in subclass.")
+        
     def __iter__(self):
         self.fofindex = self.fof_start
         return self
