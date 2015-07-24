@@ -69,7 +69,7 @@ class BootNGMixER(NGMixER):
         fit the obs list
         """
 
-        # onyl fit stuff that is not flagged
+        # only fit stuff that is not flagged
         new_mb_obs_list = self._get_good_mb_obs_list(mb_obs_list)
         
         fit_flags = 0
@@ -78,14 +78,14 @@ class BootNGMixER(NGMixER):
         for model in self['fit_models']:
             log.info('    fitting: %s' % model)            
 
-            model_flags, boot = self._run_boot(model,new_mb_obs_list)
+            model_flags, boot = self._run_boot(model,new_mb_obs_list,coadd)
             fit_flags |= model_flags
 
             if make_epoch:
                 make_epoch = False
 
                 # make the epoch data
-
+                
                 # fill in PSF stats
 
             if model_flags & PSF_FIT_FAILURE:
@@ -109,7 +109,7 @@ class BootNGMixER(NGMixER):
         
         return boot
     
-    def _run_boot(self, model, mb_obs_list):
+    def _run_boot(self, model, mb_obs_list, coadd):
         """
         run a boot strapper
         """
@@ -118,21 +118,26 @@ class BootNGMixER(NGMixER):
         boot=self._get_bootstrapper(model,mb_obs_list)
         self.boot=boot
 
+        if coadd:
+            n = Namer('coadd_psf')
+        else:
+            n = Namer('psf')
+        
         try:
             self._fit_psfs()
-            flags |= self._fit_psf_flux()
+            flags |= self._fit_psf_flux(coadd)
 
             if flags == 0:
                 dindex = self.curr_data_index
-                s2n = self.curr_data['psf_flux'][dindex,:]/self.curr_data['psf_flux_err'][dindex,:]
+                s2n = self.curr_data[n('flux')][dindex,:]/self.curr_data[n('flux_err')][dindex,:]
                 max_s2n = numpy.nanmax(s2n)
                 if max_s2n < self['min_psf_s2n']:
                     flags |= LOW_PSF_FLUX
                 
             if flags == 0:
                 try:
-                    self._fit_galaxy(model)
-                    self._copy_galaxy_result(model)
+                    self._fit_galaxy(model,coadd)
+                    self._copy_galaxy_result(model,coadd)
                     self._print_galaxy_result()
                 except (BootGalFailure,GMixRangeError):
                     log.info("    galaxy fitting failed")
@@ -144,13 +149,16 @@ class BootNGMixER(NGMixER):
 
         return flags, boot
 
-    def _fit_psf_flux(self):
+    def _fit_psf_flux(self,coadd):
         self.boot.fit_gal_psf_flux()
 
         res=self.boot.get_psf_flux_result()
 
         dindex = self.curr_data_index
-        n = Namer("psf")
+        if coadd:
+            n = Namer("coadd_psf")
+        else:
+            n = Namer("psf")
         data = self.curr_data
         
         flagsall=0
@@ -195,36 +203,13 @@ class BootNGMixER(NGMixER):
                       Tguess=Tguess,
                       ntry=psf_pars['ntry'])
 
-    def _fit_galaxy(self, model):
+    def _fit_galaxy(self, model, coadd):
         """
         over-ride for different fitters
         """
         raise RuntimeError("over-ride me")
-
- 
-    def _fit_max(self, model):
-        """
-        do a maximum likelihood fit
-
-        note prior applied during
-        """
-        boot=self.boot
-
-        max_pars=self['max_pars']
-        cov_pars=self['cov_pars']
-        prior=self['model_pars'][model]['prior']
-
-        # now with prior
-        boot.fit_max(model,
-                     max_pars,
-                     prior=prior,
-                     ntry=max_pars['ntry'])
-
-        if self['replace_cov']:
-            log.info("        replacing cov")
-            boot.try_replace_cov(cov_pars)
-        
-    def _copy_galaxy_result(self, model):
+    
+    def _copy_galaxy_result(self, model, coadd):
         """
         Copy from the result dict to the output array
         """
@@ -236,7 +221,10 @@ class BootNGMixER(NGMixER):
 
         rres=self.boot.get_round_result()
 
-        n=Namer(model)
+        if coadd:
+            n=Namer('coadd_%s' % model)
+        else:
+            n=Namer(model)
         data=self.curr_data
 
         data[n('flags')][dindex] = res['flags']
@@ -321,10 +309,18 @@ class BootNGMixER(NGMixER):
         simple_npars=5+nband
 
         dt += [('nimage_tot','i4',bshape),
-               ('nimage_use','i4',bshape),
-               ('mask_frac','f8'),
-               ('psfrec_T','f8'),
-               ('psfrec_g','f8', 2)]
+               ('nimage_use','i4',bshape)]
+
+        names = []
+        if self['fit_me_galaxy']:
+            names.append('')
+        if self['fit_coadd_galaxy']:
+            names.append('coadd')
+        for name in names:
+            n = Namer(name)
+            dt += [(n('mask_frac'),'f8'),
+                   (n('psfrec_T'),'f8'),
+                   (n('psfrec_g'),'f8', 2)]
         
         names = []
         if self['fit_me_galaxy']:
@@ -378,11 +374,18 @@ class BootNGMixER(NGMixER):
         make the output structure
         """
         data = super(BootNGMixER,self)._make_struct(num)
-        
-        data['mask_frac'] = DEFVAL
-        data['psfrec_T'] = DEFVAL
-        data['psfrec_g'] = DEFVAL
 
+        names = []
+        if self['fit_me_galaxy']:
+            names.append('')
+        if self['fit_coadd_galaxy']:
+            names.append('coadd')
+        for name in names:
+            n = Namer(name)
+            data[n('mask_frac')] = DEFVAL
+            data[n('psfrec_T')] = DEFVAL
+            data[n('psfrec_g')] = DEFVAL
+        
         names = []
         if self['fit_me_galaxy']:
             names.append('psf')
@@ -426,7 +429,29 @@ class BootNGMixER(NGMixER):
         return data
 
 class MaxBootNGMixER(BootNGMixER):
-    def _fit_galaxy(self, model):
+    def _fit_max(self, model):
+        """
+        do a maximum likelihood fit
+
+        note prior applied during
+        """
+        boot=self.boot
+
+        max_pars=self['max_pars']
+        cov_pars=self['cov_pars']
+        prior=self['model_pars'][model]['prior']
+
+        # now with prior
+        boot.fit_max(model,
+                     max_pars,
+                     prior=prior,
+                     ntry=max_pars['ntry'])
+
+        if self['replace_cov']:
+            log.info("        replacing cov")
+            boot.try_replace_cov(cov_pars)
+
+    def _fit_galaxy(self, model, coadd):
         self._fit_max(model)
 
         rpars=self['round_pars']
@@ -440,8 +465,8 @@ class MaxBootNGMixER(BootNGMixER):
         
         self.gal_fitter=self.boot.get_max_fitter()
 
-class ISampleBootNGMixER(BootNGMixER):
-    def _fit_galaxy(self, model):
+class ISampleBootNGMixER(MaxBootNGMixER):
+    def _fit_galaxy(self, model, coadd):
         self._fit_max(model)
 
         """
@@ -509,15 +534,19 @@ class ISampleBootNGMixER(BootNGMixER):
         res['g_sens'] = g_sens
         res['nuse'] = ls.get_nuse()
 
-    def _copy_galaxy_result(self, model):
-        super(ISampleBootNGMixER,self)._copy_galaxy_result(model)
+    def _copy_galaxy_result(self, model, coadd):
+        super(ISampleBootNGMixER,self)._copy_galaxy_result(model,coadd)
 
         res=self.gal_fitter.get_result()
         if res['flags'] == 0:
 
             dindex=self.curr_data_index
             res=self.gal_fitter.get_result()
-            n=Namer(model)
+
+            if coadd:
+                n=Namer('coadd_%s' % model)
+            else:
+                n=Namer(model)
 
             for f in ['efficiency','neff']:
                 self.curr_data[n(f)][dindex] = res[f]
@@ -543,16 +572,20 @@ class ISampleBootNGMixER(BootNGMixER):
         return d
 
 class CompositeISampleBootNGMixER(ISampleBootNGMixER):
-    def _copy_galaxy_result(self, model):
-        super(CompositeISampleBootNGMixER,self)._copy_galaxy_result(model)
+    def _copy_galaxy_result(self, model, coadd):
+        super(CompositeISampleBootNGMixER,self)._copy_galaxy_result(model,coadd)
 
         res=self.gal_fitter.get_result()
         if res['flags'] == 0:
 
             dindex=self.curr_data_index
             res=self.gal_fitter.get_result()
-            n=Namer(model)
 
+            if coadd:
+                n=Namer('coadd_%s' % model)
+            else:
+                n=Namer(model)
+            
             for f in ['fracdev','fracdev_noclip','fracdev_err','TdByTe']:
                 self.curr_data[n(f)][dindex] = res[f]
 

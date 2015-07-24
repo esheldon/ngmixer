@@ -145,6 +145,7 @@ class NGMixER(dict):
         epoch_data = []
         
         if self['fit_me_galaxy'] and fit_flags == 0:
+            log.info('    fitting me galaxy')
             try:
                 me_fit_flags, me_epoch_data = self.fit_obs_list(mb_obs_list,coadd=False)
                 epoch_data.extend(list(me_epoch_data))
@@ -155,6 +156,7 @@ class NGMixER(dict):
             fit_flags |= me_fit_flags
 
         if self['fit_coadd_galaxy'] and fit_flags == 0:
+            log.info('    fitting coadd galaxy')
             try:
                 coadd_fit_flags, coadd_epoch_data = self.fit_obs_list(coadd_mb_obs_list,coadd=True)
                 epoch_data.extend(list(coadd_epoch_data))
