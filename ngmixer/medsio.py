@@ -197,7 +197,7 @@ class MEDSImageIO(ImageIO):
         # weight map is modified
         nreject=meds.reject_outliers(imlist,wtlist)
         if nreject > 0:
-            log.info('        rejected:',nreject)
+            log.info('        rejected: %d' % nreject)
             
     def _get_band_observations(self, band, mindex):
         """
