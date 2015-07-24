@@ -272,6 +272,12 @@ class BootNGMixER(NGMixER):
             print_pars(res['pars'],    front='    gal_pars: ')
         if 'pars_err' in res:
             print_pars(res['pars_err'],front='    gal_perr: ')
+
+        mres=self.boot.get_max_fitter().get_result()
+        if 's2n_w' in mres:
+            rres=self.boot.get_round_result()
+            tup=(mres['s2n_w'],rres['s2n_r'],mres['chi2per'])
+            log.info("    s2n: %.1f s2n_r: %.1f chi2per: %.3f" % tup)
     
     def _get_lnames(self):
         if self['use_logpars']:
@@ -507,16 +513,6 @@ class ISampleBootNGMixER(BootNGMixER):
 
             for f in ['efficiency','neff']:
                 self.curr_data[n(f)][dindex] = res[f]
-
-    def _print_galaxy_result(self):
-        super(ISampleBootNGMixER,self)._print_galaxy_result()
-        mres=self.boot.get_max_fitter().get_result()
-
-        if 's2n_w' in mres:
-            rres=self.boot.get_round_result()
-            tup=(mres['s2n_w'],rres['s2n_r'],mres['chi2per'])
-            log.info("    s2n: %.1f s2n_r: %.1f chi2per: %.3f" % tup)
-
 
     def _get_dtype(self):
         dt=super(ISampleBootNGMixER,self)._get_dtype()
