@@ -7,6 +7,7 @@ import time
 # local imports
 from . import imageio
 from .defaults import NO_ATTEMPT,DEFVAL,LOGGERNAME,_CHECKPOINTS_DEFAULT_MINUTES
+from .defaults import BOX_SIZE_TOO_BIG,IMAGE_FLAGS
 from .util import UtterFailure
 
 # logging
@@ -100,6 +101,10 @@ class NGMixER(dict):
         """
 
         t0 = time.time()
+
+        for name in mb_obs_list.meta['meta_row'].dtype.names:
+            if 'id' in name:
+                log.info('    id: %d' % mb_obs_list.meta['meta_row'][name][0])
         
         # get data to fill
         self.curr_data = self._make_struct()
@@ -109,6 +114,9 @@ class NGMixER(dict):
         flags = self._obj_check(coadd_mb_obs_list)
         flags |= self._obj_check(mb_obs_list)
 
+        if self.curr_data['box_size'][self.curr_data_index] > 0:
+            log.info('    box_size: %d' % self.curr_data['box_size'][self.curr_data_index])
+        
         if flags == 0:
             try:
                 fit_flags,epoch_data = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list)
@@ -206,7 +214,7 @@ class NGMixER(dict):
         for obs in obs_list:
             if obs.meta['flags'] == 0:
                 box_size = obs.image.shape[0]
-        self.curr_data['box_size'][0] = box_size
+        self.curr_data['box_size'][self.curr_data_index] = box_size
         
         if box_size > self['max_box_size']:
             log.info('    box size too big:',box_size)
