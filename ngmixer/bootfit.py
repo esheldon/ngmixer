@@ -73,26 +73,34 @@ class BootNGMixER(NGMixER):
         new_mb_obs_list = self._get_good_mb_obs_list(mb_obs_list)
         
         fit_flags = 0
-        epoch_data = []
-        make_epoch = True
+        fill_epoch = True
         for model in self['fit_models']:
             log.info('    fitting: %s' % model)            
 
             model_flags, boot = self._run_boot(model,new_mb_obs_list,coadd)
             fit_flags |= model_flags
 
-            if make_epoch:
-                make_epoch = False
-
-                # make the epoch data
+            if fill_epoch:
+                fill_epoch = False
                 
-                # fill in PSF stats
+                # fill the epoch data
+                epoch_data = self._fill_epoch_data(mb_obs_list,boot.mb_obs_list)
+
+                # fill in PSF stats in data rows
+                if (model_flags & PSF_FIT_FAILURE) == 0:
+                    self._do_psf_stats(epoch_data,coadd)
 
             if model_flags & PSF_FIT_FAILURE:
                 break
                 
         return fit_flags,epoch_data
-                                                 
+
+    def _fill_epoch_data(self,mb_obs_list,new_mb_obs_list):
+        return []
+
+    def _do_psf_stats(self,epoch_data,coadd):
+        pass
+    
     def _get_bootstrapper(self, model, mb_obs_list):
         """
         get the bootstrapper for fitting psf through galaxy
@@ -262,6 +270,10 @@ class BootNGMixER(NGMixER):
                     data[n('Q')][dindex,:] = res['Q']
                     data[n('R')][dindex,:,:] = res['R']
 
+            for f in ['fracdev','fracdev_noclip','fracdev_err','TdByTe']:
+                if f in res:
+                    self.curr_data[n(f)][dindex] = res[f]
+                    
     def _print_galaxy_result(self):
         res=self.gal_fitter.get_result()
         if 'pars' in res:
@@ -366,7 +378,13 @@ class BootNGMixER(NGMixER):
             
             if self['do_shear']:
                 dt += [(n('g_sens'), 'f8', 2)]
-            
+
+            if 'cm' in model:
+                dt += [(n('fracdev'),'f4'),
+                       (n('fracdev_noclip'),'f4'),
+                       (n('fracdev_err'),'f4'),
+                       (n('TdByTe'),'f4')]
+                
         return dt
 
     def _make_struct(self,num=1):
@@ -425,6 +443,12 @@ class BootNGMixER(NGMixER):
             
             if self['do_shear']:
                 data[n('g_sens')] = DEFVAL
+
+            if 'cm' in model:
+                data[n('fracdev')] = DEFVAL
+                data[n('fracdev_noclip')] = DEFVAL
+                data[n('fracdev_err')] = DEFVAL
+                data[n('TdByTe')] = DEFVAL
 
         return data
 
@@ -568,45 +592,6 @@ class ISampleBootNGMixER(MaxBootNGMixER):
             n=Namer(model)
             d[n('efficiency')] = DEFVAL
             d[n('neff')] = DEFVAL
-
-        return d
-
-class CompositeISampleBootNGMixER(ISampleBootNGMixER):
-    def _copy_galaxy_result(self, model, coadd):
-        super(CompositeISampleBootNGMixER,self)._copy_galaxy_result(model,coadd)
-
-        res=self.gal_fitter.get_result()
-        if res['flags'] == 0:
-
-            dindex=self.curr_data_index
-            res=self.gal_fitter.get_result()
-
-            if coadd:
-                n=Namer('coadd_%s' % model)
-            else:
-                n=Namer(model)
-            
-            for f in ['fracdev','fracdev_noclip','fracdev_err','TdByTe']:
-                self.curr_data[n(f)][dindex] = res[f]
-
-    def _get_dtype(self):
-        dt=super(CompositeISampleBootNGMixER,self)._get_dtype()
-
-        n=Namer('cm')
-        dt += [(n('fracdev'),'f4'),
-               (n('fracdev_noclip'),'f4'),
-               (n('fracdev_err'),'f4'),
-               (n('TdByTe'),'f4')]
-        
-        return dt
-
-    def _make_struct(self,num=1):
-        d = super(CompositeISampleBootNGMixER,self)._make_struct(num)
-        n=Namer('cm')
-        d[n('fracdev')] = DEFVAL
-        d[n('fracdev_noclip')] = DEFVAL
-        d[n('fracdev_err')] = DEFVAL
-        d[n('TdByTe')] = DEFVAL
 
         return d
 
