@@ -8,7 +8,7 @@ import ngmix
 from ngmix import Observation, ObsList, MultiBandObsList, GMixRangeError
 
 # local imports
-from .defaults import DEFVAL,LOGGERNAME,NO_ATTEMPT,PSF_FIT_FAILURE,GAL_FIT_FAILURE
+from .defaults import DEFVAL,LOGGERNAME,NO_ATTEMPT,PSF_FIT_FAILURE,GAL_FIT_FAILURE,LOW_PSF_FLUX
 from .fitting import NGMixER
 from .util import Namer
 
@@ -50,7 +50,8 @@ class BootNGMixER(NGMixER):
         self['replace_cov'] = self.get('replace_cov',False)
         self['use_logpars'] = self.get('ise_logpars',False)
         self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
-
+        self['min_psf_s2n'] = self.get('min_psf_s2n',-numpy.inf)
+        
     def _get_good_mb_obs_list(self,mb_obs_list):
         new_mb_obs_list = MultiBandObsList()
         for obs_list in mb_obs_list:
@@ -121,6 +122,13 @@ class BootNGMixER(NGMixER):
             self._fit_psfs()
             flags |= self._fit_psf_flux()
 
+            if flags == 0:
+                dindex = self.curr_data_index
+                s2n = self.curr_data['psf_flux'][dindex,:]/self.curr_data['psf_flux_err'][dindex,:]
+                max_s2n = numpy.nanmax(s2n)
+                if max_s2n < self['min_psf_s2n']:
+                    flags |= LOW_PSF_FLUX
+                
             if flags == 0:
                 try:
                     self._fit_galaxy(model)
