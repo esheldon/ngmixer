@@ -1,5 +1,5 @@
 from . import files
-from . import fitting
+from . import ngmixing
 from . import medsio
 from . import priors
 from . import util

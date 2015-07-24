@@ -9,7 +9,7 @@ from ngmix import Observation, ObsList, MultiBandObsList, GMixRangeError
 
 # local imports
 from .defaults import DEFVAL,LOGGERNAME,NO_ATTEMPT,PSF_FIT_FAILURE,GAL_FIT_FAILURE,LOW_PSF_FLUX
-from .fitting import NGMixER
+from .fitting import BaseFitter
 from .util import Namer
 
 # logging

@@ -13,7 +13,7 @@ from .util import UtterFailure
 # logging
 log = logging.getLogger(LOGGERNAME)
 
-class BaseFitter(dict):
+class NGMixER(dict):
     def __init__(self,
                  conf,
                  files,
