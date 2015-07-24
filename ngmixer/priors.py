@@ -1,7 +1,13 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import os
 import ngmix
 import fitsio
+import logging
+
+# logging
+from .defaults import LOGGERNAME
+log = logging.getLogger(LOGGERNAME)
 
 def set_priors(conf):
     """
@@ -20,7 +26,7 @@ def set_priors(conf):
     
     # set comps
     for model,params in model_pars.iteritems():
-        print("loading prior for:",model)
+        log.info("loading prior for: %s" % model)
         
         set_cen_prior(params)
         set_g_prior(params)
@@ -28,7 +34,7 @@ def set_priors(conf):
         
         counts_prior_repeat=params.get('counts_prior_repeat',False)
         if counts_prior_repeat:
-            print("repeating counts prior for model '%s'" % model)
+            log.info("repeating counts prior for model '%s'" % model)
         set_counts_prior(params, repeat=counts_prior_repeat)
 
         if 'fracdev_prior_file' in params:
@@ -42,14 +48,14 @@ def set_priors(conf):
               "%d, got %d" % (conf['nband'],len(cp)) )
         assert len(cp) == conf['nband'],mess
             
-        print("    full")
+        log.info("    full")
         prior = PriorSimpleSep(params['cen_prior'],
                                params['g_prior'],
                                params['T_prior'],
                                cp)
         
         # for the exploration, for which we do not apply g prior during
-        print("    gflat")
+        log.info("    gflat")
         gflat_prior = PriorSimpleSep(params['cen_prior'],
                                      g_prior_flat,
                                      params['T_prior'],

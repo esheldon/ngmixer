@@ -6,7 +6,8 @@ import time
 
 # local imports
 from . import imageio
-from .defaults import LOGGERNAME,_CHECKPOINTS_DEFAULT_MINUTES
+from .defaults import NO_ATTEMPT,DEFVAL,LOGGERNAME,_CHECKPOINTS_DEFAULT_MINUTES
+from .util import UtterFailure
 
 # logging
 log = logging.getLogger(LOGGERNAME)
@@ -28,6 +29,7 @@ class NGMixER(dict):
         self.imageio = imageio_class(conf,files)
         self.curr_fofindex = 0
         self['nband'] = self.imageio.get_num_bands()
+        self.iband = range(self['nband'])
         
         # random numbers
         if random_seed is not None:
@@ -47,7 +49,11 @@ class NGMixER(dict):
 
     def _set_some_defaults(self):
         self['work_dir'] = self.get('work_dir','.')
-                
+        self['make_plots'] = self.get('make_plots',False)
+        self['fit_coadd_galaxy'] = self.get('fit_coadd_galaxy',False)
+        self['fit_me_galaxy'] = self.get('fit_me_galaxy',True)
+        self['max_box_size']=self.get('max_box_size',2048)
+        
     def get_data(self):
         return numpy.array(self.data,dtype=self.data_dtype)
 
@@ -77,7 +83,7 @@ class NGMixER(dict):
                 ti = time.time()
                 self.fit_obj(coadd_mb_obs_list,mb_obs_list)
                 ti = time.time()-ti
-                log.info('    time:',ti)
+                log.info('    time: %f' % ti)
 
             self.curr_fofindex += 1
             
@@ -85,15 +91,129 @@ class NGMixER(dict):
             self._try_checkpoint(tm)
             
         tm=time.time()-t0
-        log.info("time:",tm)
-        log.info("time per:",tm/num)
+        log.info("time: %f" % tm)
+        log.info("time per: %f" % tm/num)
 
     def fit_obj(self,coadd_mb_obs_list,mb_obs_list):
         """
-        fits a single object
+        fit a single object
         """
-        raise NotImplementedError("fit_obj method of NGMixER must be defined in subclass.")
+
+        t0 = time.time()
         
+        # get data to fill
+        self.curr_data = self._make_struct()
+        self.curr_data_index = 0
+        
+        # check flags
+        flags = self._obj_check(coadd_mb_obs_list)
+        flags |= self._obj_check(mb_obs_list)
+
+        if flags == 0:
+            try:
+                fit_flags,epoch_data = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list)
+                self.epoch_data.extend(epoch_data)
+            except UtterFailure as err:
+                log.info("    got utter failure error: %s" % str(err))
+                fit_flags = UTTER_FAILURE
+
+            flags |= fit_flags
+        
+        # add in data
+        self.curr_data['flags'][self.curr_data_index] = flags
+        self.curr_data['time'][self.curr_data_index] = time.time()-t0        
+
+        # fill in from mb_obs_meta
+        for tag in mb_obs_list.meta['meta_row'].dtype.names:
+            self.curr_data[tag][self.curr_data_index] = mb_obs_list.meta['meta_row'][tag][0]
+        
+        self.data.extend(list(self.curr_data))
+
+    def fit_all_obs_lists(self,coadd_mb_obs_list,mb_obs_list):
+        """
+        fit all obs lists
+        """
+
+        fit_flags = 0
+        epoch_data = []
+        
+        if self['fit_me_galaxy'] and fit_flags == 0:
+            try:
+                me_fit_flags, me_epoch_data = self.fit_obs_list(mb_obs_list,coadd=False)
+                epoch_data.extend(list(me_epoch_data))
+            except UtterFailure as err:
+                log.info("    me fit got utter failure error: %s" % str(err))
+                me_fit_flags = UTTER_FAILURE
+
+            fit_flags |= me_fit_flags
+
+        if self['fit_coadd_galaxy'] and fit_flags == 0:
+            try:
+                coadd_fit_flags, coadd_epoch_data = self.fit_obs_list(coadd_mb_obs_list,coadd=True)
+                epoch_data.extend(list(coadd_epoch_data))
+            except UtterFailure as err:
+                log.info("    coadd fit got utter failure error: %s" % str(err))
+                coadd_fit_flags = UTTER_FAILURE
+        
+            fit_flags |= coadd_fit_flags
+        
+        return fit_flags, epoch_data
+    
+    def fit_obs_list(self,mb_obs_list,coadd=False):
+        """
+        do fit of single obs list
+        """
+        raise NotImplementedError("fit_obs_list method of NGMixER must be defined in subclass.")
+        
+    def _obj_check(self, mb_obs_list):
+        """
+        Check box sizes, number of cutouts
+        Require good in all bands
+        """
+        for band,obs_list in enumerate(mb_obs_list):
+            flags=self._obj_check_one(band,obs_list)
+            if flags != 0:
+                break
+        return flags
+
+    def _obj_check_one(self, band, obs_list):
+        """
+        Check box sizes, number of cutouts, flags on images
+        """
+        flags=0
+        
+        ncutout = len(obs_list)
+        
+        if ncutout == 0:
+            log.info('    no cutouts')
+            flags |= NO_CUTOUTS
+            return flags
+        
+        num_use = 0
+        for obs in obs_list:
+            if obs.meta['flags'] == 0:
+                num_use += 1
+                
+        if num_use < ncutout:
+            log.info("    for band %d removed %d/%d images due to flags"
+                     % (band, ncutout-num_use, ncutout))
+            
+        if num_use == 0:
+            flags |= IMAGE_FLAGS
+            return flags
+        
+        box_size = -1
+        for obs in obs_list:
+            if obs.meta['flags'] == 0:
+                box_size = obs.image.shape[0]
+        self.curr_data['box_size'][0] = box_size
+        
+        if box_size > self['max_box_size']:
+            log.info('    box size too big:',box_size)
+            flags |= BOX_SIZE_TOO_BIG
+            
+        return flags
+    
     def _get_epoch_dtype(self):
         """
         makes epoch dtype
@@ -111,6 +231,9 @@ class NGMixER(dict):
     
     def _get_dtype(self):
         dt = self.imageio.get_meta_data_dtype()
+        dt += [('flags','i4'),
+               ('time','f8'),
+               ('box_size','i2')]
         return dt
     
     def _make_struct(self,num=1):
@@ -119,6 +242,9 @@ class NGMixER(dict):
         """
         dt = self._get_dtype()
         data=numpy.zeros(num, dtype=dt)
+        data['flags'] = NO_ATTEMPT
+        data['time'] = DEFVAL
+        data['box_size'] = DEFVAL
         return data
     
     def _setup_checkpoints(self):

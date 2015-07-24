@@ -4,6 +4,7 @@ from . import medsio
 from . import priors
 from . import util
 from . import defaults
+from . import bootfit
 
 # setup logger
 import logging
