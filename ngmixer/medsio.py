@@ -26,7 +26,7 @@ class MEDSImageIO(ImageIO):
     """
     
     def __init__(self,*args,**kwargs):
-        super(MEDSImageIO, self).__init__()
+        super(MEDSImageIO, self).__init__(*args,**kwargs)
         
         self.conf = args[0]
 
@@ -84,12 +84,10 @@ class MEDSImageIO(ImageIO):
         # warn the user
         log.info('making fof indexes')
         
-	self.conf['use_mof_fofs'] = self.conf.get('use_mof_fofs',False)
-        read_fofs = False
-        if self.conf['use_mof_fofs']:
+        if self.fof_data is not None:
             read_fofs = True
-            assert False,"Need to setup FoF reading code!"
-	else:
+        else:
+            read_fofs = False
             nobj = len(self.meds_list[0]['number'])
 	    self.fof_data = numpy.zeros(nobj,dtype=[('fofid','i8'),('number','i8')])
             self.fof_data['fofid'][:] = numpy.arange(nobj)

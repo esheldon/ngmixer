@@ -17,6 +17,8 @@ class NGMixER(dict):
     def __init__(self,
                  conf,
                  files,
+                 fof_data=None,
+                 extra_data=None,
                  random_seed=None,
                  checkpoint_file=None,
                  checkpoint_data=None):
@@ -27,7 +29,7 @@ class NGMixER(dict):
         
         # read the data
         imageio_class = imageio.get_imageio_class(self['imageio_type'])
-        self.imageio = imageio_class(conf,files)
+        self.imageio = imageio_class(conf,files,fof_data=fof_data,extra_data=extra_data)
         self.curr_fofindex = 0
         self['nband'] = self.imageio.get_num_bands()
         self.iband = range(self['nband'])

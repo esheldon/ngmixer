@@ -20,7 +20,7 @@ class ImageIO(object):
     
     class MyImageIO(ImageIO):
         def __init__(self,*args,**kwargs):
-            super(MEDSImageIO, self).__init__()
+            super(MEDSImageIO, self).__init__(*args,**kwargs)
             self.num_fofs = # of mb obs lists to return
             
         def __next__(self):
@@ -48,9 +48,19 @@ class ImageIO(object):
     
     """
     
-    def __init__(self):
+    def __init__(self,*args,**kwargs):
         self.set_fof_start(0)
         self.num_fofs = 0
+
+        if 'fof_data' in kwargs:
+            self.fof_data = kwargs['fof_data']
+        else:
+            self.fof_data = None
+
+        if 'extra_data' in kwargs:
+            self.extra_data = kwargs['extra_data']
+        else:
+            self.extra_data = None
         
     def get_num_bands(self):
         """
