@@ -71,10 +71,9 @@ class NGMixER(dict):
         t0=time.time()
         num = 0
         numtot = self.imageio.get_num_fofs()
-        
-        for coadd_mb_obs_lists,mb_obs_lists in self.imageio:
-            log.info('index: %d:%d' % (self.curr_fofindex+1,numtot))
 
+        log.info('index: %d:%d' % (self.curr_fofindex+1,numtot))
+        for coadd_mb_obs_lists,mb_obs_lists in self.imageio:            
             foflen = len(mb_obs_lists)            
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
                 if foflen > 1:
@@ -90,6 +89,8 @@ class NGMixER(dict):
             
             tm=time.time()-t0                
             self._try_checkpoint(tm)
+
+            log.info('index: %d:%d' % (self.curr_fofindex+1,numtot))
             
         tm=time.time()-t0
         log.info("time: %f" % tm)
@@ -217,7 +218,7 @@ class NGMixER(dict):
         self.curr_data['box_size'][self.curr_data_index] = box_size
         
         if box_size > self['max_box_size']:
-            log.info('    box size too big:',box_size)
+            log.info('    box size too big: %d' % box_size)
             flags |= BOX_SIZE_TOO_BIG
             
         return flags

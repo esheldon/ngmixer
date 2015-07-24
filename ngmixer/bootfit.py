@@ -258,7 +258,8 @@ class BootNGMixER(NGMixER):
             data[n('psf_T_r')][dindex]  = rres['psf_T_r']
 
             if self['do_shear']:
-                data[n('g_sens')][dindex,:] = res['g_sens']
+                if 'g_sens' in res:
+                    data[n('g_sens')][dindex,:] = res['g_sens']
 
                 if 'R' in res:
                     data[n('P')][dindex] = res['P']
@@ -410,6 +411,20 @@ class BootNGMixER(NGMixER):
 
         return data
 
+class MaxBootNGMixER(BootNGMixER):
+    def _fit_galaxy(self, model):
+        self._fit_max(model)
+
+        rpars=self['round_pars']
+        self.boot.set_round_s2n(self['max_pars'],fitter_type=rpars['fitter_type'])
+        
+        """
+        if self['make_plots']:
+            fitter = self.boot.get_max_fitter()
+            self._do_make_plots(fitter, model, fitter_type='lm')
+        """
+        
+        self.gal_fitter=self.boot.get_max_fitter()
 
 class ISampleBootNGMixER(BootNGMixER):
     def _fit_galaxy(self, model):
