@@ -561,17 +561,15 @@ class ISampleBootNGMixER(MaxBootNGMixER):
     def _copy_galaxy_result(self, model, coadd):
         super(ISampleBootNGMixER,self)._copy_galaxy_result(model,coadd)
 
+        dindex=self.curr_data_index
         res=self.gal_fitter.get_result()
+
+        if coadd:
+            n=Namer('coadd_%s' % model)
+        else:
+            n=Namer(model)
+
         if res['flags'] == 0:
-
-            dindex=self.curr_data_index
-            res=self.gal_fitter.get_result()
-
-            if coadd:
-                n=Namer('coadd_%s' % model)
-            else:
-                n=Namer(model)
-
             for f in ['efficiency','neff']:
                 self.curr_data[n(f)][dindex] = res[f]
 
