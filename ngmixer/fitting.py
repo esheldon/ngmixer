@@ -103,10 +103,6 @@ class NGMixER(dict):
 
         t0 = time.time()
 
-        for name in mb_obs_list.meta['meta_row'].dtype.names:
-            if 'id' in name:
-                log.info('    id: %d' % mb_obs_list.meta['meta_row'][name][0])
-        
         # get data to fill
         self.curr_data = self._make_struct()
         self.curr_data_index = 0

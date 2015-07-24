@@ -127,6 +127,7 @@ class MEDSImageIO(ImageIO):
             coadd_mb_obs_lists = []
             se_mb_obs_lists = []
             for mindex in mindexes:
+                log.info('    id: %d' % self.meds_list[0]['id'][mindex])
                 c,se = self._get_multi_band_observations(mindex)
                 coadd_mb_obs_lists.append(c)
                 se_mb_obs_lists.append(se)
