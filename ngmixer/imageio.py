@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+"""
+code for image i/o
+"""
 
 def get_imageio_class(ftype):
     """
@@ -37,12 +39,12 @@ class ImageIO(object):
     
     The coadd_mb_obs_lists and se_mb_obs_lists need to have their meta data set with the field
     
-        'meta_row': numpy array with meta data (same dtype as returned by get_meta_data_dtype)
+        'meta_data': numpy array with meta data (same dtype as returned by get_meta_data_dtype)
     
     Each individual observation in the lists needs to have the following meta data fields set
     
         'flags': non-zero if the observation should be ignored
-        'meta_row': numpy array with epoch meta data (same dtype as returned by get_epoch_meta_data_dtype)
+        'meta_data': numpy array with epoch meta data (same dtype as returned by get_epoch_meta_data_dtype)
     
     You can use the update_meta_data method of these objects to set the data.
     
