@@ -52,7 +52,7 @@ class BaseFitter(dict):
             flags = Fitter(mb_obs_list,coadd=False)
 
         It should also flag any indv. obs that was not used in the fit with a non-zero value in the 
-        'flags' field of the meta data dict.
+        'fit_flags' field of the meta data dict.
         
         The fit data should be returned as a numpy array in the mb_obs_list meta data dict in 'fit_data'.
 

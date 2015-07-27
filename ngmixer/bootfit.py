@@ -83,7 +83,7 @@ class NGMixBootFitter(BaseFitter):
             fit_flags |= model_flags
 
             # fill the epoch data
-            self._fill_epoch_data(mb_obs_list)
+            self._fill_epoch_data(mb_obs_list,boot.mb_obs_list)
 
             # fill in PSF stats in data rows
             if (model_flags & PSF_FIT_FAILURE) == 0:
@@ -98,9 +98,11 @@ class NGMixBootFitter(BaseFitter):
             
         return fit_flags
 
-    def _fill_epoch_data(self,mb_obs_list):
+    def _fill_epoch_data(self,mb_obs_list,new_mb_obs_list):
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
+                used = False
+                res = None
                 if obs.meta['flags'] == 0 and obs.has_psf() and 'fit_data' not in obs.meta:
                     psf_obs = obs.get_psf()
                     
@@ -115,6 +117,7 @@ class NGMixBootFitter(BaseFitter):
                         ed['psf_fit_flags'] = res['flags']
                         
                     if psf_obs.has_gmix():
+                        used = True
                         psf_gmix = psf_obs.get_gmix()
                         g1,g2,T = psf_gmix.get_g1g2T()
                         pars = psf_gmix.get_full_pars()
@@ -124,7 +127,14 @@ class NGMixBootFitter(BaseFitter):
                         ed['psf_fit_T'] = T
                         ed['psf_fit_pars'] = pars
 
+                    if obs in new_mb_obs_list[band] and used:
+                        obs.update_meta_data({'fit_flags':0})
+                    else:
+                        obs.update_meta_data({'fit_flags':PSF_FIT_FAILURE})
+
                     obs.update_meta_data({'fit_data':ed})
+                else:
+                    obs.update_meta_data({'fit_flags':obs.meta['flags']})
 
     def _do_psf_stats(self,mb_obs_list,coadd):
         if coadd:
