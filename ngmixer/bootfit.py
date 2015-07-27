@@ -103,6 +103,11 @@ class NGMixBootFitter(BaseFitter):
             for obs in obs_list:
                 used = False
                 res = None
+
+                if obs.meta['flags'] != 0:
+                    obs.update_meta_data({'fit_flags':obs.meta['flags']})
+                    continue
+
                 if obs.meta['flags'] == 0 and obs.has_psf() and 'fit_data' not in obs.meta:
                     psf_obs = obs.get_psf()
                     
@@ -133,8 +138,6 @@ class NGMixBootFitter(BaseFitter):
                         obs.update_meta_data({'fit_flags':PSF_FIT_FAILURE})
 
                     obs.update_meta_data({'fit_data':ed})
-                else:
-                    obs.update_meta_data({'fit_flags':obs.meta['flags']})
 
     def _do_psf_stats(self,mb_obs_list,coadd):
         if coadd:
