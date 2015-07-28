@@ -21,7 +21,7 @@ class MEDSNGMixIt(NGMixIt):
         bname = os.path.basename(fname)
         bname = bname.replace('.fits.fz','').replace('.fits','')
         bname = '%s-%s.fits' % (bname, rng_string)
-        newf = os.path.join(self.work_dir, bname)
+        newf = os.path.expandvars(os.path.join(self.work_dir, bname))
         return newf
 
     def _get_sub(self):

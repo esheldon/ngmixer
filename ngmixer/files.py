@@ -547,7 +547,10 @@ class StagedOutFile(object):
     """
     def __init__(self, fname, tmpdir=None, must_exist=False):
         self.final_path=fname
-        self.tmpdir=tmpdir
+        if tmpdir is not None:
+            self.tmpdir=os.path.expandvars(tmpdir)
+        else:
+            self.tempdir = tmpdir
         self.must_exist=must_exist
 
         self.was_staged_out=False
@@ -556,17 +559,17 @@ class StagedOutFile(object):
         if fpath == '':
             fpath = '.'
             
-        if tmpdir is None or os.path.samefile(tmpdir,fpath):
+        if self.tmpdir is None or os.path.samefile(self.tmpdir,fpath):
             self.is_temp=False
             self.path=self.final_path
         else:
             self.is_temp=True
 
-            if not os.path.exists(tmpdir):
-                os.makedirs(tmpdir)
+            if not os.path.exists(self.tmpdir):
+                os.makedirs(self.tmpdir)
 
             bname=os.path.basename(fname)
-            self.path=os.path.join(tmpdir, bname)
+            self.path=os.path.join(self.tmpdir, bname)
 
             if self.path == self.final_path:
                 # the user sent tmpdir as the final output dir, no
