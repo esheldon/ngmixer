@@ -1,6 +1,9 @@
 # flagging
 
-if False:
+# this is here for testing, it will be removed one day
+USE_OLD_FLAGS = True
+
+if not USE_OLD_FLAGS:
     # flags used by NGMixER
     IMAGE_FLAGS          = 2**26
     NO_CUTOUTS           = 2**27
