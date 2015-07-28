@@ -7,6 +7,8 @@ from . import priors
 from . import util
 from . import defaults
 from . import bootfit
+from . import ngmixit
+from . import medsngmixit
 
 #######################################################
 # setup logger

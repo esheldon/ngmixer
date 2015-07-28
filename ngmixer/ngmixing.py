@@ -100,7 +100,7 @@ class NGMixER(dict):
             
         tm=time.time()-t0
         log.info("time: %f" % tm)
-        log.info("time per: %f" % tm/num)
+        log.info("time per: %f" % (tm/num))
 
     def fit_obj(self,coadd_mb_obs_list,mb_obs_list):
         """
@@ -380,7 +380,7 @@ class NGMixER(dict):
         from .files import StagedOutFile
         import cPickle
         
-        log.info('checkpointing at',tm/60,'minutes')
+        log.info('checkpointing at %f minutes' % (tm/60))
         log.info(self.checkpoint_file)
 
         # make checkpoint data        
@@ -391,7 +391,7 @@ class NGMixER(dict):
         with StagedOutFile(self.checkpoint_file, tmpdir=self['work_dir']) as sf:
             with fitsio.FITS(sf.path,'rw',clobber=True) as fobj:                
                 fobj.write(numpy.array(self.data,dtype=self.data_dtype), extname="model_fits")
-                if len(epoch_data) > 0:
+                if len(self.epoch_data) > 0:
                     fobj.write(numpy.array(self.epoch_data,dtype=self.epoch_data_dtype), extname="epoch_data")
                 fobj.write(cd, extname="checkpoint_data")
         
