@@ -684,9 +684,9 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         res['nuse'] = ls.get_nuse()
 
     def _copy_galaxy_result(self, model, coadd):
-        super(ISampleBootNGMixER,self)._copy_galaxy_result(model,coadd)
+        super(ISampNGMixBootFitter,self)._copy_galaxy_result(model,coadd)
 
-        dindex=self.curr_data_index
+        dindex=0
         res=self.gal_fitter.get_result()
 
         if coadd:
@@ -696,22 +696,22 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
 
         if res['flags'] == 0:
             for f in ['efficiency','neff']:
-                self.curr_data[n(f)][dindex] = res[f]
+                self.data[n(f)][dindex] = res[f]
 
-    def _get_dtype(self):
-        dt=super(ISampleBootNGMixER,self)._get_dtype()
+    def _get_fit_data_dtype(self,coadd):
+        dt=super(ISampNGMixBootFitter,self)._get_fit_data_dtype(coadd)
 
-        for model in self._get_all_models():
+        for model in self._get_all_models(coadd):
             n=Namer(model)
             dt += [(n('efficiency'),'f4'),
                 (n('neff'),'f4')]
             
         return dt
 
-    def _make_struct(self,num=1):
-        d = super(ISampleBootNGMixER,self)._make_struct(num)
+    def _make_struct(self,coadd):
+        d = super(ISampNGMixBootFitter,self)._make_struct(coadd)
 
-        for model in self._get_all_models():
+        for model in self._get_all_models(coadd):
             n=Namer(model)
             d[n('efficiency')] = DEFVAL
             d[n('neff')] = DEFVAL

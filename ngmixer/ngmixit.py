@@ -100,8 +100,8 @@ class NGMixIt(object):
     def read_extra_data(self):
         pass
 
-    def get_meta_data(self):
-        return None
+    def get_file_meta_data(self):
+        return self.ngmixer.get_file_meta_data()
     
     def go(self):
         from .ngmixing import NGMixER
@@ -118,7 +118,7 @@ class NGMixIt(object):
 
         self.data = self.ngmixer.get_data()
         self.epoch_data = self.ngmixer.get_epoch_data()
-        self.meta = self.get_meta_data()
+        self.meta = self.get_file_meta_data()
         
     def go_profile(config_file, meds_files, out_file, options):
         import cProfile

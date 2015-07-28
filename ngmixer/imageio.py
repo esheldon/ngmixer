@@ -63,7 +63,15 @@ class ImageIO(object):
             self.extra_data = kwargs['extra_data']
         else:
             self.extra_data = None
+
+    def get_file_meta_data(self):
+        """
+        returns file meta data
         
+        if there is none, return None
+        """
+        raise NotImplementedError("get_file_meta_data method of ImageIO must be defined in subclass.")
+            
     def get_num_bands(self):
         """
         returns number of bands for galaxy images        

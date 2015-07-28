@@ -73,8 +73,9 @@ class MEDSNGMixIt(NGMixIt):
             self.data_files = meds_files
             self.extracted = extracted
         
-    def get_meta_data(self):
-        dt = [] #meds_meta_list[0].dtype.descr
+    def get_file_meta_data(self):
+        meds_meta_list = self.ngmixer.get_file_meta_data()
+        dt = meds_meta_list[0].dtype.descr
 
         config_file = self.conf_file
 
@@ -89,11 +90,11 @@ class MEDSNGMixIt(NGMixIt):
 
         for band in xrange(nband):            
             meds_file = self.data_files_full[band]
-            #meds_meta=meds_meta_list[band]
-            #mnames=meta.dtype.names
-            #for name in meds_meta.dtype.names:
-            #    if name in mnames:
-            #        meta[name][band] = meds_meta[name][0]
+            meds_meta=meds_meta_list[band]
+            mnames=meta.dtype.names
+            for name in meds_meta.dtype.names:
+                if name in mnames:
+                    meta[name][band] = meds_meta[name][0]
 
             meta['gmix_meds_config'][band] = config_file
             meta['meds_file'][band] = meds_file

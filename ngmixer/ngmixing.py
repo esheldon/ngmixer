@@ -68,6 +68,9 @@ class NGMixER(dict):
     def get_epoch_data(self):
         return numpy.array(self.epoch_data,dtype=self.epoch_data_dtype)
 
+    def get_file_meta_data(self):
+        return self.imageio.get_file_meta_data()
+    
     def do_fits(self):
         """
         Fit all objects in our list
@@ -114,13 +117,23 @@ class NGMixER(dict):
         # get data to fill
         self.curr_data = self._make_struct()
         self.curr_data_index = 0
-        
-        # check flags
-        flags = self._obj_check(coadd_mb_obs_list)
-        flags |= self._obj_check(mb_obs_list)
 
-        if self.curr_data['box_size'][self.curr_data_index] > 0:
-            log.info('    box_size: %d' % self.curr_data['box_size'][self.curr_data_index])
+        # get the box size
+        box_size = self._get_box_size(mb_obs_list)
+        if box_size < 0:
+            box_size = self._get_box_size(coadd_mb_obs_list)
+        self.curr_data['box_size'][self.curr_data_index] = box_size
+        log.info('    box_size: %d' % self.curr_data['box_size'][self.curr_data_index])
+
+        # check flags
+        flags = 0
+        if box_size < 0:
+            flags = UTTER_FAILURE
+
+        if flags == 0:
+            flags |= self._obj_check(coadd_mb_obs_list)
+        if flags == 0:
+            flags |= self._obj_check(mb_obs_list)
         
         if flags == 0:
             fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list)
@@ -203,6 +216,15 @@ class NGMixER(dict):
             fit_flags = NO_ATTEMPT
         
         return fit_flags
+
+    def _get_box_size(self, mb_obs_list):
+        box_size = DEFVAL
+        for band,obs_list in enumerate(mb_obs_list):
+            for obs in obs_list:
+                if obs.meta['flags'] == 0:
+                    box_size = obs.image.shape[0]
+                    break
+        return box_size
     
     def _obj_check(self, mb_obs_list):
         """
@@ -240,13 +262,8 @@ class NGMixER(dict):
         if num_use == 0:
             flags |= IMAGE_FLAGS
             return flags
-        
-        box_size = -1
-        for obs in obs_list:
-            if obs.meta['flags'] == 0:
-                box_size = obs.image.shape[0]
-        self.curr_data['box_size'][self.curr_data_index] = box_size
-        
+
+        box_size = self.curr_data['box_size'][self.curr_data_index]
         if box_size > self['max_box_size']:
             log.info('    box size too big: %d' % box_size)
             flags |= BOX_SIZE_TOO_BIG

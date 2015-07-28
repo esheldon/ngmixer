@@ -134,6 +134,9 @@ class MEDSImageIO(ImageIO):
 
     next = __next__
 
+    def get_file_meta_data(self):
+        return self.meds_meta_list
+    
     def get_num_fofs(self):
         return copy.copy(self.num_fofs - self.fof_start)
     
