@@ -50,6 +50,7 @@ class NGMixER(dict):
             numpy.random.seed(random_seed)
 
         # checkpointing
+        self.start_fofindex = 0
         self.checkpoint_file = checkpoint_file
         self.checkpoint_data = checkpoint_data        
         self._setup_checkpoints()
@@ -78,7 +79,7 @@ class NGMixER(dict):
         num = 0
         numtot = self.imageio.get_num_fofs()
 
-        log.info('index: %d:%d' % (self.curr_fofindex+1,numtot))
+        log.info('index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
         for coadd_mb_obs_lists,mb_obs_lists in self.imageio:            
             foflen = len(mb_obs_lists)            
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
@@ -96,7 +97,8 @@ class NGMixER(dict):
             tm=time.time()-t0                
             self._try_checkpoint(tm)
 
-            log.info('index: %d:%d' % (self.curr_fofindex+1,numtot))
+            if self.curr_fofindex < numtot:
+                log.info('index: %d:%d' % (self.curr_fofindex+1,numtot))
             
         tm=time.time()-t0
         log.info("time: %f" % tm)
@@ -336,6 +338,7 @@ class NGMixER(dict):
             numpy.random.set_state(rs)
             self.curr_fofindex = self.checkpoint_data['checkpoint_data']['curr_fofindex'][0]
             self.imageio.set_fof_start(self.curr_fofindex)
+            self.start_fofindex = self.checkpoint_data['checkpoint_data']['curr_fofindex'][0]
             
     def _try_checkpoint(self, tm):
         """

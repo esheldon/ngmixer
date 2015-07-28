@@ -78,7 +78,7 @@ class NGMixIt(object):
         
         if os.path.exists(self.checkpoint_file):
             self.checkpoint_data={}
-            print('reading checkpoint data:',self.checkpoint_file)
+            log.info('reading checkpoint data: %s' % self.checkpoint_file)
             with fitsio.FITS(self.checkpoint_file) as fobj:
                 self.checkpoint_data['data'] = fobj['model_fits'][:]
 
