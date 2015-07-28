@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """
     %prog [options] config_file out_file meds_file1 meds_files2 ...
-    Process the input meds file.
-    """
+    Process the input meds file."""
 from __future__ import print_function
+import sys
 from ngmixer.medsngmixit import MEDSNGMixIt
 
 from optparse import OptionParser
