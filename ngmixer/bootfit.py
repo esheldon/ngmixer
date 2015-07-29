@@ -187,7 +187,6 @@ class NGMixBootFitter(BaseFitter):
         else:
             n = Namer("")
 
-        self.data[n('nimage_tot')][0,:] = nim
         self.data[n('nimage_use')][0,:] = nim_used
     
     def _get_bootstrapper(self, model, mb_obs_list):
@@ -348,6 +347,9 @@ class NGMixBootFitter(BaseFitter):
             data[n(Tname+'_r')][dindex] = rres['pars'][4]
             data[n('psf_T_r')][dindex]  = rres['psf_T_r']
 
+            for sn in ['s2n_w','chi2per','dof']:
+                data[n(sn)][dindex] = res[sn]
+            
             if self['do_shear']:
                 if 'g_sens' in res:
                     data[n('g_sens')][dindex,:] = res['g_sens']
@@ -465,8 +467,7 @@ class NGMixBootFitter(BaseFitter):
         else:
             n = Namer('')
 
-        dt += [(n('nimage_tot'),'i4',bshape),
-               (n('nimage_use'),'i4',bshape)]
+        dt += [(n('nimage_use'),'i4',bshape)]
         
         dt += [(n('mask_frac'),'f8'),
                (n('psfrec_T'),'f8'),
@@ -530,7 +531,7 @@ class NGMixBootFitter(BaseFitter):
         data[n('flags')] = NO_ATTEMPT
         data[n('flux')] = DEFVAL
         data[n('flux_err')] = DEFVAL
-        
+
         if coadd:
             n = Nmer('coadd')
         else:
@@ -577,6 +578,25 @@ class NGMixBootFitter(BaseFitter):
 
         return data
 
+    def get_default_fit_data(self,me,coadd):                
+        dt = self.get_fit_data_dtype(me,coadd)
+        d = numpy.zeros(1,dtype=dt)
+        if me:
+            dme = self._make_struct(False)
+            for tag in dme.dtype.names:                
+                d[tag] = dme[tag]
+
+        if coadd:
+            dcoadd = self._make_struct(True)
+            for tag in dcoadd.dtype.names:                
+                d[tag] = dcoadd[tag]        
+
+        return d
+
+    def get_default_epoch_fit_data(self):                
+        d = self._make_epoch_struct()
+        return d
+    
 class MaxNGMixBootFitter(NGMixBootFitter):
     def _fit_max(self, model):
         """

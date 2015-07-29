@@ -44,7 +44,9 @@ class NGMixER(dict):
         # get the fitter
         fitter_class = fitting.get_fitter_class(self['fitter_type'])
         self.fitter = fitter_class(self)
-        
+        self.default_data = self.fitter.get_default_fit_data(self['fit_me_galaxy'],self['fit_coadd_galaxy'])
+        self.default_epoch_data = self.fitter.get_default_epoch_fit_data()
+
         # random numbers
         if random_seed is not None:
             numpy.random.seed(random_seed)
@@ -116,6 +118,8 @@ class NGMixER(dict):
 
         # get data to fill
         self.curr_data = self._make_struct()
+        for tag in self.default_data.dtype.names:
+            self.curr_data[tag] = self.default_data[tag]
         self.curr_data_index = 0
 
         # get the box size
@@ -156,7 +160,9 @@ class NGMixER(dict):
                 if 'fit_data' in obs.meta and obs.meta['fit_data'] is not None \
                    and 'meta_data' in obs.meta:
                     ed = self._make_epoch_struct()
-                    
+                    for tag in self.default_epoch_data.dtype.names:
+                        ed[tag] = self.default_epoch_data[tag]
+
                     for tag in obs.meta['fit_data'].dtype.names:
                         ed[tag] = obs.meta['fit_data'][tag][0]
                         

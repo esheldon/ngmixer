@@ -156,9 +156,9 @@ class MEDSImageIO(ImageIO):
     
     def _get_meta_row(self,num=1):
         # build the meta data
-        dt=[('id','i8'),     # could be coadd_objects_id
-            ('number','i4'), # 1-n as in sextractor
-            ]
+        dt=[('id','i8'),
+            ('number','i4'),
+            ('nimage_tot','i4',self.conf['nband'])]
         meta_row = numpy.zeros(num,dtype=dt)
         for tag in meta_row.dtype.names:
             meta_row[tag][:] = DEFVAL
@@ -181,6 +181,7 @@ class MEDSImageIO(ImageIO):
         meta_row = self._get_meta_row()
         meta_row['id'][0] = self.meds_list[0]['id'][mindex]
         meta_row['number'][0] = self.meds_list[0]['number'][mindex]
+        meta_row['nimage_tot'][0,:] = numpy.array([self.meds_list[b]['ncutout'][mindex]-1 for b in xrange(self.conf['nband'])],dtype='i4')
         meta = {'meta_data':meta_row,'meds_index':mindex}
 
         coadd_mb_obs_list.update_meta_data(meta)

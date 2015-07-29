@@ -35,6 +35,14 @@ class BaseFitter(dict):
         """
         raise NotImplementedError("get_fit_data_dtype method of BaseFitter must be defined in subclass.")
 
+    def get_default_fit_data(self,me,coadd):
+        """
+        returns the default values for a line in the fit data table
+        
+        me and coadd behave as in get_fit_data_dtype
+        """
+        raise NotImplementedError("get_default_fit_data method of BaseFitter must be defined in subclass.")
+
     def get_epoch_fit_data_dtype(self):
         """
         returns a numpy dtype for the galaxy per epoch fit data as a list        
@@ -42,6 +50,12 @@ class BaseFitter(dict):
             return [('x','f8'),('y','f8')]
         """
         raise NotImplementedError("get_epoch_fit_data_dtype method of BaseFitter must be defined in subclass.")
+
+    def get_default_epoch_fit_data(self):
+        """
+        returns a default line in the per galaxy epoch fit data
+        """
+        raise NotImplementedError("get_default_epoch_fit_data method of BaseFitter must be defined in subclass.")
     
     def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True):
         """
