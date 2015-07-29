@@ -3,6 +3,8 @@ import os
 import numpy
 from numpy import log
 import fitsio
+import time
+import sys
 
 import ngmix
 from ngmix import srandu, GMixRangeError, print_pars

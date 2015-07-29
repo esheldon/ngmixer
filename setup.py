@@ -2,7 +2,8 @@ import os
 import glob
 from distutils.core import setup
 
-scripts=['ngmixit']
+scripts=glob.glob('./bin/*')
+scripts = [os.path.basename(f) for f in scripts]
 scripts=[os.path.join('bin',s) for s in scripts]
 
 setup(name="ngmixer", 
