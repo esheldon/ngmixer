@@ -89,7 +89,7 @@ class NGMixer(dict):
         if self.done:
             self.cleanup_checkpoint()
         
-    def go_profile():
+    def go_profile(self):
         import cProfile
         import pstats
 
