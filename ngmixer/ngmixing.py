@@ -14,7 +14,7 @@ from .util import UtterFailure
 # logging
 log = logging.getLogger(LOGGERNAME)
 
-class NGMixER(dict):
+class NGMixer(dict):
     def __init__(self,
                  conf,
                  files,

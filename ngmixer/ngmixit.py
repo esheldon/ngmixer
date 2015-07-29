@@ -104,10 +104,10 @@ class NGMixIt(object):
         return self.ngmixer.get_file_meta_data()
     
     def go(self):
-        from .ngmixing import NGMixER
+        from .ngmixing import NGMixer
         self.epoch_data=None
 
-        self.ngmixer = NGMixER(self.conf,
+        self.ngmixer = NGMixer(self.conf,
                                self.data_files,
                                fof_data=self.fof_data,
                                extra_data=self.extra_data,

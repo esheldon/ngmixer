@@ -4,7 +4,7 @@
 USE_OLD_FLAGS = True
 
 if not USE_OLD_FLAGS:
-    # flags used by NGMixER
+    # flags used by NGMixer
     IMAGE_FLAGS          = 2**26
     NO_CUTOUTS           = 2**27
     BOX_SIZE_TOO_BIG     = 2**28
