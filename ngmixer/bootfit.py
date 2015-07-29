@@ -760,42 +760,24 @@ class MaxNGMixBootFitter(NGMixBootFitter):
         rpars=self['round_pars']
         self.boot.set_round_s2n(self['max_pars'],fitter_type=rpars['fitter_type'])
         
-        """
-        if self['make_plots']:
-            fitter = self.boot.get_max_fitter()
-            self._do_make_plots(fitter, model, fitter_type='lm')
-        """
-        
         self.gal_fitter=self.boot.get_max_fitter()
 
-        self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
-        self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
+        if self['make_plots']:
+            self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
+            self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
         
 class ISampNGMixBootFitter(MaxNGMixBootFitter):
     def _fit_galaxy(self, model, coadd):
         self._fit_max(model)
-
-        """
-        if self['make_plots']:
-            fitter = self.boot.get_max_fitter()
-            self._do_make_plots(fitter, model, fitter_type='lm')
-        """
-        
         self._do_isample(model)
-
-        """
-        if self['make_plots']:
-            fitter = self.boot.get_isampler()
-            self._do_make_plots(fitter, model, fitter_type='isample')
-        """
-        
         self._add_shear_info(model)
 
         self.gal_fitter=self.boot.get_isampler()
 
-        self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
-        self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
-        self._plot_trials(self.new_mb_obs_list.meta['id'], self.boot.get_isampler(), model, coadd, 'isample', self.boot.get_isampler().get_iweights())
+        if self['make_plots']:        
+            self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
+            self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
+            self._plot_trials(self.new_mb_obs_list.meta['id'], self.boot.get_isampler(), model, coadd, 'isample', self.boot.get_isampler().get_iweights())
 
     def _do_isample(self, model):
         """
