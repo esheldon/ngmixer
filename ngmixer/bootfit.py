@@ -2,6 +2,7 @@ from __future__ import print_function
 import time
 import numpy
 import logging
+import os
 
 # ngmix
 import ngmix
@@ -73,10 +74,16 @@ class NGMixBootFitter(BaseFitter):
 
         # only fit stuff that is not flagged
         new_mb_obs_list = self._get_good_mb_obs_list(mb_obs_list)
-
+        self.new_mb_obs_list = new_mb_obs_list
+        
         mb_obs_list.update_meta_data({'fit_data':self._make_struct(coadd)})
         self.data = mb_obs_list.meta['fit_data']
 
+        if self['make_plots']:
+            self.plot_dir = './%d-plots' % new_mb_obs_list.meta['id']
+            if not os.path.exists(self.plot_dir):
+                os.mkdir(self.plot_dir)
+                
         fit_flags = 0
         for model in self['fit_models']:
             log.info('    fitting: %s' % model)            
@@ -236,7 +243,7 @@ class NGMixBootFitter(BaseFitter):
                 
             if flags == 0:
                 try:
-                    self._fit_galaxy(model,coadd)
+                    self._fit_galaxy(model,coadd)                    
                     self._copy_galaxy_result(model,coadd)
                     self._print_galaxy_result()
                 except (BootGalFailure,GMixRangeError):
@@ -333,9 +340,9 @@ class NGMixBootFitter(BaseFitter):
         plt.title=title
 
         if coadd:
-            fname='%d-psf-resid-band%d-coadd.png' % (obs_id,band)
+            fname=os.path.join(self.plot_dir,'%d-psf-resid-band%d-coadd.png' % (obs_id,band))
         else:
-            fname='%d-psf-resid-band%d-%d.png' % (obs_id,band,band_id)
+            fname=os.path.join(self.plot_dir,'%d-psf-resid-band%d-%d.png' % (obs_id,band,band_id))
 
         log.info("        making plot %s" % fname)
         plt.write_img(1920,1200,fname)
@@ -345,7 +352,91 @@ class NGMixBootFitter(BaseFitter):
         over-ride for different fitters
         """
         raise RuntimeError("over-ride me")
-    
+
+    def _plot_resids(self, obj_id, fitter, model, coadd, fitter_type):
+        """
+        make plots
+        """
+        import images
+
+        if coadd:
+            ptype='coadd'
+        else:
+            ptype='mb'
+
+        ptype = '%s-%s-%s' % (ptype,model,fitter_type)
+        title='%d %s' % (obj_id,ptype)
+        try:
+            res_plots = None
+            if fitter_type != 'isample':
+                res_plots=fitter.plot_residuals(title=title)
+            if res_plots is not None:
+                for band, band_plots in enumerate(res_plots):
+                    for icut, plt in enumerate(band_plots):
+                        fname=os.path.join(self.plot_dir,'%d-%s-resid-band%d-im%d.png' % (obj_id,ptype,band,icut))
+                        log.info("        making plot %s" % fname)
+                        plt.write_img(1920,1200,fname)
+
+        except GMixRangeError as err:
+            log.info("        caught error plotting resid: %s" % str(err))
+
+    def _plot_trials(self, obj_id, fitter, model, coadd, fitter_type, wgts):
+        """
+        make plots
+        """        
+        if coadd:
+            ptype='coadd'
+        else:
+            ptype='mb'
+
+        ptype = '%s-%s-%s' % (ptype,model,fitter_type)
+        title='%d %s' % (obj_id,ptype)
+        
+        try:
+            pdict=fitter.make_plots(title=title,
+                                    weights=wgts)
+            
+            pdict['trials'].aspect_ratio=1.5
+            pdict['wtrials'].aspect_ratio=1.5
+            
+            trials_png=os.path.join(self.plot_dir,'%d-%s-trials.png' % (obj_id,ptype))
+            wtrials_png=os.path.join(self.plot_dir,'%d-%s-wtrials.png' % (obj_id,ptype))
+            
+            log.info("        making plot %s" % trials_png)
+            pdict['trials'].write_img(1200,1200,trials_png)
+            
+            log.info("        making plot %s" % wtrials_png)
+            pdict['wtrials'].write_img(1200,1200,wtrials_png)
+        except:
+            log.info("        caught error plotting trials")
+
+        try:
+            from .util import plot_autocorr
+            trials=fitter.get_trials()
+            plt=plot_autocorr(trials)
+            plt.title=title
+            fname=os.path.join(self.plot_dir,'%d-%s-autocorr.png' % (obj_id,ptype))
+            log.info("        making plot %s" % fname)
+            plt.write_img(1000,1000,fname)
+        except:
+            log.info("        caught error plotting autocorr")
+
+    def _plot_images(self, obj_id, model, coadd):
+        import images
+        imlist = []
+        titles = []
+        for band,obs_list in enumerate(self.new_mb_obs_list):
+            for obs in obs_list: 
+                imlist.append(obs.image*obs.weight)
+                titles.append('band: %d %d' % (band,obs.meta['band_id']))
+        if coadd:
+            coadd_png=os.path.join(self.plot_dir,'%d-coadd-images.png' % (obj_id))
+        else:
+            coadd_png=os.path.join(self.plot_dir,'%d-mb-images.png' % (obj_id))
+        plt=images.view_mosaic(imlist, titles=titles, show=False)
+        log.info("        making plot %s" % coadd_png)
+        plt.write_img(1200,1200,coadd_png)
+
     def _copy_galaxy_result(self, model, coadd):
         """
         Copy from the result dict to the output array
@@ -677,6 +768,9 @@ class MaxNGMixBootFitter(NGMixBootFitter):
         
         self.gal_fitter=self.boot.get_max_fitter()
 
+        self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
+        self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
+        
 class ISampNGMixBootFitter(MaxNGMixBootFitter):
     def _fit_galaxy(self, model, coadd):
         self._fit_max(model)
@@ -698,6 +792,10 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         self._add_shear_info(model)
 
         self.gal_fitter=self.boot.get_isampler()
+
+        self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
+        self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
+        self._plot_trials(self.new_mb_obs_list.meta['id'], self.boot.get_isampler(), model, coadd, 'isample', self.boot.get_isampler().get_iweights())
 
     def _do_isample(self, model):
         """
