@@ -4,7 +4,7 @@
     Process the input meds file."""
 from __future__ import print_function
 import sys
-from ngmixer.ngmixit import NGMixIt
+from ngmixer.ngmixing import NGMixer
 
 from optparse import OptionParser
 parser = OptionParser(__doc__)
@@ -12,6 +12,10 @@ parser = OptionParser(__doc__)
 parser.add_option("--fof-range",default=None,
                   help=("Inclusive, zero-offset range of FoFs to "
                         "process"))
+
+parser.add_option("--fof-file",default=None,
+                  help=("File with FoF definitions."))
+
 parser.add_option("--work-dir", default='.',
                   help=("copy files local for processing.  "
                         "Also write to local files and copy out."
@@ -50,10 +54,11 @@ if __name__ == '__main__':
     else:
         seed = None
 
-    NGMixIt(config_file,
-            out_file,
+    NGMixer(config_file,
             data_files,
+            output_file=out_file,
             fof_range=fof_range,
+            fof_file=options.fof_file,
             work_dir=options.work_dir,
             random_seed=seed,
             profile=options.profile,

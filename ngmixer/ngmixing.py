@@ -3,10 +3,14 @@ from __future__ import print_function
 import logging
 import numpy
 import time
+import pprint
+import os
+import fitsio
 
 # local imports
 from . import imageio
 from . import fitting
+from . import files
 from .defaults import DEFVAL,LOGGERNAME,_CHECKPOINTS_DEFAULT_MINUTES
 from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS
 from .util import UtterFailure
@@ -16,31 +20,40 @@ log = logging.getLogger(LOGGERNAME)
 
 class NGMixer(dict):
     def __init__(self,
-                 conf,
-                 files,
-                 fof_data=None,
+                 config_file,
+                 data_files,
+                 work_dir='.',
+                 output_file=None,
+                 fof_range=None,
+                 fof_file=None,
                  extra_data=None,
                  random_seed=None,
-                 checkpoint_file=None,
-                 checkpoint_data=None):
+                 init_only=False,
+                 profile=False,
+                 make_plots=False):
         
         # parameters
-        self.update(conf)
-        
-        # read the data
-        imageio_class = imageio.get_imageio_class(self['imageio_type'])
-        self.imageio = imageio_class(self,files,fof_data=fof_data,extra_data=extra_data)
-
-        # default pars
-        self['work_dir'] = self.get('work_dir','.')
-        self['make_plots'] = self.get('make_plots',False)
+        self.update(files.read_yaml(config_file))
+        self['config_file'] = config_file
+        self['work_dir'] = work_dir
+        self['make_plots'] = self.get('make_plots',make_plots)
         self['fit_coadd_galaxy'] = self.get('fit_coadd_galaxy',False)
         self['fit_me_galaxy'] = self.get('fit_me_galaxy',True)
         self['max_box_size']=self.get('max_box_size',2048)
+        self.profile = profile
+        pprint.pprint(self)
+        
+        # read the data
+        imageio_class = imageio.get_imageio_class(self['imageio_type'])
+        self.imageio = imageio_class(self,data_files,fof_range=fof_range,fof_file=fof_file,extra_data=extra_data)        
         self.curr_fofindex = 0
         self['nband'] = self.imageio.get_num_bands()
         self.iband = range(self['nband'])
-
+        
+        # priors
+        from .priors import set_priors
+        set_priors(self)
+        
         # get the fitter
         fitter_class = fitting.get_fitter_class(self['fitter_type'])
         self.fitter = fitter_class(self)
@@ -51,10 +64,9 @@ class NGMixer(dict):
         if random_seed is not None:
             numpy.random.seed(random_seed)
 
-        # checkpointing
+        # checkpointing and outputs
+        self.output_file = output_file
         self.start_fofindex = 0
-        self.checkpoint_file = checkpoint_file
-        self.checkpoint_data = checkpoint_data        
         self._setup_checkpoints()
         
         # build data
@@ -63,6 +75,31 @@ class NGMixer(dict):
             self.data_dtype = self._get_dtype()
             self.epoch_data = []
             self.epoch_data_dtype = self._get_epoch_dtype()
+
+        # run the code
+        if not init_only:
+            if profile:
+                self.go_profile()
+            else:
+                self.go()
+
+    def go(self):
+        self.do_fits()
+        self.write_data()
+        if self.done:
+            self.cleanup_checkpoint()
+        
+    def go_profile():
+        import cProfile
+        import pstats
+
+        log.info("doing profile")
+
+        cProfile.runctx('self.go()',
+                        globals(),locals(),
+                        'profile_stats')
+        p = pstats.Stats('profile_stats')
+        p.sort_stats('time').print_stats()
 
     def get_data(self):
         return numpy.array(self.data,dtype=self.data_dtype)
@@ -78,6 +115,8 @@ class NGMixer(dict):
         Fit all objects in our list
         """
 
+        self.done = False
+        
         log.info('doing fits')
         
         t0=time.time()
@@ -109,6 +148,8 @@ class NGMixer(dict):
         log.info("time: %f" % tm)
         log.info("time per: %f" % (tm/num))
 
+        self.done = True
+        
     def fit_obj(self,coadd_mb_obs_list,mb_obs_list):
         """
         fit a single object
@@ -334,7 +375,23 @@ class NGMixer(dict):
         """
         import fitsio
         import cPickle
+
+        self.checkpoint_data = None
         
+        if self.output_file is not None:
+            self.checkpoint_file = self.output_file.replace('.fits','-checkpoint.fits')
+            if os.path.exists(self.checkpoint_file):
+                self.checkpoint_data={}
+                log.info('reading checkpoint data: %s' % self.checkpoint_file)
+                with fitsio.FITS(self.checkpoint_file) as fobj:
+                    self.checkpoint_data['data'] = fobj['model_fits'][:]
+
+                    if 'epoch_data' in fobj:
+                        self.checkpoint_data['epoch_data']=fobj['epoch_data'][:]
+
+                    if 'checkpoint_data' in fobj:
+                        self.checkpoint_data['checkpoint_data'] = fobj['checkpoint_data'][:]
+
         if self.checkpoint_data is not None:
             # data
             self.data = self.checkpoint_data['data']
@@ -421,4 +478,32 @@ class NGMixer(dict):
                     fobj.write(numpy.array(self.epoch_data,dtype=self.epoch_data_dtype), extname="epoch_data")
                 fobj.write(cd, extname="checkpoint_data")
         
+    def cleanup_checkpoint(self):
+        """
+        if we get this far, we have succeeded in writing the data. We can remove
+        the checkpoint file
+        """
+        if os.path.exists(self.checkpoint_file):
+            log.info('removing checkpoint file %s' % self.checkpoint_file)
+            os.remove(self.checkpoint_file)
+    
+    def write_data(self):
+        """
+        write the actual data.  clobber existing
+        """
+        if self.output_file is not None:
+            self.meta = self.get_file_meta_data()
+            
+            from .files import StagedOutFile
+            work_dir = self['work_dir']
+            with StagedOutFile(self.output_file, tmpdir=work_dir) as sf:
+                log.info('writing %s' % sf.path)
+                with fitsio.FITS(sf.path,'rw',clobber=True) as fobj:
+                    fobj.write(self.get_data(),extname="model_fits")
+                    
+                    if self.epoch_data is not None:
+                        fobj.write(self.get_epoch_data(),extname="epoch_data")
 
+                    if self.meta is not None:
+                        fobj.write(self.meta,extname="meta_data")
+            

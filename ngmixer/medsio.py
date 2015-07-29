@@ -36,6 +36,9 @@ class MEDSImageIO(ImageIO):
 	else:
 	    self.meds_files =  meds_files
 
+        # do sub range files if needed
+        self._setup_work_files()
+        
 	# load meds files and image flags array
 	self._load_meds_files()
 
@@ -51,6 +54,87 @@ class MEDSImageIO(ImageIO):
         
 	self.psfex_lists = self._get_psfex_lists()
 
+    def get_file_meta_data(self):
+        meds_meta_list = self.meds_meta_list
+        dt = meds_meta_list[0].dtype.descr
+
+        if 'config_file' in self.conf:
+            clen=len(self.conf['config_file'])
+            dt += [('ngmixer_config','S%d' % clen)]
+            
+        flen=max([len(mf) for mf in self.meds_files_full] )
+        dt += [('meds_file','S%d' % flen)]
+
+        nband=len(self.meds_files_full)
+        meta=numpy.zeros(nband, dtype=dt)
+
+        for band in xrange(nband):
+            meds_file = self.meds_files_full[band]
+            meds_meta=meds_meta_list[band]
+            mnames=meta.dtype.names
+            for name in meds_meta.dtype.names:
+                if name in mnames:
+                    meta[name][band] = meds_meta[name][0]
+
+            if 'config_file' in self.conf:
+                meta['ngmixer_config'][band] = self.conf['config_file']
+            meta['meds_file'][band] = meds_file
+
+        return meta
+
+    def _get_sub_fname(self,fname):
+        rng_string = '%s-%s' % (self.fof_range[0], self.fof_range[1])
+        bname = os.path.basename(fname)
+        bname = bname.replace('.fits.fz','').replace('.fits','')
+        bname = '%s-%s.fits' % (bname, rng_string)
+        newf = os.path.expandvars(os.path.join(self.conf['work_dir'], bname))
+        return newf
+
+    def _get_sub(self):
+        """
+        Local files will get cleaned up
+        """
+        extracted=[]
+
+        if self.fof_file is None:
+            for f in self.meds_files:
+                log.info(f)
+                newf = self._get_sub_fname(f)
+                ex=meds.MEDSExtractor(f, self.fof_range[0], self.fof_range[1], newf, cleanup=True)
+                extracted.append(ex)
+            extracted.append(None)
+        else:
+            # do the fofs first
+            log.info(self.fof_file)
+            newf = self._get_sub_fname(fof_file)
+            fofex = nbrsfofs.NbrsFoFExtractor(fof_file, self.fof_range[0], self.fof_range[1], newf, cleanup=True)
+
+            # now do the meds
+            for f in self.meds_files:
+                log.info(f)
+                newf = self._get_sub_fname(f)
+                ex=meds.MEDSNumberExtractor(f, fofex.numbers, newf, cleanup=True)
+                extracted.append(ex)
+            extracted.append(fofex)
+
+        return extracted
+
+    def _setup_work_files(self):
+        """
+        Set up local, possibly sub-range meds files
+        """
+        self.meds_files_full = self.meds_files
+        self.fof_file_full = self.fof_file
+        self.extracted=None
+        if self.fof_range is not None:
+            extracted=self._get_sub()
+            meds_files=[ex.sub_file for ex in extracted if ex is not None]
+            if extracted[-1] is not None:
+                self.fof_file = extracted[-1].sub_file
+                meds_files = meds_files[:-1]
+            self.meds_files = meds_files
+            self.extracted = extracted
+        
     def _set_and_check_index_lookups(self):
 	"""
 	Deal with common indexing issues in one place
@@ -84,8 +168,9 @@ class MEDSImageIO(ImageIO):
         # warn the user
         log.info('making fof indexes')
         
-        if self.fof_data is not None:
+        if self.fof_file is not None:
             read_fofs = True
+            self.fof_data = fitsio.read(self.fof_file)
         else:
             read_fofs = False
             nobj = len(self.meds_list[0]['number'])
@@ -134,9 +219,6 @@ class MEDSImageIO(ImageIO):
 
     next = __next__
 
-    def get_file_meta_data(self):
-        return self.meds_meta_list
-    
     def get_num_fofs(self):
         return copy.copy(self.num_fofs - self.fof_start)
     

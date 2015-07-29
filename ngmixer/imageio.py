@@ -17,6 +17,9 @@ class ImageIO(object):
     """
     abstract base class for reading images
     
+    Basic Intro
+    -----------
+    
     To implement an image reader, you need to fill out the abstract methods below
     and make a __next__ and next method like this.
     
@@ -37,6 +40,9 @@ class ImageIO(object):
     
         ...
     
+    Meta Data
+    ---------
+    
     The coadd_mb_obs_lists and se_mb_obs_lists need to have their meta data set with the field
     
         'meta_data': numpy array with meta data (same dtype as returned by get_meta_data_dtype)
@@ -52,16 +58,37 @@ class ImageIO(object):
     
     You can use the update_meta_data method of these objects to set the data.
     
+    Sub-files and extra data
+    ------------------------
+    
+    The image io class will be passed three extra variables
+    
+        fof_range - range of FoF's (or objects if each object is a FoF) to yeild
+        fof_file - a file (user defined) that possibly breaks the set of objects into subsets to 
+                   sent back from __next__ all at once 
+        extra_data - a dict with extra data fields that can be used by the image i/o class
+    
+    The basic idea here is the user can define subsets of objects to all be dealt with by the calling class at once. 
+    
+    This can enable load balancing or other more complicated fitting patterns.
+    
+    Note that the FoF file name is just pass to the image i/o class, so there is no restriction on 
+    the format or tags.    
     """
     
     def __init__(self,*args,**kwargs):
         self.set_fof_start(0)
         self.num_fofs = 0
 
-        if 'fof_data' in kwargs:
-            self.fof_data = kwargs['fof_data']
+        if 'fof_range' in kwargs:
+            self.fof_range = kwargs['fof_range']
         else:
-            self.fof_data = None
+            self.fof_range = None
+        
+        if 'fof_file' in kwargs:
+            self.fof_file = kwargs['fof_file']
+        else:
+            self.fof_file = None
 
         if 'extra_data' in kwargs:
             self.extra_data = kwargs['extra_data']
