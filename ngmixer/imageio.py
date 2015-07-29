@@ -44,11 +44,14 @@ class ImageIO(object):
     ---------
     
     The coadd_mb_obs_lists and se_mb_obs_lists need to have their meta data set with the field
-    
+
+        'id': unique id for object in obs
         'meta_data': numpy array with meta data (same dtype as returned by get_meta_data_dtype)
     
     Each individual observation in the lists needs to have the following meta data fields set
-    
+
+        'id': unique id for object in obs
+        'band_ind': id for object's cutout in the band
         'flags': non-zero if the observation should be ignored
         'meta_data': numpy array with epoch meta data (same dtype as returned by get_epoch_meta_data_dtype)
          

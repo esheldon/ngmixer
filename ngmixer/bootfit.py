@@ -51,6 +51,8 @@ class NGMixBootFitter(BaseFitter):
         self['use_logpars'] = self.get('ise_logpars',False)
         self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
         self['min_psf_s2n'] = self.get('min_psf_s2n',-numpy.inf)
+
+        self.made_psf_plots = False
         
     def _get_good_mb_obs_list(self,mb_obs_list):
         new_mb_obs_list = MultiBandObsList()
@@ -222,7 +224,7 @@ class NGMixBootFitter(BaseFitter):
             n = Namer('psf')
         
         try:
-            self._fit_psfs()
+            self._fit_psfs(coadd)
             flags |= self._fit_psf_flux(coadd)
 
             if flags == 0:
@@ -273,11 +275,13 @@ class NGMixBootFitter(BaseFitter):
 
         return flagsall
 
-    def _fit_psfs(self):
+    def _fit_psfs(self,coadd):
         """
         fit the psf model to every observation's psf image
         """
 
+        log.info('    fitting PSF')
+        
         boot=self.boot
 
         psf_pars = {}
@@ -291,6 +295,51 @@ class NGMixBootFitter(BaseFitter):
                       ntry=self['psf_pars']['ntry'],
                       fit_pars=psf_pars)
 
+        if self['make_plots'] and not self.made_psf_plots:
+            self.made_psf_plots = True
+            for band,obs_list in enumerate(boot.mb_obs_list):
+                for obs in obs_list:
+                    psf_obs = obs.get_psf()
+                    if psf_obs.has_gmix():
+                        self._do_psf_plot(psf_obs,obs.meta['id'],band,obs.meta['band_id'],coadd)
+
+    def _do_psf_plot(self,obs,obs_id,band,band_id,coadd):
+        """
+        make residual plots for psf
+        """
+        import images
+
+        title='%d band: %s' % (obs_id, band)
+        if coadd:
+            title='%s coadd' % title
+        else:
+            title='%s %d' % (title,band_id)
+
+        im=obs.image
+
+        gmix = obs.get_gmix()
+        model_im=gmix.make_image(im.shape, jacobian=obs.jacobian)
+        modflux=model_im.sum()
+        if modflux <= 0:
+            log.log("        psf model flux too low: %f" % modflux)
+            return
+
+        model_im *= ( im.sum()/modflux )
+
+        ims = 1e3/numpy.max(im)
+        plt=images.compare_images(im*ims, model_im*ims,
+                                  label1='psf', label2='model',
+                                  show=False, nonlinear=0.075)
+        plt.title=title
+
+        if coadd:
+            fname='%d-psf-resid-band%d-coadd.png' % (obs_id,band)
+        else:
+            fname='%d-psf-resid-band%d-%d.png' % (obs_id,band,band_id)
+
+        log.info("        making plot %s" % fname)
+        plt.write_img(1920,1200,fname)
+        
     def _fit_galaxy(self, model, coadd):
         """
         over-ride for different fitters

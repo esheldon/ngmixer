@@ -264,7 +264,7 @@ class MEDSImageIO(ImageIO):
         meta_row['id'][0] = self.meds_list[0]['id'][mindex]
         meta_row['number'][0] = self.meds_list[0]['number'][mindex]
         meta_row['nimage_tot'][0,:] = numpy.array([self.meds_list[b]['ncutout'][mindex]-1 for b in xrange(self.conf['nband'])],dtype='i4')
-        meta = {'meta_data':meta_row,'meds_index':mindex}
+        meta = {'meta_data':meta_row,'meds_index':mindex,'id':self.meds_list[0]['id'][mindex]}
 
         coadd_mb_obs_list.update_meta_data(meta)
         mb_obs_list.update_meta_data(meta)
@@ -391,7 +391,9 @@ class MEDSImageIO(ImageIO):
         meta={'icut':icut,
               'orig_start_row':meds['orig_start_row'][mindex, icut],
               'orig_start_col':meds['orig_start_col'][mindex, icut],
-              'meta_data':meta_row}
+              'meta_data':meta_row,
+              'id':meds['id'][mindex],
+              'band_id':icut}
         obs.update_meta_data(meta)
         
         return obs
