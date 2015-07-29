@@ -1,7 +1,7 @@
 # flagging
 
 # this is here for testing, it will be removed one day
-USE_OLD_FLAGS = True
+USE_OLD_FLAGS = False
 
 if not USE_OLD_FLAGS:
     # flags used by NGMixer
