@@ -156,6 +156,8 @@ class NGMixBootFitter(BaseFitter):
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
                 if obs.meta['flags'] == 0 and 'fit_data' in obs.meta and obs.meta['fit_data']['psf_fit_flags'][0] == 0:
+                    assert obs.meta['fit_flags'] == 0
+                    assert obs.get_psf().has_gmix()
                     if obs.meta['fit_data']['wmax'][0] > 0.0:
                         did_one_max = True
                         npix += obs.meta['fit_data']['npix'][0]
@@ -278,24 +280,16 @@ class NGMixBootFitter(BaseFitter):
 
         boot=self.boot
 
-        psf_pars=self['psf_em_pars']
+        psf_pars = {}
+        for k,v in self['psf_pars'].iteritems():
+            if k != 'model' and k != 'ntry':
+                psf_pars.update({k:v})
 
-        Tguess = 0.0
-        Nguess = 0.0
-
-        for band,obs_list in enumerate(boot.mb_obs_list_orig):
-            for obs in obs_list:
-                if obs.meta['flags'] == 0:
-                    if 'sigma_sky' in obs.get_psf().meta:
-                        Tguess += obs.get_psf().meta['sigma_sky']**2
-                        Nguess += 1.0
-        Tguess /= Nguess
-        if Tguess <= 0.0:
-            Tguess = 10.0
-        
-        boot.fit_psfs(psf_pars['model'],
-                      Tguess=Tguess,
-                      ntry=psf_pars['ntry'])
+        boot.fit_psfs(self['psf_pars']['model'],
+                      None,
+                      Tguess_key='Tguess',
+                      ntry=self['psf_pars']['ntry'],
+                      fit_pars=psf_pars)
 
     def _fit_galaxy(self, model, coadd):
         """

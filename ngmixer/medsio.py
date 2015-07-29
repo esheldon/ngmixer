@@ -387,7 +387,8 @@ class MEDSImageIO(ImageIO):
         sigma_sky = sigma_pix*psf_jacobian.get_scale()
 
         psf_obs.update_meta_data({'sigma_sky':sigma_sky})
-
+        psf_obs.update_meta_data({'Tguess':sigma_sky*sigma_sky})
+        
         return psf_obs
 
     def _get_psf_image(self, band, mindex, icut):

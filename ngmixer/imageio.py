@@ -45,6 +45,10 @@ class ImageIO(object):
     
         'flags': non-zero if the observation should be ignored
         'meta_data': numpy array with epoch meta data (same dtype as returned by get_epoch_meta_data_dtype)
+         
+    Each psf of each observation needs to have the meta data field
+
+        'Tguess': guess for size of PSF in arcsec
     
     You can use the update_meta_data method of these objects to set the data.
     
