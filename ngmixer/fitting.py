@@ -21,7 +21,7 @@ class BaseFitter(dict):
     """
     def __init__(self,conf):        
         self.update(conf)
-                
+
     def get_fit_data_dtype(self,me,coadd):
         """
         returns a numpy dtype for the galaxy fit data as a list        
@@ -57,7 +57,7 @@ class BaseFitter(dict):
         """
         raise NotImplementedError("get_default_epoch_fit_data method of BaseFitter must be defined in subclass.")
     
-    def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True):
+    def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True,nbrs_fit_data=None,make_plots=False):
         """
         do fit of single obs list
         
@@ -81,5 +81,29 @@ class BaseFitter(dict):
 
         If make_epoch_data is False, then epoch_fit_data can be set to None in the meta data dict. Even if this value is not None
         if make_epoch_data is False, this value will be ignored be the calling routine.
+        
+        If make_plots is set, fitter should make some plots.
+        
+        Nbrs Modeling
+        -------------
+        if nbrs_fit_data is not None, then all of the nbrs for this obejct should be modeled.
+        
+        Each obs in mb_obs_list has four meta data fields that are used to do this
+        
+            nbrs_inds: index into nbrs_fit_data
+            nbrs_psfs: psf obs for each nbr
+            nbrs_jacs: jaobians for each nbr
+            nbrs_flags: only render nbrs with flags == 0
+        
+        These fields are lists that can be iterated over in parallel like this
+        
+            for ind,psf,jac,flags in zip(nbrs_inds,nbrs_psfs,nbrs_jacs,nbrs_flags):
+                # render and model the nbr for a given obs
+        
+        The original image and weight map in each obs are here
+
+            obs.image_orig
+            obs.weight_orig
+        
         """
         raise NotImplementedError("__call__ method of BaseFitter must be defined in subclass.")

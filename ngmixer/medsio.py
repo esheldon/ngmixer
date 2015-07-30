@@ -235,21 +235,42 @@ class MEDSImageIO(ImageIO):
         adds nbr info to obs lists
         """
 
-        # first get index into mindexes of nbrs
-        for cen,mindex in enumerate(mindexes):
-            nbrs_inds = []
-            nbrs_ids = []
-            q, = numpy.where(self.extra_data['nbrs']['number'] == self.meds_list[0]['number'][mindex])
-            for ind in q:
-                qi, = numpy.where(self.meds_list[0]['number'][mindexes] == self.extra_data['nbrs']['nbr_number'][ind])
-                assert len(qi) == 1
-                nbrs_inds.append(qi[0])
-                nbrs_ids.append(self.meds_list[0]['id'][mindexes[qi[0]]])
-                assert coadd_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
-                assert me_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
+        # save orig images and weights
+        for mb_obs_list in coadd_mb_obs_lists:
+            for obs_list in mb_obs_list:
+                for obs in obs_list:
+                    obs.image_orig = obs.image.copy()
+                    obs.weight_orig = obs.weight.copy()
 
-            coadd_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids})
-            me_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids})
+        for mb_obs_list in me_mb_obs_lists:
+            for obs_list in mb_obs_list:
+                for obs in obs_list:
+                    obs.image_orig = obs.image.copy()
+                    obs.weight_orig = obs.weight.copy()        
+        
+        # do indexes
+        if len(mindexes) == 1:
+            for cen,mindex in enumerate(mindexes):
+                nbrs_inds = []
+                nbrs_ids = []
+                coadd_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids})
+                me_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids})
+        else:
+            for cen,mindex in enumerate(mindexes):
+                nbrs_inds = []
+                nbrs_ids = []
+                q, = numpy.where(self.extra_data['nbrs']['number'] == self.meds_list[0]['number'][mindex])
+                for ind in q:
+                    qi, = numpy.where(self.meds_list[0]['number'][mindexes] == self.extra_data['nbrs']['nbr_number'][ind])
+                    assert len(qi) == 1
+                    nbrs_inds.append(qi[0])
+                    nbrs_ids.append(self.meds_list[0]['id'][mindexes[qi[0]]])
+                    assert coadd_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
+                    assert me_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
+                    
+                coadd_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids,'cen_ind':cen})
+                me_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids,'cen_ind':cen})
+                assert cen not in nbrs_inds,'weird error where cen_ind is in nbrs_ind!'
                 
         # now do psfs and jacobians
         self._add_nbrs_psfs_and_jacs(coadd_mb_obs_lists,mindexes)
@@ -283,7 +304,7 @@ class MEDSImageIO(ImageIO):
         cen_file_id = cen_obs.meta['meta_data']['file_id'][0]
         nbr_obs = None
         for obs in mb_obs_lists[nbr_mindex][band]:
-            if obs.meta['meta_data']['file_id'][0] == cen_file_id:
+            if obs.meta['meta_data']['file_id'][0] == cen_file_id and self.meds_list[band]['id'][nbr_mindex] == obs.meta['id']:
                 nbr_obs = obs
 
         if nbr_obs is not None:

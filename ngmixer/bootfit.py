@@ -4,10 +4,6 @@ import numpy
 import logging
 import os
 
-# ngmix
-import ngmix
-from ngmix import Observation, ObsList, MultiBandObsList, GMixRangeError
-
 # local imports
 from .defaults import DEFVAL,LOGGERNAME,NO_ATTEMPT,PSF_FIT_FAILURE,GAL_FIT_FAILURE,LOW_PSF_FLUX
 from .fitting import BaseFitter
@@ -17,9 +13,12 @@ from .util import Namer
 log = logging.getLogger(LOGGERNAME)
 
 # ngmix imports
+import ngmix
+from ngmix import Observation, ObsList, MultiBandObsList, GMixRangeError
 from ngmix import print_pars
 from ngmix.fitting import EIG_NOTFINITE
 from ngmix.gexceptions import BootPSFFailure, BootGalFailure
+from ngmix.gmix import GMixModel, GMix, GMixCM
 
 def get_bootstrapper(obs, type='boot', **keys):
     from ngmix.bootstrap import Bootstrapper
@@ -53,8 +52,6 @@ class NGMixBootFitter(BaseFitter):
         self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
         self['min_psf_s2n'] = self.get('min_psf_s2n',-numpy.inf)
 
-        self.made_psf_plots = False
-        
     def _get_good_mb_obs_list(self,mb_obs_list):
         new_mb_obs_list = MultiBandObsList()
         for obs_list in mb_obs_list:
@@ -66,17 +63,22 @@ class NGMixBootFitter(BaseFitter):
         new_mb_obs_list.update_meta_data(mb_obs_list.meta)
         new_mb_obs_list.update_meta_data({'old_mb_obs_list':mb_obs_list})
         return new_mb_obs_list
-    
-    def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True):
+
+    def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True,nbrs_fit_data=None,make_plots=False):
         """
         fit the obs list
         """
 
+        # decide whether or not to make plots
+        self['make_plots'] = make_plots
+        
         # only fit stuff that is not flagged
         new_mb_obs_list = self._get_good_mb_obs_list(mb_obs_list)
         self.new_mb_obs_list = new_mb_obs_list
+        self.mb_obs_list = mb_obs_list
         
-        mb_obs_list.update_meta_data({'fit_data':self._make_struct(coadd)})
+        if 'fit_data' not in mb_obs_list.meta:
+            mb_obs_list.update_meta_data({'fit_data':self._make_struct(coadd)})
         self.data = mb_obs_list.meta['fit_data']
 
         if self['make_plots']:
@@ -88,6 +90,9 @@ class NGMixBootFitter(BaseFitter):
         for model in self['fit_models']:
             log.info('    fitting: %s' % model)            
 
+            if self['model_nbrs'] and nbrs_fit_data is not None:
+                self._render_nbrs(model,new_mb_obs_list,coadd,nbrs_fit_data)
+            
             model_flags, boot = self._run_boot(model,new_mb_obs_list,coadd)
             fit_flags |= model_flags
 
@@ -107,6 +112,147 @@ class NGMixBootFitter(BaseFitter):
             
         return fit_flags
 
+    def _render_single(self,model,band,obs,pars_tag,fit_data,psf_gmix,jac):
+        """
+        render a single image of model with pars_tag in fit_data and psf_gmix w/ jac
+        """
+        n = Namer(model)
+        pars_obj = fit_data[pars_tag][0].copy()
+        band_pars_obj = pars_obj[0:6]
+        band_pars_obj[-1] = pars_obj[5+band]
+        if model != 'cm':
+            gmix_sky = GMixModel(band_pars_obj, model)
+        else:
+            gmix_sky = GMixCM(fit_data[n('fracdev')][0],fit_data[n('TdByTe')][0],band_pars_obj)
+        gmix_image = gmix_sky.convolve(psf_gmix)
+        image = gmix_image.make_image(obs.image.shape, jacobian=jac)
+        return image
+    
+    def _render_nbrs(self,model,mb_obs_list,coadd,nbrs_fit_data):
+        """
+        render nbrs
+        """
+
+        if len(mb_obs_list.meta['nbrs_inds']) == 0:
+            return
+
+        n = Namer(model)        
+        pars_name = 'max_pars'        
+        if n(pars_name) not in nbrs_fit_data.dtype.names:
+            pars_name = 'pars'
+
+        pars_tag = n(pars_name)
+        assert pars_tag in nbrs_fit_data.dtype.names
+
+        if 'max' in pars_tag:
+            fit_flags_tag = n('max_flags')
+        else:
+            fit_flags_tag = n('flags')
+        
+        cen_ind = mb_obs_list.meta['cen_ind']
+        for band,obs_list in enumerate(mb_obs_list):
+            for obs in obs_list:
+                if obs.meta['flags'] != 0:
+                    continue
+
+                # do central image first
+                if nbrs_fit_data[fit_flags_tag][cen_ind] == 0:
+                    assert obs.has_psf_gmix()
+                    cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1],obs.get_psf_gmix(),obs.get_jacobian())
+                else:
+                    cenim = numpy.zeros_like(obs.image)
+
+                # now do nbrs
+                totim = cenim.copy()                
+                for nbrs_ind,nbrs_flags,nbrs_psf,nbrs_jac in zip(mb_obs_list.meta['nbrs_inds'],
+                                                                 obs.meta['nbrs_flags'],
+                                                                 obs.meta['nbrs_psfs'],
+                                                                 obs.meta['nbrs_jacs']):
+                    if nbrs_flags == 0 and nbrs_fit_data[fit_flags_tag][nbrs_ind] == 0:
+                        if nbrs_psf.has_gmix():
+                            nbrs_psf_gmix = nbrs_psf.get_gmix()
+                        else:
+                            # FIXME - need to fit psf from off chip nbrs
+                            continue
+
+                        totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1],nbrs_psf_gmix,nbrs_jac)
+
+                if self['model_nbrs_method'] == 'subtract':
+                    obs.image = obs.image_orig - totim
+                else:
+                    assert False,'nbrs model method %s not implemented!' % self['model_nbrs_method']
+
+                if self['make_plots']:
+                    self._plot_nbrs_model(band,model,obs,totim,cenim,coadd)
+
+    def _plot_nbrs_model(self,band,model,obs,totim,cenim,coadd):
+        """
+        plot nbrs model
+        """
+        if coadd:
+            ptype='coadd'
+        else:
+            ptype='mb'
+
+        obj_id = obs.meta['id']
+        ptype = '%s-%s-%s' % (ptype,model,'max')
+        title='%d %s' % (obj_id,ptype)
+
+        """
+        def plot_seg(seg):
+            seg_new = seg.copy()
+            seg_new = seg_new.astype(float)
+            uvals = numpy.unique(seg)
+            mval = 1.0*(len(uvals)-1)
+            ind = 1.0
+            for uval in uvals:
+                if uval > 0:
+                    qx,qy = numpy.where(seg == uval)
+                    seg_new[qx[:],qy[:]] = ind/mval
+                    ind += 1
+                                    
+            return seg_new
+        """
+        
+        icut_cen = obs.meta['icut']
+                
+        import images
+        import biggles
+        width = 1920
+        height = 1200
+        biggles.configure('screen','width', width)
+        biggles.configure('screen','height', height)
+        tab = biggles.Table(2,3)
+        tab.title = title
+                    
+        tab[0,0] = images.view(obs.image_orig,title='original image',show=False,nonlinear=0.075)
+        tab[0,1] = images.view(totim-cenim,title='models of nbrs',show=False,nonlinear=0.075)
+
+        """
+        if coadd:
+            tab[0,2] = images.view(plot_seg(seg),title='seg map',show=False)
+        else:
+            tab[0,2] = images.view(plot_seg(meds.interpolate_coadd_seg(self.mindex,icut_cen)),title='seg map',show=False)
+        """
+        
+        tab[1,0] = images.view(obs.image,title='corrected image',show=False,nonlinear=0.075)
+        msk = totim != 0
+        frac = numpy.zeros(totim.shape)
+        frac[msk] = cenim[msk]/totim[msk]
+        tab[1,1] = images.view(frac,title='fraction of flux due to central',show=False)                    
+        tab[1,2] = images.view(obs.weight,title='weight map',show=False)
+                    
+        try:
+            if icut_cen > 0:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d.png' % (ptype,band,icut_cen))
+            else:
+                fname = os.path.join(self.plot_dir,'%d-nbrs-band%d-coadd.png' % (ptype,band))
+            log.info("        making plot %s" % fname)
+            tab.write_img(1920,1200,fname)
+        except:
+            log.info("        caught error plotting nbrs")
+            pass
+    
     def _fill_epoch_data(self,mb_obs_list,new_mb_obs_list):
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
@@ -305,8 +451,9 @@ class NGMixBootFitter(BaseFitter):
                       ntry=self['psf_pars']['ntry'],
                       fit_pars=psf_pars)
 
-        if self['make_plots'] and not self.made_psf_plots:
-            self.made_psf_plots = True
+        if self['make_plots'] and (('made_psf_plots' not in self.mb_obs_list.meta) or \
+                                   ('made_psf_plots' in self.mb_obs_list.meta and self.mb_obs_list.meta['made_psf_plots'] == False)):
+            self.mb_obs_list.update_meta_data({'made_psf_plots':True})
             for band,obs_list in enumerate(boot.mb_obs_list):
                 for obs in obs_list:
                     psf_obs = obs.get_psf()

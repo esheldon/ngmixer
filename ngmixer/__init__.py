@@ -9,6 +9,7 @@ from . import defaults
 from . import bootfit
 from . import ngmixit
 from . import medsngmixit
+from . import mofngmixing
 
 #######################################################
 # setup logger
