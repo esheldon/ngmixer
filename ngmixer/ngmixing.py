@@ -122,10 +122,18 @@ class NGMixer(dict):
         t0=time.time()
         num = 0
         numtot = self.imageio.get_num_fofs()
-
+        
         log.info('index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
         for coadd_mb_obs_lists,mb_obs_lists in self.imageio:            
             foflen = len(mb_obs_lists)            
+
+            # get data to fill
+            self.curr_data = self._make_struct(num=foflen)
+            for tag in self.default_data.dtype.names:
+                self.curr_data[tag][:] = self.default_data[tag]
+            self.curr_data_index = 0
+
+            # fit the fof
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
                 if foflen > 1:
                     log.info('    fof obj: %d:%d' % (num,foflen))
@@ -136,11 +144,15 @@ class NGMixer(dict):
                 ti = time.time()-ti
                 log.info('    time: %f' % ti)
 
+                self.curr_data_index += 1
+
+            # append data and incr.
+            self.data.extend(list(self.curr_data))
             self.curr_fofindex += 1
             
             tm=time.time()-t0                
             self._try_checkpoint(tm)
-
+            
             if self.curr_fofindex < numtot:
                 log.info('index: %d:%d' % (self.curr_fofindex+1,numtot))
             
@@ -156,12 +168,6 @@ class NGMixer(dict):
         """
 
         t0 = time.time()
-
-        # get data to fill
-        self.curr_data = self._make_struct()
-        for tag in self.default_data.dtype.names:
-            self.curr_data[tag] = self.default_data[tag]
-        self.curr_data_index = 0
 
         # get the box size
         box_size = self._get_box_size(mb_obs_list)
@@ -191,8 +197,6 @@ class NGMixer(dict):
         # fill in from mb_obs_meta
         for tag in mb_obs_list.meta['meta_data'].dtype.names:
             self.curr_data[tag][self.curr_data_index] = mb_obs_list.meta['meta_data'][tag][0]
-
-        self.data.extend(list(self.curr_data))
 
     def _fill_epoch_data(self,mb_obs_list):
         # fill in epoch data

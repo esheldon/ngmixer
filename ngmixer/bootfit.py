@@ -115,6 +115,9 @@ class NGMixBootFitter(BaseFitter):
 
                 if obs.meta['flags'] != 0:
                     obs.update_meta_data({'fit_flags':obs.meta['flags']})
+                    ed = self._make_epoch_struct()
+                    ed['psf_fit_flags'] = obs.meta['flags']
+                    obs.update_meta_data({'fit_data':ed})
                     continue
 
                 if obs.meta['flags'] == 0 and obs.has_psf() and 'fit_data' not in obs.meta:
@@ -125,7 +128,7 @@ class NGMixBootFitter(BaseFitter):
                     ed['wsum'] = obs.weight.sum()
                     ed['wmax'] = obs.weight.max()
                     ed['psf_counts'] = psf_obs.image.sum()
-                    
+
                     if 'fitter' in psf_obs.meta:
                         res = obs.get_psf().meta['fitter'].get_result()
                         ed['psf_fit_flags'] = res['flags']

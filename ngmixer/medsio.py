@@ -268,7 +268,7 @@ class MEDSImageIO(ImageIO):
 
         coadd_mb_obs_list.update_meta_data(meta)
         mb_obs_list.update_meta_data(meta)
-        
+
         return coadd_mb_obs_list, mb_obs_list
     
     def _reject_outliers(self, obs_list):
@@ -278,12 +278,12 @@ class MEDSImageIO(ImageIO):
             if obs.meta['flags'] == 0:
                 imlist.append(obs.image)
                 wtlist.append(obs.weight)
-            
+        
         # weight map is modified
         nreject=meds.reject_outliers(imlist,wtlist)
         if nreject > 0:
             log.info('    rejected: %d' % nreject)
-            
+
     def _get_band_observations(self, band, mindex):
         """
         Get an ObsList for the coadd observations in each band
@@ -309,6 +309,9 @@ class MEDSImageIO(ImageIO):
                 obs = self._get_band_observation(band, mindex, icut)
                 flags=0
 
+            # fill the meta data
+            self._fill_obs_meta_data(obs,band,mindex,icut)
+            
             # set flags
             meta = {'flags':flags}
             obs.update_meta_data(meta)
@@ -320,7 +323,7 @@ class MEDSImageIO(ImageIO):
 
         if self.conf['reject_outliers'] and len(obs_list) > 0:
             self._reject_outliers(obs_list)
-        
+            
         return coadd_obs_list, obs_list
 
     def _get_image_flags(self, band, mindex):
@@ -374,8 +377,16 @@ class MEDSImageIO(ImageIO):
                         psf=psf_obs)
 
         obs.filename=fname
+        
+        return obs
 
-        # fill meta data to be included in output files
+    def _fill_obs_meta_data(self,obs, band, mindex, icut):
+        """
+        fill meta data to be included in output files
+        """
+
+        meds=self.meds_list[band]
+
         meta_row = self._get_epoch_meta_row()
         meta_row['id'][0] = meds['id'][mindex]
         meta_row['number'][0] = meds['number'][mindex]
@@ -396,8 +407,6 @@ class MEDSImageIO(ImageIO):
               'band_id':icut}
         obs.update_meta_data(meta)
         
-        return obs
-
     def _get_meds_orig_filename(self, meds, mindex, icut):
         """
         Get the original filename
