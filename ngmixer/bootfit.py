@@ -178,7 +178,7 @@ class NGMixBootFitter(BaseFitter):
                         totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1],nbrs_psf_gmix,nbrs_jac)
 
                 if self['model_nbrs_method'] == 'subtract':
-                    obs.image = obs.image_orig - totim
+                    obs.image = obs.image_orig - totim + cenim
                 else:
                     assert False,'nbrs model method %s not implemented!' % self['model_nbrs_method']
 
