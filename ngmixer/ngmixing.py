@@ -26,7 +26,7 @@ class NGMixer(dict):
                  output_file=None,
                  fof_range=None,
                  fof_file=None,
-                 extra_data=None,
+                 extra_data={},
                  random_seed=None,
                  init_only=False,
                  profile=False,
@@ -123,7 +123,7 @@ class NGMixer(dict):
         num = 0
         numtot = self.imageio.get_num_fofs()
         
-        log.info('index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
+        log.info('fof index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
         for coadd_mb_obs_lists,mb_obs_lists in self.imageio:            
             foflen = len(mb_obs_lists)            
 
@@ -136,7 +136,8 @@ class NGMixer(dict):
             # fit the fof
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
                 if foflen > 1:
-                    log.info('    fof obj: %d:%d' % (num,foflen))
+                    log.info('fof obj: %d:%d' % (num,foflen))
+                log.info('    id: %d' % mb_obs_list.meta['id'])
 
                 num += 1
                 ti = time.time()
@@ -154,7 +155,7 @@ class NGMixer(dict):
             self._try_checkpoint(tm)
             
             if self.curr_fofindex < numtot:
-                log.info('index: %d:%d' % (self.curr_fofindex+1,numtot))
+                log.info('fof index: %d:%d' % (self.curr_fofindex+1,numtot))
             
         tm=time.time()-t0
         log.info("time: %f" % tm)

@@ -3,7 +3,9 @@
     %prog [options] config_file out_file data_file1 data_files2 ...
     Process the input meds file."""
 from __future__ import print_function
+import os
 import sys
+import fitsio
 from ngmixer.ngmixing import NGMixer
 
 from optparse import OptionParser
@@ -30,6 +32,9 @@ parser.add_option("--make-plots", action='store_true',
 parser.add_option("--seed", default=None, 
                   help=("random seed"))
 
+parser.add_option("--nbrs-file", default=None,
+                  help=("file with the neighbors of each object"))
+
 def get_range(rng_string):
     if rng_string is not None:
         rng = rng_string.split(',')
@@ -54,6 +59,10 @@ if __name__ == '__main__':
     else:
         seed = None
 
+    extra_data = {}
+    if options.nbrs_file is not None:
+        extra_data['nbrs'] = fitsio.read(os.path.expandvars(options.nbrs_file))
+        
     NGMixer(config_file,
             data_files,
             output_file=out_file,
@@ -61,6 +70,7 @@ if __name__ == '__main__':
             fof_file=options.fof_file,
             work_dir=options.work_dir,
             random_seed=seed,
+            extra_data=extra_data,
             profile=options.profile,
             make_plots=options.make_plots)
     

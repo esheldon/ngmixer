@@ -4,6 +4,7 @@ import os
 import numpy
 import logging
 import copy
+import fitsio
 
 # meds and ngmix imports
 import meds
@@ -13,6 +14,7 @@ from ngmix import Observation, ObsList, MultiBandObsList
 # local imports
 from .imageio import ImageIO
 from .defaults import DEFVAL,IMAGE_FLAGS,LOGGERNAME
+from . import nbrsfofs
 
 # internal flagging
 IMAGE_FLAGS_SET=2**0
@@ -53,6 +55,11 @@ class MEDSImageIO(ImageIO):
 	self._set_and_check_index_lookups()
         
 	self.psfex_lists = self._get_psfex_lists()
+
+        if 'model_nbrs' in self.conf:
+            assert 'extra_data' in kwargs
+            self.extra_data = kwargs['extra_data']
+            assert 'nbrs' in self.extra_data
 
     def get_file_meta_data(self):
         meds_meta_list = self.meds_meta_list
@@ -106,8 +113,8 @@ class MEDSImageIO(ImageIO):
         else:
             # do the fofs first
             log.info(self.fof_file)
-            newf = self._get_sub_fname(fof_file)
-            fofex = nbrsfofs.NbrsFoFExtractor(fof_file, self.fof_range[0], self.fof_range[1], newf, cleanup=True)
+            newf = self._get_sub_fname(self.fof_file)
+            fofex = nbrsfofs.NbrsFoFExtractor(self.fof_file, self.fof_range[0], self.fof_range[1], newf, cleanup=True)
 
             # now do the meds
             for f in self.meds_files:
@@ -193,7 +200,8 @@ class MEDSImageIO(ImageIO):
 	    for fofid in self.fofids:
 	        q, = numpy.where(self.fof_data['fofid'] == fofid)
 	        assert len(q) > 0, 'Found zero length FoF! fofid = %ld' % fofid
-	        self.fofid2mindex[fofid] = q.copy()
+                assert numpy.array_equal(self.fof_data['number'][q],self.meds_list[0]['number'][q])
+                self.fofid2mindex[fofid] = q.copy()
         else:
             #use a list of lists since is much faster to make
             self.fofid2mindex = []
@@ -208,17 +216,102 @@ class MEDSImageIO(ImageIO):
             fofid = self.fofids[self.fofindex]
             mindexes = self.fofid2mindex[fofid]
             coadd_mb_obs_lists = []
-            se_mb_obs_lists = []
+            me_mb_obs_lists = []
             for mindex in mindexes:
-                log.info('    id: %d' % self.meds_list[0]['id'][mindex])
-                c,se = self._get_multi_band_observations(mindex)
+                c,me = self._get_multi_band_observations(mindex)
                 coadd_mb_obs_lists.append(c)
-                se_mb_obs_lists.append(se)
+                me_mb_obs_lists.append(me)
+
+            if self.conf['model_nbrs']:                
+                self._add_nbrs_info(coadd_mb_obs_lists,me_mb_obs_lists,mindexes)
+
             self.fofindex += 1
-            return coadd_mb_obs_lists,se_mb_obs_lists
+            return coadd_mb_obs_lists,me_mb_obs_lists
 
     next = __next__
 
+    def _add_nbrs_info(self,coadd_mb_obs_lists,me_mb_obs_lists,mindexes):
+        """
+        adds nbr info to obs lists
+        """
+
+        # first get index into mindexes of nbrs
+        for cen,mindex in enumerate(mindexes):
+            nbrs_inds = []
+            nbrs_ids = []
+            q, = numpy.where(self.extra_data['nbrs']['number'] == self.meds_list[0]['number'][mindex])
+            for ind in q:
+                qi, = numpy.where(self.meds_list[0]['number'][mindexes] == self.extra_data['nbrs']['nbr_number'][ind])
+                assert len(qi) == 1
+                nbrs_inds.append(qi[0])
+                nbrs_ids.append(self.meds_list[0]['id'][mindexes[qi[0]]])
+                assert coadd_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
+                assert me_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
+
+            coadd_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids})
+            me_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids})
+                
+        # now do psfs and jacobians
+        self._add_nbrs_psfs_and_jacs(coadd_mb_obs_lists,mindexes)
+        self._add_nbrs_psfs_and_jacs(me_mb_obs_lists,mindexes)        
+
+    def _add_nbrs_psfs_and_jacs(self,mb_obs_lists,mindexes):
+        # for each object
+        for cen,mindex in enumerate(mindexes):
+            # for each band per object
+            for band,obs_list in enumerate(mb_obs_lists[cen]):
+                # for each obs per band per object
+                for obs in obs_list:
+                    if obs.meta['flags'] == 0:
+                        # for each nbr per obs per band per object
+                        nbrs_psfs = []
+                        nbrs_flags = []
+                        nbrs_jacs = []
+                        for ind in mb_obs_lists[cen].meta['nbrs_inds']:
+                            psf_obs,jac = self._get_nbr_psf_obs_and_jac(band,mindex,obs,mindexes[ind],mb_obs_lists)
+                            nbrs_psfs.append(psf_obs)
+                            nbrs_jacs.append(jac)
+
+                            if psf_obs is None or jac is None:
+                                nbrs_flags.append(1)
+                            else:
+                                nbrs_flags.append(0)
+                        
+                        obs.update_meta_data({'nbrs_psfs':nbrs_psfs,'nbrs_flags':nbrs_flags,'nbrs_jacs':nbrs_jacs})
+
+    def _get_nbr_psf_obs_and_jac(self,band,cen_mindex,cen_obs,nbr_mindex,mb_obs_lists):
+        cen_file_id = cen_obs.meta['meta_data']['file_id'][0]
+        nbr_obs = None
+        for obs in mb_obs_lists[nbr_mindex][band]:
+            if obs.meta['meta_data']['file_id'][0] == cen_file_id:
+                nbr_obs = obs
+
+        if nbr_obs is not None:
+            assert nbr_obs.meta['flags'] == 0
+            nbr_psf_obs = nbr_obs.get_psf()
+            nbr_icut = nbr_obs.meta['icut']
+            assert self.meds_list[band]['file_id'][nbr_mindex,nbr_icut] == cen_file_id
+            
+            # construct jacobian
+            # get fiducial location of object in postage stamp
+            row = self.meds_list[band]['orig_row'][nbr_mindex,nbr_icut] - cen_obs.meta['orig_start_row']
+            col = self.meds_list[band]['orig_col'][nbr_mindex,nbr_icut] - cen_obs.meta['orig_start_col']
+            nbr_jac = Jacobian(row,col,
+                               self.meds_list[band]['dudrow'][nbr_mindex,nbr_icut],
+                               self.meds_list[band]['dudcol'][nbr_mindex,nbr_icut],
+                               self.meds_list[band]['dvdrow'][nbr_mindex,nbr_icut],
+                               self.meds_list[band]['dvdcol'][nbr_mindex,nbr_icut])
+            # FIXME - this is wrong...I think - commented out for now
+            #pixscale = jacob.get_scale()
+            #row += pars_obj[0]/pixscale
+            #col += pars_obj[1]/pixscale
+            #nbr_jac.set_cen(row,col)            
+
+            return nbr_psf_obs,nbr_jac
+        else:
+            # FIXME - implement off chip nbrs
+            return None,None
+    
     def get_num_fofs(self):
         return copy.copy(self.num_fofs - self.fof_start)
     
