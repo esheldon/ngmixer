@@ -50,7 +50,7 @@ class MOFNGMixer(NGMixer):
                 if model not in self.curr_data.dtype.names:
                     continue
 
-                if self.curr_data['flags'][fofind]:
+                if self.curr_data['flags'][fofind] or self.prev_data['flags'][fofind]:
                     log.info('    skipping fof obj %s in convergence check' % (fofind+1))
                     continue
                 
