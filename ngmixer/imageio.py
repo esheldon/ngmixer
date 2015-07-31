@@ -78,6 +78,20 @@ class ImageIO(object):
     
     Note that the FoF file name is just pass to the image i/o class, so there is no restriction on 
     the format or tags.    
+
+    Nbrs Modeling                                                                                                                                                                                   
+    -------------                                                                                                                                                                                   
+    To enable the nbrs modeling, each object has to mark which nbrs must be modeled. 
+    
+    Each mb_obs_list in mb_obs_lists needs five meta data fields that are used to do this
+    
+        nbrs_inds: index into mb_obs_lists of the nbr obs                                                                                                                       
+        nbrs_psfs: psf obs for each nbr
+        nbrs_jacs: jaobians for each nbr                                                                                                                                                            
+        nbrs_flags: only render nbrs with flags == 0
+        cen_ind: index into mb_obs_lists of the central object
+        nbrs_ids: id of the nbr - useful for double checking things
+    
     """
     
     def __init__(self,*args,**kwargs):

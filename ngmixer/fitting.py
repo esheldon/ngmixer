@@ -98,7 +98,7 @@ class BaseFitter(dict):
         -------------
         if nbrs_fit_data is not None, then all of the nbrs for this obejct should be modeled.
         
-        Each obs in mb_obs_list has four meta data fields that are used to do this
+        Each mb_obs_list in mb_obs_lists has four meta data fields that are used to do this
         
             nbrs_inds: index into nbrs_fit_data
             nbrs_psfs: psf obs for each nbr
