@@ -44,9 +44,8 @@ class MOFNGMixer(NGMixer):
         maxerr[:] = -numpy.inf
         
         for fofind in xrange(foflen):
-            log.info('    fof obj: %ld' % fofind)
+            log.debug('    fof obj: %ld' % fofind)
 
-            #FIXME - mofngmixer doesn't know what tags to use - prob get from fitter
             for model,model_cov in zip(models_to_check,cov_models_to_check):
                 if model not in self.curr_data.dtype.names:
                     continue
@@ -65,12 +64,13 @@ class MOFNGMixer(NGMixer):
                     if abserr[i] > maxerr[i]:
                         maxerr[i] = copy.copy(abserr[i])
                 
-                log.info('        %s:' % model)
-                print_pars(old,        front='            old      ')
-                print_pars(new,        front='            new      ')
-                print_pars(absdiff,    front='            abs diff ')
-                print_pars(absfracdiff,front='            frac diff')
-                print_pars(abserr,front='            err diff ')
+                log.debug('        %s:' % model)
+                if log.getEffectiveLevel() <= logging.DEBUG:
+                    print_pars(old,        front='            old      ')
+                    print_pars(new,        front='            new      ')
+                    print_pars(absdiff,    front='            abs diff ')
+                    print_pars(absfracdiff,front='            frac diff')
+                    print_pars(abserr,front='            err diff ')
         
                     
         fmt = "%8.3g "*len(maxabs)
@@ -81,7 +81,7 @@ class MOFNGMixer(NGMixer):
         self.maxabs = maxabs
         self.maxfrac = maxfrac
         self.maxerr = maxerr
-        
+
         if numpy.all((maxabs <= self['mof_maxabs_conv']) | (maxfrac <= self['mof_maxfrac_conv']) | (maxerr <= self['mof_maxerr_conv'])):
             return True
         else:
@@ -108,21 +108,25 @@ class MOFNGMixer(NGMixer):
             foflen = len(mb_obs_lists)            
             log.info('    num in fof: %d' % foflen)
 
-            # deal with plots
-            if self['make_plots']:
-                make_plots_at_end = True
-                self['make_plots'] = False
-            else:
-                make_plots_at_end = False
-            
             # get data to fill
             self.curr_data = self._make_struct(num=foflen)
             for tag in self.default_data.dtype.names:
                 self.curr_data[tag][:] = self.default_data[tag]
 
             # fit the fof once with no nbrs
-            self.curr_data_index = 0
+            # sort by stamp size
+            bs = []
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
+                box_size = self._get_box_size(mb_obs_list)
+                if box_size < 0:
+                    box_size = self._get_box_size(coadd_mb_obs_list)
+                bs.append(box_size)
+            bs = numpy.array(bs)
+            q = numpy.argsort(bs)            
+            for i in q:
+                self.curr_data_index = i                                    
+                coadd_mb_obs_list = coadd_mb_obs_lists[i]
+                mb_obs_list = mb_obs_lists[i]
                 if foflen > 1:
                     log.info('fof obj: %d:%d' % (self.curr_data_index+1,foflen))
                 log.info('    id: %d' % mb_obs_list.meta['id'])
@@ -133,37 +137,43 @@ class MOFNGMixer(NGMixer):
                 ti = time.time()-ti
                 log.info('    time: %f' % ti)
 
-                self.curr_data_index += 1
-
-            if make_plots_at_end:
-                self['make_plots'] = True
-            
-            # now fit again with nbrs - simple for now
-            for itr in xrange(self['mof_max_itr']):
-                log.info('itr %d:' % itr)
+            if foflen > 1:
+                # now fit again with nbrs
+                converged = False
+                for itr in xrange(self['mof_max_itr']):
+                    log.info('itr %d:' % itr)
                 
-                # data
-                self.prev_data = self.curr_data.copy()
-
-                # fitting
-                for i in numpy.random.choice(foflen,size=foflen,replace=False):
-                    self.curr_data_index = i                                    
-                    coadd_mb_obs_list = coadd_mb_obs_lists[i]
-                    mb_obs_list = mb_obs_lists[i]
-                    if foflen > 1:
-                        log.info('fof obj: %d:%d' % (self.curr_data_index+1,foflen))
-                    log.info('    id: %d' % mb_obs_list.meta['id'])
-
-                    num += 1
-                    ti = time.time()
-                    self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=self.curr_data)
-                    ti = time.time()-ti
-                    log.info('    time: %f' % ti)
+                    # data
+                    self.prev_data = self.curr_data.copy()
                     
-                if itr >= 1:
-                    log.info('convergence itr %d:' % itr)
-                    if self._check_convergence(foflen):
-                        break
+                    # fitting
+                    for i in numpy.random.choice(foflen,size=foflen,replace=False):
+                        self.curr_data_index = i                                    
+                        coadd_mb_obs_list = coadd_mb_obs_lists[i]
+                        mb_obs_list = mb_obs_lists[i]
+                        if foflen > 1:
+                            log.info('fof obj: %d:%d' % (self.curr_data_index+1,foflen))
+                        log.info('    id: %d' % mb_obs_list.meta['id'])
+
+                        num += 1
+                        ti = time.time()
+                        self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=self.curr_data)
+                        ti = time.time()-ti
+                        log.info('    time: %f' % ti)
+                    
+                    if itr >= 1:
+                        log.info('convergence itr %d:' % (itr+1))
+                        if self._check_convergence(foflen):
+                            converged = True
+                            break
+
+                log.info('fof index: %d' % (self.curr_fofindex+1-self.start_fofindex))
+                log.info('    converged: %s' % str(converged))
+                log.info('    num itr: %d' % (itr+1))
+                fmt = "%8.3g "*len(self.maxabs)
+                log.info("    max abs diff : "+fmt % tuple(self.maxabs))
+                log.info("    max frac diff: "+fmt % tuple(self.maxfrac))
+                log.info("    max err diff : "+fmt % tuple(self.maxerr))
 
             # append data and incr.
             self.data.extend(list(self.curr_data))
