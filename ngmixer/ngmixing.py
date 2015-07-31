@@ -489,7 +489,7 @@ class NGMixer(dict):
         the checkpoint file
         """
         if os.path.exists(self.checkpoint_file):
-            log.info('removing checkpoint file %s' % self.checkpoint_file)
+            log.info('removing checkpoint file: %s' % self.checkpoint_file)
             os.remove(self.checkpoint_file)
     
     def write_data(self):
@@ -502,7 +502,7 @@ class NGMixer(dict):
             from .files import StagedOutFile
             work_dir = self['work_dir']
             with StagedOutFile(self.output_file, tmpdir=work_dir) as sf:
-                log.info('writing %s' % sf.path)
+                log.info('writing: %s' % sf.path)
                 with fitsio.FITS(sf.path,'rw',clobber=True) as fobj:
                     fobj.write(self.get_data(),extname="model_fits")
                     

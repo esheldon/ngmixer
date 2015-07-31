@@ -86,7 +86,7 @@ class MOFNGMixer(NGMixer):
         self.maxfrac = maxfrac
         self.maxerr = maxerr
 
-        if numpy.all((maxabs <= self['mof_maxabs_conv']) | (maxfrac <= self['mof_maxfrac_conv']) | (maxerr <= self['mof_maxerr_conv'])):
+        if numpy.all((maxabs <= self['mof']['maxabs_conv']) | (maxfrac <= self['mof']['maxfrac_conv']) | (maxerr <= self['mof']['maxerr_conv'])):
             return True
         else:
             return False
@@ -144,7 +144,7 @@ class MOFNGMixer(NGMixer):
             if foflen > 1:
                 # now fit again with nbrs
                 converged = False
-                for itr in xrange(self['mof_max_itr']):
+                for itr in xrange(self['mof']['max_itr']):
                     log.info('itr %d:' % itr)
                 
                     # data
@@ -165,7 +165,7 @@ class MOFNGMixer(NGMixer):
                         ti = time.time()-ti
                         log.info('    time: %f' % ti)
                     
-                    if itr >= self['mof_min_itr']:
+                    if itr >= self['mof']['min_itr']:
                         log.info('convergence itr %d:' % (itr+1))
                         if self._check_convergence(foflen):
                             converged = True
