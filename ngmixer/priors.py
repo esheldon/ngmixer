@@ -37,7 +37,7 @@ def set_priors(conf):
             log.info("repeating counts prior for model '%s'" % model)
         set_counts_prior(params, repeat=counts_prior_repeat)
 
-        if 'fracdev_prior_file' in params:
+        if model == 'cm':
             set_fracdev_prior(params)
 
         cp = params['counts_prior']
@@ -80,7 +80,7 @@ def set_T_prior(params):
     elif typ=="cosmos_dev":
         params['T_prior']=ngmix.priors.TPriorCosmosDev()
     else:
-        raise ValueError("bad T prior type: %s" % T_prior_type)
+        raise ValueError("bad T prior type: %s" % typ)
 
 def set_counts_prior(params, repeat=False):
     typ=params['counts_prior_type']
@@ -105,21 +105,24 @@ def set_counts_prior(params, repeat=False):
         params['counts_prior'] = plist
             
 def set_fracdev_prior(params):
-    fname=os.path.expanduser( params['fracdev_prior_file'] )
-    fname=os.path.expandvars( fname )
-    print("reading fracdev_prior:",fname)
-    data = fitsio.read(fname)
-    
-    weights=data['weights']
-    means=data['means']
-    covars=data['covars']
-    
-    if len(means.shape) == 1:
-        means = means.reshape( (means.size, 1) )
+    if 'fracdev_prior_file' in params:
+        fname=os.path.expanduser( params['fracdev_prior_file'] )
+        fname=os.path.expandvars( fname )
+        print("reading fracdev_prior:",fname)
+        data = fitsio.read(fname)
         
-    prior = ngmix.gmix.GMixND(weights,
-                              means,
-                              covars)
+        weights=data['weights']
+        means=data['means']
+        covars=data['covars']
+        
+        if len(means.shape) == 1:
+            means = means.reshape( (means.size, 1) )
+        
+        prior = ngmix.gmix.GMixND(weights,
+                                  means,
+                                  covars)
+    else:
+        raise ValueError("implement fracdev prior '%s'" % params['fracdev_prior_type'])
 
     params['fracdev_prior'] = prior
     
@@ -141,7 +144,7 @@ def set_g_prior(params):
     elif typ=='flat':
         g_prior=ngmix.priors.ZDisk2D(1.0)
     else:
-        raise ValueError("implement gprior '%s'")
+        raise ValueError("implement gprior '%s'" % typ)
     params['g_prior']=g_prior
     
 def set_cen_prior(params):

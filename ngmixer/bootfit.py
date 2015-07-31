@@ -112,14 +112,20 @@ class NGMixBootFitter(BaseFitter):
             
         return fit_flags
 
-    def _render_single(self,model,band,obs,pars_tag,fit_data,psf_gmix,jac):
+    def _render_single(self,model,band,obs,pars_tag,fit_data,psf_gmix,jac,coadd):
         """
         render a single image of model with pars_tag in fit_data and psf_gmix w/ jac
         """
-        n = Namer(model)
+        if coadd:
+            n = Namer('coadd_%s' % model)        
+        else:
+            n = Namer(model)                
         pars_obj = fit_data[pars_tag][0].copy()
-        band_pars_obj = pars_obj[0:6]
-        band_pars_obj[-1] = pars_obj[5+band]
+        band_pars_obj = numpy.zeros(6,dtype='f8')
+        band_pars_obj[0:5] = pars_obj[0:5]
+        band_pars_obj[5] = pars_obj[5+band]
+        assert len(band_pars_obj) == 6
+        
         if model != 'cm':
             gmix_sky = GMixModel(band_pars_obj, model)
         else:
@@ -133,10 +139,15 @@ class NGMixBootFitter(BaseFitter):
         render nbrs
         """
 
+        log.info('    rendering nbrs')
+        
         if len(mb_obs_list.meta['nbrs_inds']) == 0:
             return
 
-        n = Namer(model)        
+        if coadd:
+            n = Namer('coadd_%s' % model)        
+        else:
+            n = Namer(model)        
         pars_name = 'max_pars'        
         if n(pars_name) not in nbrs_fit_data.dtype.names:
             pars_name = 'pars'
@@ -158,9 +169,10 @@ class NGMixBootFitter(BaseFitter):
                 # do central image first
                 if nbrs_fit_data[fit_flags_tag][cen_ind] == 0:
                     assert obs.has_psf_gmix()
-                    cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1],obs.get_psf_gmix(),obs.get_jacobian())
+                    cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1],obs.get_psf_gmix(),obs.get_jacobian(),coadd)
                 else:
-                    cenim = numpy.zeros_like(obs.image)
+                    log.info('        bad fit data: %d' % (cen_ind))
+                    cenim = obs.image_orig.copy()
 
                 # now do nbrs
                 totim = cenim.copy()                
@@ -175,7 +187,7 @@ class NGMixBootFitter(BaseFitter):
                             # FIXME - need to fit psf from off chip nbrs
                             continue
 
-                        totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1],nbrs_psf_gmix,nbrs_jac)
+                        totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1],nbrs_psf_gmix,nbrs_jac,coadd)
 
                 if self['model_nbrs_method'] == 'subtract':
                     obs.image = obs.image_orig - totim + cenim
@@ -246,13 +258,13 @@ class NGMixBootFitter(BaseFitter):
             if icut_cen > 0:
                 fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d.png' % (ptype,band,icut_cen))
             else:
-                fname = os.path.join(self.plot_dir,'%d-nbrs-band%d-coadd.png' % (ptype,band))
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd.png' % (ptype,band))
             log.info("        making plot %s" % fname)
             tab.write_img(1920,1200,fname)
         except:
             log.info("        caught error plotting nbrs")
             pass
-    
+
     def _fill_epoch_data(self,mb_obs_list,new_mb_obs_list):
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
@@ -817,7 +829,7 @@ class NGMixBootFitter(BaseFitter):
         data[n('flux_err')] = DEFVAL
 
         if coadd:
-            n = Nmer('coadd')
+            n = Namer('coadd')
         else:
             n = Namer('')
             

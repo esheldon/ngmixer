@@ -178,7 +178,7 @@ class MOFNGMixer(NGMixer):
                 self._fill_epoch_data(coadd_mb_obs_list)
                 
                 # fill in fit data
-                for tag in mb_obs_list.meta['fit_data'].dtype.names:
+                for tag in coadd_mb_obs_list.meta['fit_data'].dtype.names:
                     self.curr_data[tag][self.curr_data_index] = coadd_mb_obs_list.meta['fit_data'][tag][0]
                 
             except UtterFailure as err:
