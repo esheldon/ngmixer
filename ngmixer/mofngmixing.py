@@ -27,7 +27,13 @@ class MOFNGMixer(NGMixer):
         check convergence of fits
         """
         
-        dlevel = 0
+        models_to_check,cov_models_to_check = self.fitter.get_models_for_checking()
+        if self['fit_coadd_galaxy']:
+            coadd_models_to_check = ['coadd_'+modl for modl in models_to_check]
+            models_to_check.extend(coadd_models_to_check)
+
+            coadd_cov_models_to_check = ['coadd_'+modl for modl in cov_models_to_check]
+            cov_models_to_check.extend(coadd_cov_models_to_check)
         
         npars = 5+self['nband']
         maxabs = numpy.zeros(npars,dtype='f8')
@@ -37,20 +43,19 @@ class MOFNGMixer(NGMixer):
         maxerr = numpy.zeros(npars,dtype='f8')
         maxerr[:] = -numpy.inf
         
-        log.info('convergence:')
         for fofind in xrange(foflen):
             log.info('    fof obj: %ld' % fofind)
 
             #FIXME - mofngmixer doesn't know what tags to use - prob get from fitter
-            for model in ['coadd_cm','cm']:
-                if model+'_pars' not in self.curr_data.dtype.names:
+            for model,model_cov in zip(models_to_check,cov_models_to_check):
+                if model not in self.curr_data.dtype.names:
                     continue
                 
-                old = self.prev_data[model+'_pars'][fofind]
-                new = self.curr_data[model+'_pars'][fofind]
+                old = self.prev_data[model][fofind]
+                new = self.curr_data[model][fofind]
                 absdiff = numpy.abs(new-old)
                 absfracdiff = numpy.abs(new/old-1.0)
-                abserr = numpy.abs((old-new)/numpy.sqrt(numpy.diag(self.curr_data[model+'_pars_cov'][fofind])))
+                abserr = numpy.abs((old-new)/numpy.sqrt(numpy.diag(self.curr_data[model_cov][fofind])))
                 
                 for i in xrange(npars):
                     if absdiff[i] > maxabs[i]:
@@ -155,8 +160,10 @@ class MOFNGMixer(NGMixer):
                     ti = time.time()-ti
                     log.info('    time: %f' % ti)
                     
-                if itr >= 1 and self._check_convergence(foflen):
-                    break
+                if itr >= 1:
+                    log.info('convergence itr %d:' % itr)
+                    if self._check_convergence(foflen):
+                        break
 
             # append data and incr.
             self.data.extend(list(self.curr_data))

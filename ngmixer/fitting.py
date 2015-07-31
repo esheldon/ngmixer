@@ -22,6 +22,16 @@ class BaseFitter(dict):
     def __init__(self,conf):        
         self.update(conf)
 
+    def get_models_for_checking(self):
+        """
+        return a list of model pars for checking for convergence in mof
+        also return a second list of the cov estimate for each parameter 
+        
+            mod,cov = fitter.get_models_for_checking()
+        
+        """
+        raise NotImplementedError("get_models_for_checking method of BaseFitter must be defined in subclass.")
+        
     def get_fit_data_dtype(self,me,coadd):
         """
         returns a numpy dtype for the galaxy fit data as a list        
