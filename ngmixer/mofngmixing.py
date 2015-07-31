@@ -165,7 +165,7 @@ class MOFNGMixer(NGMixer):
                         ti = time.time()-ti
                         log.info('    time: %f' % ti)
                     
-                    if itr >= self['mod_min_itr']:
+                    if itr >= self['mof_min_itr']:
                         log.info('convergence itr %d:' % (itr+1))
                         if self._check_convergence(foflen):
                             converged = True
