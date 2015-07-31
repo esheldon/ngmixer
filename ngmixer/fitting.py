@@ -104,6 +104,9 @@ class BaseFitter(dict):
             nbrs_psfs: psf obs for each nbr
             nbrs_jacs: jaobians for each nbr
             nbrs_flags: only render nbrs with flags == 0
+            cen_ind: index into nbrs_fit_data
+        
+        The idea is that the rows in nbrs_fit_data correspond to the objects in mb_obs_lists in order.
         
         These fields are lists that can be iterated over in parallel like this
         
