@@ -190,6 +190,7 @@ class NGMixBootFitter(BaseFitter):
                             nbrs_psf_gmix = nbrs_psf.get_gmix()
                         else:
                             # FIXME - need to fit psf from off chip nbrs
+                            log.info('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' % (nbrs_ind,cen_ind))
                             continue
 
                         totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1],nbrs_psf_gmix,nbrs_jac,coadd)

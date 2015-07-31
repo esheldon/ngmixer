@@ -311,7 +311,7 @@ class MEDSImageIO(ImageIO):
                         nbrs_flags = []
                         nbrs_jacs = []
                         for ind in mb_obs_lists[cen].meta['nbrs_inds']:
-                            psf_obs,jac = self._get_nbr_psf_obs_and_jac(band,mindex,obs,mindexes[ind],mb_obs_lists[ind])
+                            psf_obs,jac = self._get_nbr_psf_obs_and_jac(band,cen,mindex,obs,ind,mindexes[ind],mb_obs_lists[ind])
                             nbrs_psfs.append(psf_obs)
                             nbrs_jacs.append(jac)
 
@@ -322,7 +322,7 @@ class MEDSImageIO(ImageIO):
                         
                         obs.update_meta_data({'nbrs_psfs':nbrs_psfs,'nbrs_flags':nbrs_flags,'nbrs_jacs':nbrs_jacs})
 
-    def _get_nbr_psf_obs_and_jac(self,band,cen_mindex,cen_obs,nbr_mindex,nbrs_obs_list):
+    def _get_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
         assert nbrs_obs_list.meta['id'] ==  self.meds_list[band]['id'][nbr_mindex]
         assert cen_obs.meta['id'] ==  self.meds_list[band]['id'][cen_mindex]
 
@@ -355,7 +355,8 @@ class MEDSImageIO(ImageIO):
 
             return nbr_psf_obs,nbr_jac
         else:
-            # FIXME - implement off chip nbrs
+            # FIXME
+            log.info('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind,cen_ind))
             return None,None
     
     def get_num_fofs(self):
