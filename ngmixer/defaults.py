@@ -1,10 +1,11 @@
 # flagging
 
 # this is here for testing, it will be removed one day
-USE_OLD_FLAGS = True
+USE_OLD_FLAGS = False
 
 if not USE_OLD_FLAGS:
     # flags used by NGMixer
+    BAD_OBJ              = 2**25
     IMAGE_FLAGS          = 2**26
     NO_CUTOUTS           = 2**27
     BOX_SIZE_TOO_BIG     = 2**28

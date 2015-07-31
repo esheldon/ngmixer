@@ -56,9 +56,18 @@ class MEDSImageIO(ImageIO):
         
 	self.psfex_lists = self._get_psfex_lists()
 
+        # deal with extra data
+        if 'extra_data' in kwargs:
+            self.extra_data = kwargs['extra_data']            
+        else:
+            self.extra_data = None
+
+        if self.extra_data is None:
+            self.extra_data = {}
+
+        # make sure if we are doing nbrs we have the info we need
         if 'model_nbrs' in self.conf:
-            assert 'extra_data' in kwargs
-            self.extra_data = kwargs['extra_data']
+            assert 'extra_data' in kwargs            
             assert 'nbrs' in self.extra_data
 
     def get_file_meta_data(self):
@@ -222,14 +231,27 @@ class MEDSImageIO(ImageIO):
                 coadd_mb_obs_lists.append(c)
                 me_mb_obs_lists.append(me)
 
+            if 'obj_flags' in self.extra_data:
+                self._flag_objects(coadd_mb_obs_lists,me_mb_obs_lists,mindexes)
+                
             if self.conf['model_nbrs']:                
                 self._add_nbrs_info(coadd_mb_obs_lists,me_mb_obs_lists,mindexes)
-
+                
             self.fofindex += 1
             return coadd_mb_obs_lists,me_mb_obs_lists
 
     next = __next__
 
+    def _flag_objects(coadd_mb_obs_lists,me_mb_obs_lists,mindexes):
+        qnz, = numpy.where(self.extra_data['obj_flags']['flags'] != 0)
+        for mindex,coadd_mb_obs_list,me_mb_obs_list in zip(mindexes,coadd_mb_obs_lists,me_mb_obs_lists):
+            q, = np.where(self.extra_data['obj_flags']['id'][qnz] == me_mb_obs_list.meta['id'])
+            if len(q) > 0:
+                assert len(q) == 1
+                assert me_mb_obs_list.meta['id'] ==  self.extra_data['obj_flags']['id'][qnz[q[0]]]
+                coadd_mb_obs_list.meta['obj_flags'] = self.extra_data['obj_flags']['flags'][qnz[q[0]]]
+                me_mb_obs_list.meta['obj_flags'] = self.extra_data['obj_flags']['flags'][qnz[q[0]]]        
+    
     def _add_nbrs_info(self,coadd_mb_obs_lists,me_mb_obs_lists,mindexes):
         """
         adds nbr info to obs lists
@@ -289,21 +311,24 @@ class MEDSImageIO(ImageIO):
                         nbrs_flags = []
                         nbrs_jacs = []
                         for ind in mb_obs_lists[cen].meta['nbrs_inds']:
-                            psf_obs,jac = self._get_nbr_psf_obs_and_jac(band,mindex,obs,mindexes[ind],mb_obs_lists)
+                            psf_obs,jac = self._get_nbr_psf_obs_and_jac(band,mindex,obs,mindexes[ind],mb_obs_lists[ind])
                             nbrs_psfs.append(psf_obs)
                             nbrs_jacs.append(jac)
 
-                            if psf_obs is None or jac is None:
+                            if psf_obs is None or jac is None or mb_obs_lists[ind].meta['obj_flags'] != 0:
                                 nbrs_flags.append(1)
                             else:
                                 nbrs_flags.append(0)
                         
                         obs.update_meta_data({'nbrs_psfs':nbrs_psfs,'nbrs_flags':nbrs_flags,'nbrs_jacs':nbrs_jacs})
 
-    def _get_nbr_psf_obs_and_jac(self,band,cen_mindex,cen_obs,nbr_mindex,mb_obs_lists):
+    def _get_nbr_psf_obs_and_jac(self,band,cen_mindex,cen_obs,nbr_mindex,nbrs_obs_list):
+        assert nbrs_obs_list.meta['id'] ==  self.meds_list[band]['id'][nbr_mindex]
+        assert cen_obs.meta['id'] ==  self.meds_list[band]['id'][cen_mindex]
+
         cen_file_id = cen_obs.meta['meta_data']['file_id'][0]
         nbr_obs = None
-        for obs in mb_obs_lists[nbr_mindex][band]:
+        for obs in nbrs_obs_list[band]:
             if obs.meta['meta_data']['file_id'][0] == cen_file_id and self.meds_list[band]['id'][nbr_mindex] == obs.meta['id']:
                 nbr_obs = obs
 
@@ -378,7 +403,7 @@ class MEDSImageIO(ImageIO):
         meta_row['id'][0] = self.meds_list[0]['id'][mindex]
         meta_row['number'][0] = self.meds_list[0]['number'][mindex]
         meta_row['nimage_tot'][0,:] = numpy.array([self.meds_list[b]['ncutout'][mindex]-1 for b in xrange(self.conf['nband'])],dtype='i4')
-        meta = {'meta_data':meta_row,'meds_index':mindex,'id':self.meds_list[0]['id'][mindex]}
+        meta = {'meta_data':meta_row,'meds_index':mindex,'id':self.meds_list[0]['id'][mindex],'obj_flags':0}
 
         coadd_mb_obs_list.update_meta_data(meta)
         mb_obs_list.update_meta_data(meta)

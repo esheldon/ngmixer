@@ -47,7 +47,8 @@ class ImageIO(object):
 
         'id': unique id for object in obs
         'meta_data': numpy array with meta data (same dtype as returned by get_meta_data_dtype)
-    
+        'obj_flags': non-zero if whole object should be ignored
+
     Each individual observation in the lists needs to have the following meta data fields set
 
         'id': unique id for object in obs

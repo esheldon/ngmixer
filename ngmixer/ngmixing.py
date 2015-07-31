@@ -12,7 +12,7 @@ from . import imageio
 from . import fitting
 from . import files
 from .defaults import DEFVAL,LOGGERNAME,_CHECKPOINTS_DEFAULT_MINUTES
-from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS
+from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS,BAD_OBJ
 from .util import UtterFailure
 
 # logging
@@ -163,7 +163,7 @@ class NGMixer(dict):
 
         self.done = True
         
-    def fit_obj(self,coadd_mb_obs_list,mb_obs_list):
+    def fit_obj(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None):
         """
         fit a single object
         """
@@ -176,25 +176,30 @@ class NGMixer(dict):
             box_size = self._get_box_size(coadd_mb_obs_list)
         self.curr_data['box_size'][self.curr_data_index] = box_size
         log.info('    box_size: %d' % self.curr_data['box_size'][self.curr_data_index])
-
+        
         # check flags
         flags = 0
         if box_size < 0:
             flags = UTTER_FAILURE
 
+        if mb_obs_list.meta['obj_flags'] != 0:
+            flags = BAD_OBJ
+            log.info('    skipping bad object')        
+            
         if flags == 0:
             flags |= self._obj_check(coadd_mb_obs_list)
         if flags == 0:
             flags |= self._obj_check(mb_obs_list)
         
         if flags == 0:
-            fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list)
+            fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data)
             flags |= fit_flags
         
         # add in data
         self.curr_data['flags'][self.curr_data_index] = flags
         self.curr_data['time'][self.curr_data_index] = time.time()-t0        
-
+        self.curr_data['obj_flags'][self.curr_data_index] = mb_obs_list.meta['obj_flags']
+        
         # fill in from mb_obs_meta
         for tag in mb_obs_list.meta['meta_data'].dtype.names:
             self.curr_data[tag][self.curr_data_index] = mb_obs_list.meta['meta_data'][tag][0]
@@ -217,7 +222,7 @@ class NGMixer(dict):
                         
                     self.epoch_data.extend(list(ed))
                             
-    def fit_all_obs_lists(self,coadd_mb_obs_list,mb_obs_list):
+    def fit_all_obs_lists(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None):
         """
         fit all obs lists
         """
@@ -227,7 +232,7 @@ class NGMixer(dict):
         if self['fit_me_galaxy']:
             log.info('    fitting me galaxy')
             try:
-                me_fit_flags = self.fitter(mb_obs_list,coadd=False)
+                me_fit_flags = self.fitter(mb_obs_list,coadd=False,nbrs_fit_data=nbrs_fit_data)
 
                 # fill in epoch data
                 self._fill_epoch_data(mb_obs_list)
@@ -247,7 +252,7 @@ class NGMixer(dict):
         if self['fit_coadd_galaxy']:
             log.info('    fitting coadd galaxy')
             try:
-                coadd_fit_flags = self.fitter(coadd_mb_obs_list,coadd=True)
+                coadd_fit_flags = self.fitter(coadd_mb_obs_list,coadd=True,nbrs_fit_data=nbrs_fit_data)
 
                 # fill in epoch data
                 self._fill_epoch_data(coadd_mb_obs_list)
@@ -342,7 +347,8 @@ class NGMixer(dict):
         dt = self.imageio.get_meta_data_dtype()
         dt += [('flags','i4'),
                ('time','f8'),
-               ('box_size','i2')]
+               ('box_size','i2'),
+               ('obj_flags','i4')]
         dt += self.fitter.get_fit_data_dtype(self['fit_me_galaxy'],self['fit_coadd_galaxy'])
         return dt
     
@@ -355,6 +361,7 @@ class NGMixer(dict):
         data['flags'] = NO_ATTEMPT
         data['time'] = DEFVAL
         data['box_size'] = DEFVAL
+        data['obj_flags'] = NO_ATTEMPT
         return data
     
     def _setup_checkpoints(self):
