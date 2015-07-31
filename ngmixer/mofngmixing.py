@@ -49,6 +49,10 @@ class MOFNGMixer(NGMixer):
             for model,model_cov in zip(models_to_check,cov_models_to_check):
                 if model not in self.curr_data.dtype.names:
                     continue
+
+                if self.curr_data['flags'][fofind]:
+                    log.info('    skipping fof obj %s in convergence check' % (fofind+1))
+                    continue
                 
                 old = self.prev_data[model][fofind]
                 new = self.curr_data[model][fofind]
