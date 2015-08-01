@@ -15,27 +15,38 @@ from . import files
 from .ngmixing import NGMixer
 from .defaults import DEFVAL,LOGGERNAME,_CHECKPOINTS_DEFAULT_MINUTES
 from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS
-from .util import UtterFailure
+from .util import UtterFailure,Namer
 from ngmix import print_pars
 
 # logging
 log = logging.getLogger(LOGGERNAME)
 
 class MOFNGMixer(NGMixer):
-    def _check_convergence(self,foflen):
+    def _get_models_to_check(self):
+        models_to_check,pars_models_to_check,cov_models_to_check,npars = self.fitter.get_models_for_checking()
+        if self['fit_coadd_galaxy']:
+            coadd_models_to_check = ['coadd_'+modl for modl in models_to_check]            
+            pars_coadd_models_to_check = ['coadd_'+modl for modl in pars_models_to_check]
+            coadd_cov_models_to_check = ['coadd_'+modl for modl in cov_models_to_check]
+
+        if self['fit_me_galaxy']:
+            models_to_check.extend(coadd_models_to_check)
+            pars_models_to_check.extend(pars_coadd_models_to_check)
+            cov_models_to_check.extend(coadd_cov_models_to_check)
+        else:
+            models_to_check = coadd_models_to_check
+            pars_models_to_check = pars_coadd_models_to_check
+            cov_models_to_check = coadd_cov_models_to_check
+
+        return models_to_check,pars_models_to_check,cov_models_to_check,npars
+
+    def _check_convergence(self,foflen,itr):
         """
         check convergence of fits
         """
-        
-        models_to_check,cov_models_to_check = self.fitter.get_models_for_checking()
-        if self['fit_coadd_galaxy']:
-            coadd_models_to_check = ['coadd_'+modl for modl in models_to_check]
-            models_to_check.extend(coadd_models_to_check)
 
-            coadd_cov_models_to_check = ['coadd_'+modl for modl in cov_models_to_check]
-            cov_models_to_check.extend(coadd_cov_models_to_check)
+        models_to_check,pars_models_to_check,cov_models_to_check,npars = self._get_models_to_check()
         
-        npars = 5+self['nband']
         maxabs = numpy.zeros(npars,dtype='f8')
         maxabs[:] = -numpy.inf
         maxfrac = numpy.zeros(npars,dtype='f8')
@@ -46,19 +57,29 @@ class MOFNGMixer(NGMixer):
         for fofind in xrange(foflen):
             log.debug('    fof obj: %ld' % fofind)
 
-            for model,model_cov in zip(models_to_check,cov_models_to_check):
-                if model not in self.curr_data.dtype.names:
+            for model,pars_model,model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
+                if pars_model not in self.curr_data.dtype.names:
                     continue
 
                 if self.curr_data['flags'][fofind] or self.prev_data['flags'][fofind]:
                     log.info('    skipping fof obj %s in convergence check' % (fofind+1))
                     continue
                 
-                old = self.prev_data[model][fofind]
-                new = self.curr_data[model][fofind]
+                old = self.prev_data[pars_model][fofind]
+                new = self.curr_data[pars_model][fofind]
                 absdiff = numpy.abs(new-old)
                 absfracdiff = numpy.abs(new/old-1.0)
                 abserr = numpy.abs((old-new)/numpy.sqrt(numpy.diag(self.curr_data[model_cov][fofind])))
+
+                n = Namer(model)
+                self.curr_data[n('mof_abs_diff')][fofind] = absdiff
+                self.curr_data[n('mof_frac_diff')][fofind] = absfracdiff
+                self.curr_data[n('mof_err_diff')][fofind] = abserr
+                if numpy.all((absdiff <= self['mof']['maxabs_conv']) | (absfracdiff <= self['mof']['maxfrac_conv']) | (abserr <= self['mof']['maxerr_conv'])):
+                    self.curr_data[n('mof_flags')][fofind] = 0
+                    self.curr_data[n('mof_num_itr')][fofind] = itr+1
+                else:
+                    self.curr_data[n('mof_flags')][fofind] = 1
                 
                 for i in xrange(npars):
                     if absdiff[i] > maxabs[i]:
@@ -167,7 +188,7 @@ class MOFNGMixer(NGMixer):
                     
                     if itr >= self['mof']['min_itr']:
                         log.info('convergence itr %d:' % (itr+1))
-                        if self._check_convergence(foflen):
+                        if self._check_convergence(foflen,itr):
                             converged = True
                             break
 
@@ -178,7 +199,13 @@ class MOFNGMixer(NGMixer):
                 log.info("    max abs diff : "+fmt % tuple(self.maxabs))
                 log.info("    max frac diff: "+fmt % tuple(self.maxfrac))
                 log.info("    max err diff : "+fmt % tuple(self.maxerr))
-
+            else:
+                # one object in fof, so set mof flags
+                models_to_check,pars_models_to_check,cov_models_to_check,npars = self._get_models_to_check()
+                for model in models_to_check:
+                    n = Namer(model)
+                    self.curr_data[n('mof_flags')] = 0
+            
             # append data and incr.
             self.data.extend(list(self.curr_data))
             self.curr_fofindex += 1
@@ -195,4 +222,35 @@ class MOFNGMixer(NGMixer):
         log.info("time per fof: %f" % (tm/numfof))
 
         self.done = True
+    
+    def _get_dtype(self):
+        dt = super(MOFNGMixer,self)._get_dtype()
+        models_to_check,pars_models_to_check,cov_models_to_check,npars = self._get_models_to_check()
 
+        for model in models_to_check:
+            n = Namer(model)
+            dt += [(n('mof_flags'),'i4'),
+                   (n('mof_num_itr'),'i4'),
+                   (n('mof_abs_diff'),'f8',npars),
+                   (n('mof_frac_diff'),'f8',npars),
+                   (n('mof_err_diff'),'f8',npars)]
+            
+        return dt
+
+    def _make_struct(self,num=1):
+        """
+        make an output structure
+        """
+        data = super(MOFNGMixer,self)._make_struct(num=num)
+        models_to_check,pars_models_to_check,cov_models_to_check,npars = self._get_models_to_check()
+        for model in models_to_check:
+            n = Namer(model)
+            data[n('mof_flags')] = NO_ATTEMPT
+            data[n('mof_num_itr')] = DEFVAL
+            data[n('mof_abs_diff')] = DEFVAL
+            data[n('mof_frac_diff')] = DEFVAL
+            data[n('mof_err_diff')] = DEFVAL
+        
+        return data
+    
+        

@@ -283,13 +283,14 @@ class MEDSImageIO(ImageIO):
                 nbrs_ids = []
                 q, = numpy.where(self.extra_data['nbrs']['number'] == self.meds_list[0]['number'][mindex])
                 for ind in q:
-                    qi, = numpy.where(self.meds_list[0]['number'][mindexes] == self.extra_data['nbrs']['nbr_number'][ind])
-                    assert len(qi) == 1
-                    nbrs_inds.append(qi[0])
-                    nbrs_ids.append(self.meds_list[0]['id'][mindexes[qi[0]]])
-                    assert coadd_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
-                    assert me_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
-                    
+                    if self.extra_data['nbrs']['nbr_number'][ind] != -1:
+                        qi, = numpy.where(self.meds_list[0]['number'][mindexes] == self.extra_data['nbrs']['nbr_number'][ind])
+                        assert len(qi) == 1
+                        nbrs_inds.append(qi[0])
+                        nbrs_ids.append(self.meds_list[0]['id'][mindexes[qi[0]]])
+                        assert coadd_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
+                        assert me_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
+                
                 coadd_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids,'cen_ind':cen})
                 me_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids,'cen_ind':cen})
                 assert cen not in nbrs_inds,'weird error where cen_ind is in nbrs_ind!'
@@ -356,7 +357,7 @@ class MEDSImageIO(ImageIO):
             return nbr_psf_obs,nbr_jac
         else:
             # FIXME
-            log.info('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind,cen_ind))
+            log.info('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
             return None,None
     
     def get_num_fofs(self):

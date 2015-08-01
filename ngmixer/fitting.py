@@ -27,7 +27,7 @@ class BaseFitter(dict):
         return a list of model pars for checking for convergence in mof
         also return a second list of the cov estimate for each parameter 
         
-            mod,cov = fitter.get_models_for_checking()
+            model_name,pars_tag,cov_tag,npars = fitter.get_models_for_checking()
         
         """
         raise NotImplementedError("get_models_for_checking method of BaseFitter must be defined in subclass.")

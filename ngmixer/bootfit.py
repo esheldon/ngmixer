@@ -55,7 +55,7 @@ class NGMixBootFitter(BaseFitter):
     def get_models_for_checking(self):
         models = [modl+'_max_pars' for modl in self['fit_models']]
         covs = [modl+'_max_pars_cov' for modl in self['fit_models']]
-        return models,covs
+        return self['fit_models'],models,covs,5+self['nband']
         
     def _get_good_mb_obs_list(self,mb_obs_list):
         new_mb_obs_list = MultiBandObsList()
@@ -190,9 +190,9 @@ class NGMixBootFitter(BaseFitter):
                             nbrs_psf_gmix = nbrs_psf.get_gmix()
                         else:
                             # FIXME - need to fit psf from off chip nbrs
-                            log.info('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' % (nbrs_ind,cen_ind))
+                            log.info('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' % (nbrs_ind+1,cen_ind+1))
                             continue
-
+                    
                         totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1],nbrs_psf_gmix,nbrs_jac,coadd)
 
                 if self['model_nbrs_method'] == 'subtract':
