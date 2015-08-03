@@ -156,7 +156,7 @@ class MOFNGMixer(NGMixer):
                 coadd_mb_obs_list = coadd_mb_obs_lists[i]
                 mb_obs_list = mb_obs_lists[i]
                 if foflen > 1:
-                    log.info('fof obj: %d:%d' % (self.curr_data_index+1,foflen))
+                    log.info('  fof obj: %d:%d' % (self.curr_data_index+1,foflen))
                 log.info('    id: %d' % mb_obs_list.meta['id'])
 
                 num += 1
@@ -180,7 +180,7 @@ class MOFNGMixer(NGMixer):
                         coadd_mb_obs_list = coadd_mb_obs_lists[i]
                         mb_obs_list = mb_obs_lists[i]
                         if foflen > 1:
-                            log.info('fof obj: %d:%d' % (self.curr_data_index+1,foflen))
+                            log.info('  fof obj: %d:%d' % (self.curr_data_index+1,foflen))
                         log.info('    id: %d' % mb_obs_list.meta['id'])
 
                         num += 1
@@ -190,12 +190,12 @@ class MOFNGMixer(NGMixer):
                         log.info('    time: %f' % ti)
                     
                     if itr >= self['mof']['min_itr']:
-                        log.info('convergence itr %d:' % (itr+1))
+                        log.info('  convergence itr %d:' % (itr+1))
                         if self._check_convergence(foflen,itr):
                             converged = True
                             break
 
-                log.info('fof index: %d' % (self.curr_fofindex+1-self.start_fofindex))
+                log.info('  convergence fof index: %d' % (self.curr_fofindex+1-self.start_fofindex))
                 log.info('    converged: %s' % str(converged))
                 log.info('    num itr: %d' % (itr+1))
                 fmt = "%8.3g "*len(self.maxabs)
