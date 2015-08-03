@@ -23,21 +23,26 @@ log = logging.getLogger(LOGGERNAME)
 
 class MOFNGMixer(NGMixer):
     def _get_models_to_check(self):
-        models_to_check,pars_models_to_check,cov_models_to_check,npars = self.fitter.get_models_for_checking()
-        if self['fit_coadd_galaxy']:
-            coadd_models_to_check = ['coadd_'+modl for modl in models_to_check]            
-            pars_coadd_models_to_check = ['coadd_'+modl for modl in pars_models_to_check]
-            coadd_cov_models_to_check = ['coadd_'+modl for modl in cov_models_to_check]
+        me_models_to_check,me_pars_models_to_check,me_cov_models_to_check,npars = self.fitter.get_models_for_checking()
+        
+        coadd_models_to_check = ['coadd_'+modl for modl in me_models_to_check]            
+        coadd_pars_models_to_check = ['coadd_'+modl for modl in me_pars_models_to_check]
+        coadd_cov_models_to_check = ['coadd_'+modl for modl in me_cov_models_to_check]            
 
+        models_to_check = []
+        pars_models_to_check = []
+        cov_models_to_check = []
+        
         if self['fit_me_galaxy']:
-            models_to_check.extend(coadd_models_to_check)
-            pars_models_to_check.extend(pars_coadd_models_to_check)
-            cov_models_to_check.extend(coadd_cov_models_to_check)
-        else:
-            models_to_check = coadd_models_to_check
-            pars_models_to_check = pars_coadd_models_to_check
-            cov_models_to_check = coadd_cov_models_to_check
+            models_to_check.extend(me_models_to_check)
+            pars_models_to_check.extend(me_pars_models_to_check)
+            cov_models_to_check.extend(me_cov_models_to_check)            
 
+        if self['fit_coadd_galaxy']:
+            models_to_check.extend(coadd_models_to_check)
+            pars_models_to_check.extend(coadd_pars_models_to_check)
+            cov_models_to_check.extend(coadd_cov_models_to_check)            
+            
         return models_to_check,pars_models_to_check,cov_models_to_check,npars
 
     def _check_convergence(self,foflen,itr):
