@@ -53,9 +53,15 @@ class NGMixBootFitter(BaseFitter):
         self['min_psf_s2n'] = self.get('min_psf_s2n',-numpy.inf)
 
     def get_models_for_checking(self):
-        models = [modl+'_max_pars' for modl in self['fit_models']]
+        models = [modl for modl in self['fit_models']]
+        pars = [modl+'_max_pars' for modl in self['fit_models']]
         covs = [modl+'_max_pars_cov' for modl in self['fit_models']]
-        return self['fit_models'],models,covs,5+self['nband']
+
+        coadd_models = ['coadd_'+modl for modl in models]
+        coadd_pars = ['coadd_'+modl for modl in pars]
+        coadd_covs = ['coadd_'+modl for modl in covs]
+        
+        return models,pars,covs,coadd_models,coadd_pars,coadd_covs,5+self['nband']
         
     def _get_good_mb_obs_list(self,mb_obs_list):
         new_mb_obs_list = MultiBandObsList()
