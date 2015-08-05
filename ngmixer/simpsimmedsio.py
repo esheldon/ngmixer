@@ -537,14 +537,22 @@ class SimpSimMEDSImageIO(ImageIO):
         """
         Get a weight map from the input MEDS file
         """
-        wt=meds.get_cutout(mindex, icut, type='weight')
+        if self.conf['region']=='seg_and_sky':
+            wt=meds.get_cweight_cutout(mindex, icut)
+        elif self.conf['region']=="cweight-nearest":
+            wt=meds.get_cweight_cutout_nearest(mindex, icut)
+        elif self.conf['region']=='weight':
+            wt=meds.get_cutout(mindex, icut, type='weight')
+        else:
+            raise ValueError("support other region types")
+        
         wt=wt.astype('f8', copy=False)
         
         w=numpy.where(wt < self.conf['min_weight'])
         if w[0].size > 0:
             wt[w] = 0.0
         return wt
-
+    
     def _convert_jacobian_dict(self, jdict):
         """
         Get the jacobian for the input meds index and cutout index

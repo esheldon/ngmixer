@@ -200,6 +200,12 @@ class NGMixBootFitter(BaseFitter):
 
                 if self['model_nbrs_method'] == 'subtract':
                     obs.image = obs.image_orig - totim + cenim
+                elif self['model_nbrs_method'] == 'frac':
+                    frac = numpy.zeros_like(totim)
+                    frac[:,:] = 1.0
+                    msk = totim > 0.0
+                    frac[msk] = cenim[msk]/totim[msk]
+                    obs.image = obs.image_orig*frac
                 else:
                     assert False,'nbrs model method %s not implemented!' % self['model_nbrs_method']
 

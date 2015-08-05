@@ -188,7 +188,7 @@ class MOFNGMixer(NGMixer):
                         self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=self.curr_data)
                         ti = time.time()-ti
                         log.info('    time: %f' % ti)
-                    
+
                     if itr >= self['mof']['min_itr']:
                         log.info('  convergence itr %d:' % (itr+1))
                         if self._check_convergence(foflen,itr):
