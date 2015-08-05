@@ -48,10 +48,10 @@ class NGMixBootFitter(BaseFitter):
     def __init__(self,*args,**kw):
         super(NGMixBootFitter,self).__init__(*args,**kw)        
         self['replace_cov'] = self.get('replace_cov',False)
-        self['use_logpars'] = self.get('ise_logpars',False)
+        self['use_logpars'] = self.get('use_logpars',False)
         self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
         self['min_psf_s2n'] = self.get('min_psf_s2n',-numpy.inf)
-
+        
     def get_models_for_checking(self):
         models = [modl for modl in self['fit_models']]
         pars = [modl+'_max_pars' for modl in self['fit_models']]
@@ -75,14 +75,11 @@ class NGMixBootFitter(BaseFitter):
         new_mb_obs_list.update_meta_data({'old_mb_obs_list':mb_obs_list})
         return new_mb_obs_list
 
-    def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True,nbrs_fit_data=None,make_plots=False):
+    def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True,nbrs_fit_data=None):
         """
         fit the obs list
         """
 
-        # decide whether or not to make plots
-        self['make_plots'] = make_plots
-        
         # only fit stuff that is not flagged
         new_mb_obs_list = self._get_good_mb_obs_list(mb_obs_list)
         self.new_mb_obs_list = new_mb_obs_list

@@ -188,7 +188,8 @@ class NGMixer(dict):
             
         if flags == 0:
             flags |= self._obj_check(coadd_mb_obs_list)
-        if flags == 0:
+        
+        if flags == 0 and len(mb_obs_list[0]) > 0:
             flags |= self._obj_check(mb_obs_list)
         
         if flags == 0:

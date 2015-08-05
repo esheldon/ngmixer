@@ -34,6 +34,12 @@ parser.add_option("--seed", default=None,
 parser.add_option("--nbrs-file", default=None,
                   help=("file with the neighbors of each object"))
 
+parser.add_option("--psf-file", default=None,
+                  help=("file with PSF images"))
+
+parser.add_option("--obj-flags", default=None,
+                  help=("file with flags for each object; flags != 0 are ignored"))
+
 def get_range(rng_string):
     if rng_string is not None:
         rng = rng_string.split(',')
@@ -61,7 +67,11 @@ if __name__ == '__main__':
     extra_data = {}
     if options.nbrs_file is not None:
         extra_data['nbrs'] = fitsio.read(os.path.expandvars(options.nbrs_file))
-        
+    if options.obj_flags is not None:
+        extra_data['obj_flags'] = fitsio.read(os.path.expandvars(options.obj_flags))
+    if options.psf_file is not None:
+        extra_data['psf_file'] = options.psf_file
+
     MOFNGMixer(config_file,
                data_files,
                output_file=out_file,
