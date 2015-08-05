@@ -7,8 +7,6 @@ from . import priors
 from . import util
 from . import defaults
 from . import bootfit
-from . import ngmixit
-from . import medsngmixit
 from . import mofngmixing
 
 #######################################################
@@ -30,6 +28,9 @@ IMAGEIO['SVMEDS'] = medsio.SVMEDSImageIO
 IMAGEIO['SVMOFMEDS'] = medsio.SVMOFMEDSImageIO
 IMAGEIO['Y1MEDS'] = medsio.Y1MEDSImageIO
 
+# MEDS sim formats
+from . import simpsimmedsio
+IMAGEIO['SIMPSIMMEDS'] = simpsimmedsio.SimpSimMEDSImageIO
 
 #######################################################
 # setup fitter dict
