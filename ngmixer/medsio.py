@@ -594,17 +594,19 @@ class MEDSImageIO(ImageIO):
         if w[0].size > 0:
             wt_us[w] = 0.0
 
-        wt = meds.get_cutout(mindex, icut, type='weight')
-        wt = wt.astype('f8', copy=False)
-        w = numpy.where(wt < self.conf['min_weight'])
-        if w[0].size > 0:
-            wt[w] = 0.0
-
-        seg = meds.get_cweight_cutout(mindex, icut)
-
-        if self.conf['region']=="cweight-nearest":
+        if self.conf['region'] == 'mof':
+            wt = meds.get_cutout(mindex, icut, type='weight')
+            wt = wt.astype('f8', copy=False)
+            w = numpy.where(wt < self.conf['min_weight'])
+            if w[0].size > 0:
+                wt[w] = 0.0
+        elif self.conf['region']=="cweight-nearest": 
             wt = wt_us
-        
+        else:
+            raise ValueError("no support for region type %s" % self.conf['region'])
+                    
+        seg = meds.get_cweight_cutout(mindex, icut)        
+            
         return wt,wt_us,seg
 
     def _convert_jacobian_dict(self, jdict):
