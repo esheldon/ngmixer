@@ -143,6 +143,17 @@ class MOFNGMixer(NGMixer):
 
             # fit the fof once with no nbrs
             # sort by stamp size
+            # set weight to uberseg
+            for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
+                for obs_list in mb_obs_list:
+                    for obs in obs_list:
+                        if obs.meta['flags'] == 0:
+                            obs.weight = obs.weight_us
+                for obs_list in coadd_mb_obs_list:
+                    for obs in obs_list:
+                        if obs.meta['flags'] == 0:
+                            obs.weight = obs.weight_us                
+            
             bs = []
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
                 box_size = self._get_box_size(mb_obs_list)
@@ -189,6 +200,17 @@ class MOFNGMixer(NGMixer):
                         ti = time.time()-ti
                         log.info('    time: %f' % ti)
 
+                    if itr >= self['mof']['min_itr']:
+                        for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
+                            for obs_list in mb_obs_list:
+                                for obs in obs_list:
+                                    if obs.meta['flags'] == 0:
+                                        obs.weight = obs.weight_raw
+                            for obs_list in coadd_mb_obs_list:
+                                for obs in obs_list:
+                                    if obs.meta['flags'] == 0:
+                                        obs.weight = obs.weight_raw                           
+                                        
                     if itr >= self['mof']['min_itr']:
                         log.info('  convergence itr %d:' % (itr+1))
                         if self._check_convergence(foflen,itr):

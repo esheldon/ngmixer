@@ -483,7 +483,7 @@ class SimpSimMEDSImageIO(ImageIO):
 
         fname = ''
         im = self._get_meds_image(meds, mindex, icut)
-        wt = self._get_meds_weight(meds, mindex, icut)
+        wt,wt_us,seg = self._get_meds_weight(meds, mindex, icut)
         jacob = self._get_jacobian(meds, mindex, icut)
 
         # for the psf fitting code
@@ -495,7 +495,10 @@ class SimpSimMEDSImageIO(ImageIO):
                         weight=wt,
                         jacobian=jacob,
                         psf=psf_obs)
-
+        obs.weight_us = wt_us
+        obs.weight_raw = wt
+        obs.seg = seg
+        
         obs.filename=fname
         
         return obs
@@ -536,7 +539,6 @@ class SimpSimMEDSImageIO(ImageIO):
     def _get_meds_weight(self, meds, mindex, icut):
         """
         Get a weight map from the input MEDS file
-        """
         if self.conf['region']=='seg_and_sky':
             wt=meds.get_cweight_cutout(mindex, icut)
         elif self.conf['region']=="cweight-nearest":
@@ -552,7 +554,27 @@ class SimpSimMEDSImageIO(ImageIO):
         if w[0].size > 0:
             wt[w] = 0.0
         return wt
-    
+        """
+
+        wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
+        wt_us = wt_us.astype('f8', copy=False)
+        w = numpy.where(wt_us < self.conf['min_weight'])
+        if w[0].size > 0:
+            wt_us[w] = 0.0
+
+        wt = meds.get_cutout(mindex, icut, type='weight')
+        wt = wt.astype('f8', copy=False)        
+        w = numpy.where(wt < self.conf['min_weight'])
+        if w[0].size > 0:
+            wt[w] = 0.0
+
+        seg = meds.get_cweight_cutout(mindex, icut)
+
+        if self.conf['region']=="cweight-nearest":
+            wt = wt_us
+        
+        return wt,wt_us,seg
+        
     def _convert_jacobian_dict(self, jdict):
         """
         Get the jacobian for the input meds index and cutout index
