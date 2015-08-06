@@ -67,7 +67,7 @@ class MEDSImageIO(ImageIO):
             self.extra_data = {}
 
         # make sure if we are doing nbrs we have the info we need
-        if 'model_nbrs' in self.conf:
+        if 'model_nbrs' in self.conf and self.conf['model_nbrs']:
             assert 'extra_data' in kwargs            
             assert 'nbrs' in self.extra_data
 
@@ -438,7 +438,7 @@ class MEDSImageIO(ImageIO):
         ncutout=meds['ncutout'][mindex]
 
         image_flags=self._get_image_flags(band, mindex)
-
+        
         coadd_obs_list = ObsList()
         obs_list       = ObsList()
 
@@ -706,7 +706,8 @@ class MEDSImageIO(ImageIO):
 	    self.meds_list.append(medsi)
 	    self.meds_meta_list.append(medsi_meta)
 	    image_flags=image_info['image_flags'].astype('i8')
-	    if self.conf['replacement_flags'] is not None and image_flags.size > 1:
+            
+	    if 'replacement_flags' in self.conf and self.conf['replacement_flags'] is not None and image_flags.size > 1:
                 log.info("    replacing image flags")
                 image_flags[1:] = \
 		    self._get_replacement_flags(image_info['image_path'][1:])
@@ -714,19 +715,19 @@ class MEDSImageIO(ImageIO):
 	    # now we reduce the flags to zero or IMAGE_FLAGS_SET
 	    # copy out and check image flags just for cutouts
 	    cimage_flags=image_flags[1:].copy()
-
+            
 	    w,=numpy.where( (cimage_flags & self.conf['image_flags2check']) != 0)
-
+            
 	    log.info("    flags set for: %d/%d" % (w.size,cimage_flags.size))
 
 	    cimage_flags[:] = 0
 	    if w.size > 0:
 		cimage_flags[w] = IMAGE_FLAGS_SET
-
+                
 	    # copy back in reduced flags
-	    image_flags[1:] = cimage_flags
-	    self.all_image_flags.append(image_flags)
-
+            image_flags[1:] = cimage_flags
+            self.all_image_flags.append(image_flags)
+            
 	self.nobj_tot = self.meds_list[0].size
 
     def _get_psfex_lists(self):

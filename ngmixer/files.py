@@ -102,6 +102,19 @@ class StagedOutFile(object):
     def __exit__(self, exception_type, exception_value, traceback):
         self.stage_out()
 
+def makedir_fromfile(fname):
+    dname=os.path.dirname(fname)
+    try_makedir(dname)
+
+def try_makedir(dir):
+    if not os.path.exists(dir):
+        try:
+            print("making directory:",dir)
+            os.makedirs(dir)
+        except:
+            # probably a race condition
+            pass
+
 def read_yaml(config_path):
     """
     read from the file assuming it is yaml
