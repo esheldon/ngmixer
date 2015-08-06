@@ -239,7 +239,7 @@ class MOFNGMixer(NGMixer):
             self._try_checkpoint(tm)
             
             if self.curr_fofindex < numtot:
-                log.info('fof index: %d:%d' % (self.curr_fofindex+1,numtot))
+                log.info('fof index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
             
         tm=time.time()-t0
         log.info("time: %f" % tm)
