@@ -76,11 +76,15 @@ class MEDSImageIO(ImageIO):
         dt = meds_meta_list[0].dtype.descr
 
         if 'config_file' in self.conf:
-            clen=len(self.conf['config_file'])
+            tmp,config_file = os.path.split(self.conf['config_file'])
+            clen=len(config_file)
             dt += [('ngmixer_config','S%d' % clen)]
             
-        flen=max([len(mf) for mf in self.meds_files_full] )
+        flen=max([len(mf.replace(os.environ['DESDATA'],'${DESDATA}')) for mf in self.meds_files_full] )
         dt += [('meds_file','S%d' % flen)]
+        
+        mydesdata = os.environ['DESDATA']
+        dt += [('ngmixer_DESDATA','S%d' % len(mydesdata))]
 
         nband=len(self.meds_files_full)
         meta=numpy.zeros(nband, dtype=dt)
@@ -94,9 +98,10 @@ class MEDSImageIO(ImageIO):
                     meta[name][band] = meds_meta[name][0]
 
             if 'config_file' in self.conf:
-                meta['ngmixer_config'][band] = self.conf['config_file']
-            meta['meds_file'][band] = meds_file
-
+                meta['ngmixer_config'][band] = config_file
+            meta['meds_file'][band] = meds_file.replace(os.environ['DESDATA'],'${DESDATA}')
+            meta['ngmixer_DESDTAT'][band] = mydesdata
+            
         return meta
 
     def _get_sub_fname(self,fname):
