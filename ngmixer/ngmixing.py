@@ -154,7 +154,7 @@ class NGMixer(dict):
             tm=time.time()-t0                
             self._try_checkpoint(tm)
             
-            if self.curr_fofindex < numtot:
+            if self.curr_fofindex-self.start_fofindex < numtot:
                 log.info('fof index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
             
         tm=time.time()-t0
@@ -189,7 +189,7 @@ class NGMixer(dict):
         if flags == 0 and self['fit_coadd_galaxy']:
             flags |= self._obj_check(coadd_mb_obs_list)
         
-        if flags == 0 and len(mb_obs_list[0]) > 0 and self['fit_me_galaxy']:
+        if flags == 0 and self['fit_me_galaxy']:
             flags |= self._obj_check(mb_obs_list)
         
         if flags == 0:
