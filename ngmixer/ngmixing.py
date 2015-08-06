@@ -409,18 +409,18 @@ class NGMixer(dict):
             # data
             self.data = self.checkpoint_data['data']
             fitsio.fitslib.array_to_native(self.data, inplace=True)
-            self.data_dtype = self.data.dtype.descr
+            self.data_dtype = self._get_dtype()
             self.data = list(self.data)
             
             # for nband==1 the written array drops the arrayness
             if self['nband']==1:
-                raise ValueError("fix for 1 band")
+                raise ValueError("fix checkpoints for 1 band!")
 
             # epoch data
             if 'epoch_data' in self.checkpoint_data:
                 self.epoch_data = self.checkpoint_data['epoch_data']
                 fitsio.fitslib.array_to_native(self.epoch_data, inplace=True)
-                self.epoch_data_dtype = self.epoch_data.dtype.descr
+                self.epoch_data_dtype = self._get_epoch_dtype()
                 self.epoch_data = list(self.epoch_data)
             else:
                 self.epoch_data_dtype = self._get_epoch_dtype()
