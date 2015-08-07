@@ -148,11 +148,17 @@ class MOFNGMixer(NGMixer):
                 for obs_list in mb_obs_list:
                     for obs in obs_list:
                         if obs.meta['flags'] == 0:
-                            obs.weight = obs.weight_us
+                            if foflen > 1:
+                                obs.weight = getattr(obs,'weight_us',obs.weight)
+                            else:
+                                obs.weight = getattr(obs,'weight_raw',obs.weight)
                 for obs_list in coadd_mb_obs_list:
                     for obs in obs_list:
                         if obs.meta['flags'] == 0:
-                            obs.weight = obs.weight_us                
+                            if foflen > 1:
+                                obs.weight = getattr(obs,'weight_us',obs.weight)
+                            else:
+                                obs.weight = getattr(obs,'weight_raw',obs.weight)
             
             bs = []
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
@@ -177,6 +183,17 @@ class MOFNGMixer(NGMixer):
                 log.info('    time: %f' % ti)
 
             if foflen > 1:
+                # switch back to non-uberseg weights
+                for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
+                    for obs_list in mb_obs_list:
+                        for obs in obs_list:
+                            if obs.meta['flags'] == 0:
+                                obs.weight = getattr(obs,'weight_raw',obs.weight)
+                    for obs_list in coadd_mb_obs_list:
+                        for obs in obs_list:
+                            if obs.meta['flags'] == 0:
+                                obs.weight = getattr(obs,'weight_raw',obs.weight)
+                                
                 # now fit again with nbrs
                 converged = False
                 for itr in xrange(self['mof']['max_itr']):
@@ -200,17 +217,6 @@ class MOFNGMixer(NGMixer):
                         ti = time.time()-ti
                         log.info('    time: %f' % ti)
 
-                    if itr >= self['mof']['min_itr']:
-                        for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
-                            for obs_list in mb_obs_list:
-                                for obs in obs_list:
-                                    if obs.meta['flags'] == 0:
-                                        obs.weight = obs.weight_raw
-                            for obs_list in coadd_mb_obs_list:
-                                for obs in obs_list:
-                                    if obs.meta['flags'] == 0:
-                                        obs.weight = obs.weight_raw                           
-                                        
                     if itr >= self['mof']['min_itr']:
                         log.info('  convergence itr %d:' % (itr+1))
                         if self._check_convergence(foflen,itr):
