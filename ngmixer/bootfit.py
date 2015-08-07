@@ -287,6 +287,7 @@ class NGMixBootFitter(BaseFitter):
             pass
 
     def _fill_epoch_data(self,mb_obs_list,new_mb_obs_list):
+        log.info('    filling PSF data')
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
                 used = False
@@ -299,7 +300,7 @@ class NGMixBootFitter(BaseFitter):
                     obs.update_meta_data({'fit_data':ed})
                     continue
 
-                if obs.meta['flags'] == 0 and obs.has_psf() and 'fit_data' not in obs.meta:
+                if obs.meta['flags'] == 0 and obs.has_psf():
                     psf_obs = obs.get_psf()
                     
                     ed = self._make_epoch_struct()
@@ -331,6 +332,8 @@ class NGMixBootFitter(BaseFitter):
                     obs.update_meta_data({'fit_data':ed})
 
     def _do_psf_stats(self,mb_obs_list,coadd):
+        log.info('    doing PSF stats')
+
         if coadd:
             n = Namer('coadd')
         else:
@@ -469,7 +472,7 @@ class NGMixBootFitter(BaseFitter):
         fit the psf model to every observation's psf image
         """
 
-        log.info('    fitting PSF')
+        log.info('    fitting the PSFs')
         
         boot=self.boot
 
