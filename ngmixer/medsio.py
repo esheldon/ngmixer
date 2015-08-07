@@ -100,7 +100,7 @@ class MEDSImageIO(ImageIO):
             if 'config_file' in self.conf:
                 meta['ngmixer_config'][band] = config_file
             meta['meds_file'][band] = meds_file.replace(os.environ['DESDATA'],'${DESDATA}')
-            meta['ngmixer_DESDTAT'][band] = mydesdata
+            meta['ngmixer_DESDATA'][band] = mydesdata
             
         return meta
 
