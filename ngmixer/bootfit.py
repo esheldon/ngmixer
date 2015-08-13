@@ -102,7 +102,10 @@ class NGMixBootFitter(BaseFitter):
                 self._render_nbrs(model,new_mb_obs_list,coadd,nbrs_fit_data)
 
             if nbrs_fit_data is not None:
-                n = Namer(model)
+                if coadd:
+                    n = Namer('coadd_%s' % model)
+                else:
+                    n = Namer(model)
                 guess = nbrs_fit_data[n('max_pars')][mb_obs_list.meta['cen_ind']]
             else:
                 guess = None
@@ -945,7 +948,7 @@ class MaxNGMixBootFitter(NGMixBootFitter):
         self._fit_max(model,guess=guess)
 
         rpars=self['round_pars']
-        self.boot.set_round_s2n(self['max_pars'],fitter_type=rpars['fitter_type'])
+        self.boot.set_round_s2n(fitter_type=rpars['fitter_type'])
         
         self.gal_fitter=self.boot.get_max_fitter()
 
