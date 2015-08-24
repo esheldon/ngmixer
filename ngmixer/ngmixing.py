@@ -183,7 +183,7 @@ class NGMixer(dict):
             flags = UTTER_FAILURE
 
         if mb_obs_list.meta['obj_flags'] != 0:
-            flags = BAD_OBJ
+            flags |= BAD_OBJ
             log.info('    skipping bad object')        
             
         if flags == 0 and self['fit_coadd_galaxy']:
@@ -268,7 +268,7 @@ class NGMixer(dict):
 
             if fit_flags is None:
                 fit_flags = 0
-                fit_flags |= coadd_fit_flags
+            fit_flags |= coadd_fit_flags
 
         if fit_flags is None:
             fit_flags = NO_ATTEMPT
