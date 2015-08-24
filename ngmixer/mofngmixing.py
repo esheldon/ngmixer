@@ -141,9 +141,10 @@ class MOFNGMixer(NGMixer):
             for tag in self.default_data.dtype.names:
                 self.curr_data[tag][:] = self.default_data[tag]
 
+            #####################################################################
             # fit the fof once with no nbrs
             # sort by stamp size
-            # set weight to uberseg
+            # set weight to uberseg if more than one thing in fof            
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
                 for obs_list in mb_obs_list:
                     for obs in obs_list:
@@ -164,7 +165,7 @@ class MOFNGMixer(NGMixer):
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
                 box_size = self._get_box_size(mb_obs_list)
                 if box_size < 0:
-                    box_size = self._get_box_size(coadd_mb_obs_list)
+                    box_size = self._get_box_size(coadd_mb_obs_list)                
                 bs.append(box_size)
             bs = numpy.array(bs)
             q = numpy.argsort(bs)            
@@ -182,8 +183,10 @@ class MOFNGMixer(NGMixer):
                 ti = time.time()-ti
                 log.info('    time: %f' % ti)
 
+
+            #####################################################################
+            # now fit again with nbrs if needed
             if foflen > 1:
-                # now fit again with nbrs
                 converged = False
                 for itr in xrange(self['mof']['max_itr']):
                     log.info('itr %d:' % itr)
@@ -227,10 +230,6 @@ class MOFNGMixer(NGMixer):
                 log.info('  convergence fof index: %d' % (self.curr_fofindex+1-self.start_fofindex))
                 log.info('    converged: %s' % str(converged))
                 log.info('    num itr: %d' % (itr+1))
-                fmt = "%8.3g "*len(self.maxabs)
-                log.info("    max abs diff : "+fmt % tuple(self.maxabs))
-                log.info("    max frac diff: "+fmt % tuple(self.maxfrac))
-                log.info("    max err diff : "+fmt % tuple(self.maxerr))
             else:
                 # one object in fof, so set mof flags
                 models_to_check,pars_models_to_check,cov_models_to_check,npars = self._get_models_to_check()
@@ -245,7 +244,7 @@ class MOFNGMixer(NGMixer):
             tm=time.time()-t0                
             self._try_checkpoint(tm)
             
-            if self.curr_fofindex < numtot:
+            if self.curr_fofindex-self.start_fofindex < numtot:
                 log.info('fof index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
             
         tm=time.time()-t0
