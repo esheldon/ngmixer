@@ -575,42 +575,31 @@ class MEDSImageIO(ImageIO):
     def _get_meds_weight(self, meds, mindex, icut):
         """
         Get a weight map from the input MEDS file
-
-        if self.conf['region']=='seg_and_sky':
-            wt=meds.get_cweight_cutout(mindex, icut)
-        elif self.conf['region']=="cweight-nearest":
-            wt=meds.get_cweight_cutout_nearest(mindex, icut)
-        elif self.conf['region']=='weight':
-            wt=meds.get_cutout(mindex, icut, type='weight')
-        else:
-            raise ValueError("support other region types")
-        
-        wt=wt.astype('f8', copy=False)
-        
-        w=numpy.where(wt < self.conf['min_weight'])
-        if w[0].size > 0:
-            wt[w] = 0.0
-        return wt
-        """
+        """                
 
         wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
         wt_us = wt_us.astype('f8', copy=False)
         w = numpy.where(wt_us < self.conf['min_weight'])
         if w[0].size > 0:
             wt_us[w] = 0.0
-
+        
         if self.conf['region'] == 'mof':
             wt = meds.get_cutout(mindex, icut, type='weight')
-            wt = wt.astype('f8', copy=False)
-            w = numpy.where(wt < self.conf['min_weight'])
-            if w[0].size > 0:
-                wt[w] = 0.0
-        elif self.conf['region']=="cweight-nearest": 
+        elif self.conf['region'] == "cweight-nearest": 
             wt = wt_us
+        elif self.conf['region'] == 'seg_and_sky':
+            wt=meds.get_cweight_cutout(mindex, icut)
+        elif self.conf['region'] == 'weight':
+            wt=meds.get_cutout(mindex, icut, type='weight')
         else:
             raise ValueError("no support for region type %s" % self.conf['region'])
-                    
-        seg = meds.get_cweight_cutout(mindex, icut)        
+
+        wt = wt.astype('f8', copy=False)
+        w = numpy.where(wt < self.conf['min_weight'])
+        if w[0].size > 0:
+            wt[w] = 0.0
+        
+        seg = meds.get_cseg_cutout(mindex, icut)        
             
         return wt,wt_us,seg
 
@@ -854,3 +843,5 @@ class SVMOFMEDSImageIO(SVMEDSImageIO):
 
 # alias for now
 Y1MEDSImageIO = MEDSImageIO
+
+
