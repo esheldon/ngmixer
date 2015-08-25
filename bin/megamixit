@@ -1,7 +1,13 @@
 #!/usr/bin/env python
 """
     %prog [options] command run_config_file coadd_tile
-    Process the input coadd_tile."""
+    Process the input coadd_tile.
+
+    Possible commands are:
+        setup - setup jobs
+        run - run jobs
+        rerun - rerun jobs
+        collate - combine job outputs into a single file"""
 import os
 import sys
 import meds
