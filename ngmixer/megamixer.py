@@ -133,7 +133,7 @@ class BaseNGMegaMixer(dict):
             if not os.path.exists(dr):
                 os.mkdir(dr)
                 
-        if len(self['extar_cmds']) > 0:
+        if len(self['extra_cmds']) > 0:
             os.system('cp %s %s' % (self['extra_cmds'],os.path.join(odir,'.')))
                 
     def make_scripts(self,coadd_tile,files,fof_ranges):
