@@ -35,21 +35,21 @@ class SimpSimMEDSImageIO(ImageIO):
         
         meds_files = args[1]        
         if not isinstance(meds_files, list):
-	    self.meds_files = [meds_files]
-	else:
-	    self.meds_files =  meds_files
+            self.meds_files = [meds_files]
+        else:
+            self.meds_files =  meds_files
 
         # do sub range files if needed
         self._setup_work_files()
         
-	# load meds files and image flags array
-	self._load_meds_files()
+        # load meds files and image flags array
+        self._load_meds_files()
 
         # set extra config
         self.iband = range(len(self.meds_list))
-	self.conf['nband'] = len(self.meds_list)
+        self.conf['nband'] = len(self.meds_list)
 
-	self._set_and_check_index_lookups()
+        self._set_and_check_index_lookups()
 
         self._load_psf_data()
 
@@ -159,34 +159,34 @@ class SimpSimMEDSImageIO(ImageIO):
             self.extracted = extracted
         
     def _set_and_check_index_lookups(self):
-	"""
-	Deal with common indexing issues in one place
-	"""
+        """
+        Deal with common indexing issues in one place
+        """
 
-	"""
-	Indexing notes:
-	
-	Each MEDS file consists of a list of objects to be fit, which are indexed by 
-	
-	   self.mindex = 0-offset from start of file
-	   
-	The code runs by processing groups of objects, which we call FoFs. Note however
-	that these groupings can be arbitrary. The FoFs are specified by a numpy array 
-	(read from a FITS table) which has two columns
-	
-	    fofid - the ID of the fof group, 0-offset
-	    number - the ID number of the object in the coadd detection tile seg map
-	    
-	We require that the FoF file number column matches the MEDS file, line-by-line.
-	
-	We do however build some lookup tables to enable easy translation. They are
+        """
+        Indexing notes:
+        
+        Each MEDS file consists of a list of objects to be fit, which are indexed by 
+        
+           self.mindex = 0-offset from start of file
+           
+        The code runs by processing groups of objects, which we call FoFs. Note however
+        that these groupings can be arbitrary. The FoFs are specified by a numpy array 
+        (read from a FITS table) which has two columns
+        
+            fofid - the ID of the fof group, 0-offset
+            number - the ID number of the object in the coadd detection tile seg map
+            
+        We require that the FoF file number column matches the MEDS file, line-by-line.
+        
+        We do however build some lookup tables to enable easy translation. They are
     
-	    self.fofid2mindex = this is a dict keyed on the fofid - it returns the set of mindexes
-		that give the members of the FoF group
-	    self.number2mindex = lookup table for converting numbers to mindexes
-	These are both dictionaries which use python's hashing of keys. There may be a performance 
-	issue here, in terms of building the dicts, for large numbers of objects.
-	"""
+            self.fofid2mindex = this is a dict keyed on the fofid - it returns the set of mindexes
+                that give the members of the FoF group
+            self.number2mindex = lookup table for converting numbers to mindexes
+        These are both dictionaries which use python's hashing of keys. There may be a performance 
+        issue here, in terms of building the dicts, for large numbers of objects.
+        """
 
         # warn the user
         log.info('making fof indexes')
@@ -197,25 +197,25 @@ class SimpSimMEDSImageIO(ImageIO):
         else:
             read_fofs = False
             nobj = len(self.meds_list[0]['number'])
-	    self.fof_data = numpy.zeros(nobj,dtype=[('fofid','i8'),('number','i8')])
+            self.fof_data = numpy.zeros(nobj,dtype=[('fofid','i8'),('number','i8')])
             self.fof_data['fofid'][:] = numpy.arange(nobj)
             self.fof_data['number'][:] = self.meds_list[0]['number'][:]
         
-	# first, we error check
-	for band,meds in enumerate(self.meds_list):
-	    assert numpy.array_equal(meds['number'],self.fof_data['number']),"FoF number is not the same as MEDS number for band %d!" % band
+        # first, we error check
+        for band,meds in enumerate(self.meds_list):
+            assert numpy.array_equal(meds['number'],self.fof_data['number']),"FoF number is not the same as MEDS number for band %d!" % band
 
-	#set some useful stuff here
-	self.fofids = numpy.unique(self.fof_data['fofid'])
+        #set some useful stuff here
+        self.fofids = numpy.unique(self.fof_data['fofid'])
         self.fofids = numpy.sort(self.fofids)
         self.num_fofs = len(self.fofids)
 
         if read_fofs:
             #build the fof hash
-	    self.fofid2mindex = {}
-	    for fofid in self.fofids:
-	        q, = numpy.where(self.fof_data['fofid'] == fofid)
-	        assert len(q) > 0, 'Found zero length FoF! fofid = %ld' % fofid
+            self.fofid2mindex = {}
+            for fofid in self.fofids:
+                q, = numpy.where(self.fof_data['fofid'] == fofid)
+                assert len(q) > 0, 'Found zero length FoF! fofid = %ld' % fofid
                 assert numpy.array_equal(self.fof_data['number'][q],self.meds_list[0]['number'][q])
                 self.fofid2mindex[fofid] = q.copy()
         else:
@@ -635,30 +635,30 @@ class SimpSimMEDSImageIO(ImageIO):
         return im, cen, sigma_pix, self.psf_file
             
     def _load_meds_files(self):
-	"""
-	Load all listed meds files
-	We check the flags indicated by image_flags2check.  the saved
-	flags are 0 or IMAGE_FLAGS_SET
-	"""
+        """
+        Load all listed meds files
+        We check the flags indicated by image_flags2check.  the saved
+        flags are 0 or IMAGE_FLAGS_SET
+        """
 
-	self.meds_list=[]
-	self.meds_meta_list=[]
+        self.meds_list=[]
+        self.meds_meta_list=[]
         
-	for i,funexp in enumerate(self.meds_files):
+        for i,funexp in enumerate(self.meds_files):
             f = os.path.expandvars(funexp)
             log.info('band %d meds: %s' % (i,f))
             medsi=meds.MEDS(f)
-	    medsi_meta=medsi.get_meta()
+            medsi_meta=medsi.get_meta()
             
-	    if i==0:
-		nobj_tot=medsi.size
-	    else:
-		nobj=medsi.size
-		if nobj != nobj_tot:
-		    raise ValueError("mismatch in meds "
-				     "sizes: %d/%d" % (nobj_tot,nobj))
-	    self.meds_list.append(medsi)
-	    self.meds_meta_list.append(medsi_meta)
-	    
-	self.nobj_tot = self.meds_list[0].size
+            if i==0:
+                nobj_tot=medsi.size
+            else:
+                nobj=medsi.size
+                if nobj != nobj_tot:
+                    raise ValueError("mismatch in meds "
+                                     "sizes: %d/%d" % (nobj_tot,nobj))
+            self.meds_list.append(medsi)
+            self.meds_meta_list.append(medsi_meta)
+            
+        self.nobj_tot = self.meds_list[0].size
 
