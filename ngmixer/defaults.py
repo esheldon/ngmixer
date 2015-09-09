@@ -40,3 +40,6 @@ LOGGERNAME = __name__.split('.')[0]
 
 # running code
 _CHECKPOINTS_DEFAULT_MINUTES=[0,30,60,110]
+
+PSF_IND_FIELD='ind_psf'
+PSF_IM_FIELD='psf_im'

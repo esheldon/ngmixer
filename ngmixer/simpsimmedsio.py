@@ -13,7 +13,7 @@ from ngmix import Observation, ObsList, MultiBandObsList
 
 # local imports
 from .imageio import ImageIO
-from .defaults import DEFVAL,IMAGE_FLAGS,LOGGERNAME
+from .defaults import DEFVAL,IMAGE_FLAGS,LOGGERNAME, PSF_IND_FIELD, PSF_IM_FIELD
 from . import nbrsfofs
 
 # internal flagging
@@ -31,7 +31,8 @@ class SimpSimMEDSImageIO(ImageIO):
         super(SimpSimMEDSImageIO, self).__init__(*args,**kwargs)
 
         self.conf = args[0]
-        self.conf['min_weight'] = self.conf.get('min_weight',-numpy.inf)
+
+        self._set_defaults()
 
         meds_files = args[1]
         if not isinstance(meds_files, list):
@@ -63,10 +64,15 @@ class SimpSimMEDSImageIO(ImageIO):
             self.extra_data = {}
 
         # make sure if we are doing nbrs we have the info we need
-        self.conf['model_nbrs'] = self.conf.get('model_nbrs',False)
         if self.conf['model_nbrs']:
             assert 'extra_data' in kwargs
             assert 'nbrs' in self.extra_data
+
+    def _set_defaults(self):
+        self.conf['min_weight']   = self.conf.get('min_weight',-numpy.inf)
+        self.conf['model_nbrs']   = self.conf.get('model_nbrs',False)
+        self.conf['psf_ind_field'] = self.conf.get('psf_ind_field',PSF_IND_FIELD)
+        self.conf['psf_im_field'] = self.conf.get('psf_im_field',PSF_IM_FIELD)
 
     def _load_psf_data(self):
         if 'psf_file' in self.extra_data:
@@ -625,9 +631,12 @@ class SimpSimMEDSImageIO(ImageIO):
         """
 
         meds=self.meds_list[band]
-        ind_psf = meds['ind_psf'][mindex,icut]
+        psf_ind_field=self.conf['psf_ind_field']
 
-        im = self.psf_data['im'][ind_psf].copy()
+        ind_psf = meds[psf_ind_field][mindex,icut]
+
+        psf_im_field=self.conf['psf_im_field']
+        im = self.psf_data[psf_im_field][ind_psf].copy()
         cen = numpy.zeros(2)
         cen[0] = im.shape[0]/2.0
         cen[1] = im.shape[1]/2.0
