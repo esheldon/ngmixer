@@ -63,7 +63,7 @@ class SimpSimMEDSImageIO(ImageIO):
             self.extra_data = {}
 
         # make sure if we are doing nbrs we have the info we need
-        if 'model_nbrs' in self.conf:
+        if 'model_nbrs' in self.conf and self.conf['model_nbrs']:
             assert 'extra_data' in kwargs
             assert 'nbrs' in self.extra_data
 
