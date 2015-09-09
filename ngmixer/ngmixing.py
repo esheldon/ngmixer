@@ -414,7 +414,8 @@ class NGMixer(dict):
 
             # for nband==1 the written array drops the arrayness
             if self['nband']==1:
-                raise ValueError("fix checkpoints for 1 band!")
+                self.data[0] = numpy.array( self.data[0], dtype=self.data_dtype )
+                #raise ValueError("fix checkpoints for 1 band!")
 
             # epoch data
             if 'epoch_data' in self.checkpoint_data:
