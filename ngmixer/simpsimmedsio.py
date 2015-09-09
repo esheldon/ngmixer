@@ -577,10 +577,16 @@ class SimpSimMEDSImageIO(ImageIO):
                 wt[w] = 0.0
         elif self.conf['region']=="cweight-nearest":
             wt = wt_us
+        elif self.conf['region'] == 'weight':
+            wt = meds.get_cutout(mindex, icut, type='weight')
+            wt = wt.astype('f8', copy=False)
+            w = numpy.where(wt < self.conf['min_weight'])
+            if w[0].size > 0:
+                wt[w] = 0.0
         else:
             raise ValueError("no support for region type %s" % self.conf['region'])
 
-        seg = meds.get_cweight_cutout(mindex, icut)
+        seg = meds.get_cseg_cutout(mindex, icut)
 
         return wt,wt_us,seg
 
