@@ -930,7 +930,6 @@ class MaxNGMixBootFitter(NGMixBootFitter):
         boot=self.boot
 
         max_pars=self['max_pars']
-        cov_pars=self['cov_pars']
         prior=self['model_pars'][model]['prior']
 
         # now with prior
@@ -942,6 +941,7 @@ class MaxNGMixBootFitter(NGMixBootFitter):
 
         if self['replace_cov']:
             log.info("        replacing cov")
+            cov_pars=self['cov_pars']
             boot.try_replace_cov(cov_pars)
 
     def _fit_galaxy(self, model, coadd, guess=None):
