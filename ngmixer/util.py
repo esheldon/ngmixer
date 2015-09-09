@@ -13,13 +13,13 @@ from ngmix.priors import LOWVAL
 class PBar(object):
     """
     Prints a progressbar to the screen.
-    
+
     Use like this
     pgr = PBar(N,"doing work")
     pgr.start()
     for i in xrange(N):
         pgr.update(i+1)
-    pgr.finish()    
+    pgr.finish()
     """
     def __init__(self,Nmax,name=""):
         self.name = name
@@ -32,7 +32,7 @@ class PBar(object):
         self.ic = 0
         self.lp = None
         self.columnsp = None
-        
+
     def __getdipc(self,slen):
         if slen < self.Nmax:
             self.di = int(float(self.Nmax)/float(slen))
@@ -50,11 +50,11 @@ class PBar(object):
         except:
             columns= '80'
         return columns
-        
+
     def start(self):
         self.tstart = time.time()
         self.tp = time.time()
-        columns = self._get_width()        
+        columns = self._get_width()
         self.width = int(columns)
         tail = " %3d%% ETA: --:--:--" % 0
         slen = self.width - len(self.name)-len(tail)
@@ -63,11 +63,11 @@ class PBar(object):
         sys.stdout.flush()
         self.__getdipc(slen)
         self.lp = line
-        
+
     def update(self,i):
         if i-self.ic >= self.di:
             columns = self._get_width()
-            
+
             if self.lp is not None:
                 if self.columnsp is not None and self.columnsp > int(columns):
                     sys.stdout.write('\n')
@@ -77,17 +77,17 @@ class PBar(object):
                 sys.stdout.flush()
             self.width = int(columns)
             dn = int(float(i)/float(self.Nmax)*100.0)
-            
+
             tn = time.time()
             telapsed = tn-self.tstart
             deta = telapsed/float(i)*float(self.Nmax-i)
-                        
+
             dt = tn-self.tp
             eta = dt/float(i-self.ic)*float(self.Nmax-i)
             self.tp = tn
             self.ic = i
             meta = numpy.sqrt(deta*eta)
-            
+
             tail = " %3d%% ETA: " % dn
             tail += time.strftime('%H:%M:%S', time.gmtime(meta))
             tlen = self.width - len(self.name)-len(tail)
@@ -103,7 +103,7 @@ class PBar(object):
             sys.stdout.flush()
             self.lp = line
             self.columnsp = int(columns)
-            
+
     def finish(self):
         if self.lp is not None:
             nb = len(self.lp)+1
@@ -132,7 +132,7 @@ class UtterFailure(Exception):
     could not make a good guess
     """
     def __init__(self, value):
-         self.value = value
+        self.value = value
     def __str__(self):
         return repr(self.value)
 
@@ -178,7 +178,7 @@ def plot_autocorr(trials, window=100, show=False, **kw):
 
     for i in xrange(trials.shape[1]):
         pts=biggles.Curve(xvals,func[:,i],color='blue')
-        
+
         lab=biggles.PlotLabel(0.9,0.9,
                               r'$%s tau\times 2: %s$' % (i,tau2[i]),
                               halign='right')
@@ -209,7 +209,7 @@ class CombinedImageFlags(object):
 
         expid = int(bs[1])
         ccdid = int( bs[2].split('.')[0] )
-        
+
         key='%s-%02d' % (expid, ccdid)
         return key
 
@@ -220,7 +220,7 @@ class CombinedImageFlags(object):
             flags=self.get_flags(image_name,default=default)
 
             flaglist[i] = flags
-        
+
         return flaglist
 
     def get_flags(self, image_name, default=0):
@@ -253,7 +253,7 @@ class AstromFlags(object):
         flags=numpy.ones(image_ids.size,dtype='i8')
         minput, mastro = eu.numpy_util.match(image_ids, self.data['imageid'])
 
-        nmiss=image_ids.size - minput.size 
+        nmiss=image_ids.size - minput.size
         if nmiss > 0:
             print("        %d/%d did not "
                   "match astrom flags" % (nmiss,image_ids.size))

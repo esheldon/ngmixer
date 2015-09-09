@@ -46,12 +46,12 @@ class NGMixBootFitter(BaseFitter):
     Use an ngmix bootstrapper
     """
     def __init__(self,*args,**kw):
-        super(NGMixBootFitter,self).__init__(*args,**kw)        
+        super(NGMixBootFitter,self).__init__(*args,**kw)
         self['replace_cov'] = self.get('replace_cov',False)
         self['use_logpars'] = self.get('use_logpars',False)
         self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
         self['min_psf_s2n'] = self.get('min_psf_s2n',-numpy.inf)
-        
+
     def get_models_for_checking(self):
         models = [modl for modl in self['fit_models']]
         pars = [modl+'_max_pars' for modl in self['fit_models']]
@@ -60,16 +60,16 @@ class NGMixBootFitter(BaseFitter):
         coadd_models = ['coadd_'+modl for modl in models]
         coadd_pars = ['coadd_'+modl for modl in pars]
         coadd_covs = ['coadd_'+modl for modl in covs]
-        
+
         return models,pars,covs,coadd_models,coadd_pars,coadd_covs,5+self['nband']
-        
+
     def _get_good_mb_obs_list(self,mb_obs_list):
         new_mb_obs_list = MultiBandObsList()
         for obs_list in mb_obs_list:
             new_obs_list = ObsList()
             for obs in obs_list:
                 if obs.meta['flags'] == 0:
-                    new_obs_list.append(obs)                    
+                    new_obs_list.append(obs)
             new_mb_obs_list.append(new_obs_list)
         new_mb_obs_list.update_meta_data(mb_obs_list.meta)
         new_mb_obs_list.update_meta_data({'old_mb_obs_list':mb_obs_list})
@@ -84,7 +84,7 @@ class NGMixBootFitter(BaseFitter):
         new_mb_obs_list = self._get_good_mb_obs_list(mb_obs_list)
         self.new_mb_obs_list = new_mb_obs_list
         self.mb_obs_list = mb_obs_list
-        
+
         if 'fit_data' not in mb_obs_list.meta:
             mb_obs_list.update_meta_data({'fit_data':self._make_struct(coadd)})
         self.data = mb_obs_list.meta['fit_data']
@@ -93,10 +93,10 @@ class NGMixBootFitter(BaseFitter):
             self.plot_dir = './%d-plots' % new_mb_obs_list.meta['id']
             if not os.path.exists(self.plot_dir):
                 os.mkdir(self.plot_dir)
-                
+
         fit_flags = 0
         for model in self['fit_models']:
-            log.info('    fitting: %s' % model)            
+            log.info('    fitting: %s' % model)
 
             if self['model_nbrs'] and nbrs_fit_data is not None:
                 self._render_nbrs(model,new_mb_obs_list,coadd,nbrs_fit_data)
@@ -109,7 +109,7 @@ class NGMixBootFitter(BaseFitter):
                 guess = nbrs_fit_data[n('max_pars')][mb_obs_list.meta['cen_ind']]
             else:
                 guess = None
-            
+
             model_flags, boot = self._run_boot(model,new_mb_obs_list,coadd,guess=guess)
             fit_flags |= model_flags
 
@@ -121,12 +121,12 @@ class NGMixBootFitter(BaseFitter):
                 self._do_psf_stats(mb_obs_list,coadd)
             else:
                 break
-            
+
             if (model_flags & PSF_FIT_FAILURE) != 0:
                 break
-        
+
         self._fill_nimage_used(mb_obs_list,boot.mb_obs_list,coadd)
-            
+
         return fit_flags
 
     def _render_single(self,model,band,obs,pars_tag,fit_data,psf_gmix,jac,coadd):
@@ -134,15 +134,15 @@ class NGMixBootFitter(BaseFitter):
         render a single image of model with pars_tag in fit_data and psf_gmix w/ jac
         """
         if coadd:
-            n = Namer('coadd_%s' % model)        
+            n = Namer('coadd_%s' % model)
         else:
-            n = Namer(model)                
+            n = Namer(model)
         pars_obj = fit_data[pars_tag][0].copy()
         band_pars_obj = numpy.zeros(6,dtype='f8')
         band_pars_obj[0:5] = pars_obj[0:5]
         band_pars_obj[5] = pars_obj[5+band]
         assert len(band_pars_obj) == 6
-        
+
         if model != 'cm':
             gmix_sky = GMixModel(band_pars_obj, model)
         else:
@@ -150,22 +150,22 @@ class NGMixBootFitter(BaseFitter):
         gmix_image = gmix_sky.convolve(psf_gmix)
         image = gmix_image.make_image(obs.image.shape, jacobian=jac)
         return image
-    
+
     def _render_nbrs(self,model,mb_obs_list,coadd,nbrs_fit_data):
         """
         render nbrs
         """
 
         log.info('    rendering nbrs')
-        
+
         if len(mb_obs_list.meta['nbrs_inds']) == 0:
             return
 
         if coadd:
-            n = Namer('coadd_%s' % model)        
+            n = Namer('coadd_%s' % model)
         else:
-            n = Namer(model)        
-        pars_name = 'max_pars'        
+            n = Namer(model)
+        pars_name = 'max_pars'
         if n(pars_name) not in nbrs_fit_data.dtype.names:
             pars_name = 'pars'
 
@@ -176,7 +176,7 @@ class NGMixBootFitter(BaseFitter):
             fit_flags_tag = n('max_flags')
         else:
             fit_flags_tag = n('flags')
-        
+
         cen_ind = mb_obs_list.meta['cen_ind']
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
@@ -192,7 +192,7 @@ class NGMixBootFitter(BaseFitter):
                     cenim = obs.image_orig.copy()
 
                 # now do nbrs
-                totim = cenim.copy()                
+                totim = cenim.copy()
                 for nbrs_ind,nbrs_flags,nbrs_psf,nbrs_jac in zip(mb_obs_list.meta['nbrs_inds'],
                                                                  obs.meta['nbrs_flags'],
                                                                  obs.meta['nbrs_psfs'],
@@ -204,7 +204,7 @@ class NGMixBootFitter(BaseFitter):
                             # FIXME - need to fit psf from off chip nbrs
                             log.info('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' % (nbrs_ind+1,cen_ind+1))
                             continue
-                    
+
                         totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1],nbrs_psf_gmix,nbrs_jac,coadd)
 
                 if self['model_nbrs_method'] == 'subtract':
@@ -246,12 +246,12 @@ class NGMixBootFitter(BaseFitter):
                     qx,qy = numpy.where(seg == uval)
                     seg_new[qx[:],qy[:]] = ind/mval
                     ind += 1
-                                    
+
             return seg_new
         """
-        
+
         icut_cen = obs.meta['icut']
-                
+
         import images
         import biggles
         width = 1920
@@ -260,7 +260,7 @@ class NGMixBootFitter(BaseFitter):
         biggles.configure('screen','height', height)
         tab = biggles.Table(2,3)
         tab.title = title
-                    
+
         tab[0,0] = images.view(obs.image_orig,title='original image',show=False,nonlinear=0.075)
         tab[0,1] = images.view(totim-cenim,title='models of nbrs',show=False,nonlinear=0.075)
 
@@ -270,14 +270,14 @@ class NGMixBootFitter(BaseFitter):
         else:
             tab[0,2] = images.view(plot_seg(meds.interpolate_coadd_seg(self.mindex,icut_cen)),title='seg map',show=False)
         """
-        
+
         tab[1,0] = images.view(obs.image,title='corrected image',show=False,nonlinear=0.075)
         msk = totim != 0
         frac = numpy.zeros(totim.shape)
         frac[msk] = cenim[msk]/totim[msk]
-        tab[1,1] = images.view(frac,title='fraction of flux due to central',show=False)                    
+        tab[1,1] = images.view(frac,title='fraction of flux due to central',show=False)
         tab[1,2] = images.view(obs.weight,title='weight map',show=False)
-                    
+
         try:
             if icut_cen > 0:
                 fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d.png' % (ptype,band,icut_cen))
@@ -305,7 +305,7 @@ class NGMixBootFitter(BaseFitter):
 
                 if obs.meta['flags'] == 0 and obs.has_psf():
                     psf_obs = obs.get_psf()
-                    
+
                     ed = self._make_epoch_struct()
                     ed['npix'] = obs.image.size
                     ed['wsum'] = obs.weight.sum()
@@ -315,7 +315,7 @@ class NGMixBootFitter(BaseFitter):
                     if 'fitter' in psf_obs.meta:
                         res = obs.get_psf().meta['fitter'].get_result()
                         ed['psf_fit_flags'] = res['flags']
-                        
+
                     if psf_obs.has_gmix():
                         used = True
                         psf_gmix = psf_obs.get_gmix()
@@ -341,7 +341,7 @@ class NGMixBootFitter(BaseFitter):
             n = Namer('coadd')
         else:
             n = Namer('')
-        
+
         Tsum = 0.0
         g1sum = 0.0
         g2sum = 0.0
@@ -373,26 +373,26 @@ class NGMixBootFitter(BaseFitter):
             self.data[n('psfrec_g')][0,0] = g1sum/wsum
             self.data[n('psfrec_g')][0,1] = g2sum/wsum
             self.data[n('psfrec_T')][0] = Tsum/wsum
-    
+
     def _fill_nimage_used(self,mb_obs_list,new_mb_obs_list,coadd):
         nim = numpy.zeros(self['nband'],dtype='i4')
         nim_used = numpy.zeros_like(nim)
         for band in xrange(self['nband']):
             nim[band] = len(mb_obs_list[band])
             nim_used[band] = len(new_mb_obs_list[band])
-            
+
         if coadd:
             n = Namer("coadd")
         else:
             n = Namer("")
 
         self.data[n('nimage_use')][0,:] = nim_used
-    
+
     def _get_bootstrapper(self, model, mb_obs_list):
         """
         get the bootstrapper for fitting psf through galaxy
         """
-        
+
         if model == 'cm':
             fracdev_prior=self['model_pars']['cm']['fracdev_prior']
             boot=get_bootstrapper(mb_obs_list,
@@ -401,14 +401,14 @@ class NGMixBootFitter(BaseFitter):
                                   **self)
         else:
             boot=get_bootstrapper(mb_obs_list, **self)
-        
+
         return boot
-    
+
     def _run_boot(self, model, mb_obs_list, coadd, guess=None):
         """
         run a boot strapper
         """
-        
+
         flags=0
         boot=self._get_bootstrapper(model,mb_obs_list)
         self.boot=boot
@@ -417,7 +417,7 @@ class NGMixBootFitter(BaseFitter):
             n = Namer('coadd_psf')
         else:
             n = Namer('psf')
-        
+
         try:
             self._fit_psfs(coadd)
             flags |= self._fit_psf_flux(coadd)
@@ -428,10 +428,10 @@ class NGMixBootFitter(BaseFitter):
                 max_s2n = numpy.nanmax(s2n)
                 if max_s2n < self['min_psf_s2n']:
                     flags |= LOW_PSF_FLUX
-                
+
             if flags == 0:
                 try:
-                    self._fit_galaxy(model,coadd,guess=guess)                    
+                    self._fit_galaxy(model,coadd,guess=guess)
                     self._copy_galaxy_result(model,coadd)
                     self._print_galaxy_result()
                 except (BootGalFailure,GMixRangeError):
@@ -453,7 +453,7 @@ class NGMixBootFitter(BaseFitter):
             n = Namer("coadd_psf")
         else:
             n = Namer("psf")
-            
+
         flagsall=0
         for band in xrange(self['nband']):
             flags=res['flags'][band]
@@ -476,7 +476,7 @@ class NGMixBootFitter(BaseFitter):
         """
 
         log.info('    fitting the PSFs')
-        
+
         boot=self.boot
 
         psf_pars = {}
@@ -535,7 +535,7 @@ class NGMixBootFitter(BaseFitter):
 
         log.info("        making plot %s" % fname)
         plt.write_img(1920,1200,fname)
-        
+
     def _fit_galaxy(self, model, coadd, guess=None):
         """
         over-ride for different fitters
@@ -572,7 +572,7 @@ class NGMixBootFitter(BaseFitter):
     def _plot_trials(self, obj_id, fitter, model, coadd, fitter_type, wgts):
         """
         make plots
-        """        
+        """
         if coadd:
             ptype='coadd'
         else:
@@ -580,20 +580,20 @@ class NGMixBootFitter(BaseFitter):
 
         ptype = '%s-%s-%s' % (ptype,model,fitter_type)
         title='%d %s' % (obj_id,ptype)
-        
+
         try:
             pdict=fitter.make_plots(title=title,
                                     weights=wgts)
-            
+
             pdict['trials'].aspect_ratio=1.5
             pdict['wtrials'].aspect_ratio=1.5
-            
+
             trials_png=os.path.join(self.plot_dir,'%d-%s-trials.png' % (obj_id,ptype))
             wtrials_png=os.path.join(self.plot_dir,'%d-%s-wtrials.png' % (obj_id,ptype))
-            
+
             log.info("        making plot %s" % trials_png)
             pdict['trials'].write_img(1200,1200,trials_png)
-            
+
             log.info("        making plot %s" % wtrials_png)
             pdict['wtrials'].write_img(1200,1200,wtrials_png)
         except:
@@ -615,7 +615,7 @@ class NGMixBootFitter(BaseFitter):
         imlist = []
         titles = []
         for band,obs_list in enumerate(self.new_mb_obs_list):
-            for obs in obs_list: 
+            for obs in obs_list:
                 imlist.append(obs.image*obs.weight)
                 titles.append('band: %d %d' % (band,obs.meta['band_id']))
         if coadd:
@@ -654,7 +654,7 @@ class NGMixBootFitter(BaseFitter):
 
             flux=pars[5:]
             flux_cov=pars_cov[5:, 5:]
-            
+
             data[n('max_flags')][dindex] = mres['flags']
             data[n('max_pars')][dindex,:] = mres['pars']
             data[n('max_pars_cov')][dindex,:,:] = mres['pars_cov']
@@ -672,7 +672,7 @@ class NGMixBootFitter(BaseFitter):
 
             for sn in ['s2n_w','chi2per','dof']:
                 data[n(sn)][dindex] = res[sn]
-            
+
             if self['do_shear']:
                 if 'g_sens' in res:
                     data[n('g_sens')][dindex,:] = res['g_sens']
@@ -685,7 +685,7 @@ class NGMixBootFitter(BaseFitter):
             for f in ['fracdev','fracdev_noclip','fracdev_err','TdByTe']:
                 if f in res:
                     data[n(f)][dindex] = res[f]
-                    
+
     def _print_galaxy_result(self):
         res=self.gal_fitter.get_result()
         if 'pars' in res:
@@ -708,7 +708,7 @@ class NGMixBootFitter(BaseFitter):
         model = self['psf_pars']['model'].lower()
         assert model in npdict,"psf model %s not allowed in NGMixBootFitter" % model
         return npdict[model]
-    
+
     def get_epoch_fit_data_dtype(self):
         npars = self.get_num_pars_psf()
         dt=[('npix','i4'),
@@ -724,7 +724,7 @@ class NGMixBootFitter(BaseFitter):
 
     def _make_epoch_struct(self,num=1):
         dt = self.get_epoch_fit_data_dtype()
-        
+
         epoch_data = numpy.zeros(num, dtype=dt)
         epoch_data['npix'] = DEFVAL
         epoch_data['wsum'] = DEFVAL
@@ -734,9 +734,9 @@ class NGMixBootFitter(BaseFitter):
         epoch_data['psf_fit_g'] = DEFVAL
         epoch_data['psf_fit_T'] = DEFVAL
         epoch_data['psf_fit_pars'] = DEFVAL
-        
+
         return epoch_data
-            
+
     def get_fit_data_dtype(self,me,coadd):
         dt = []
         if me:
@@ -744,7 +744,7 @@ class NGMixBootFitter(BaseFitter):
         if coadd:
             dt += self._get_fit_data_dtype(True)
         return dt
-    
+
     def _get_lnames(self):
         if self['use_logpars']:
             fname='log_flux'
@@ -765,13 +765,13 @@ class NGMixBootFitter(BaseFitter):
         if coadd:
             models = models + ['coadd_%s' % model for model in self['fit_models']]
         else:
-            models = models + self['fit_models']    
-        
+            models = models + self['fit_models']
+
         return models
-    
+
     def _get_fit_data_dtype(self,coadd):
         dt=[]
-        
+
         nband=self['nband']
         bshape=(nband,)
         simple_npars=5+nband
@@ -784,30 +784,30 @@ class NGMixBootFitter(BaseFitter):
         dt += [(n('flags'),   'i4',bshape),
                (n('flux'),    'f8',bshape),
                (n('flux_err'),'f8',bshape)]
-                
+
         if coadd:
             n = Namer('coadd')
         else:
             n = Namer('')
 
         dt += [(n('nimage_use'),'i4',bshape)]
-        
+
         dt += [(n('mask_frac'),'f8'),
                (n('psfrec_T'),'f8'),
                (n('psfrec_g'),'f8', 2)]
-        
+
         if nband==1:
             fcov_shape=(nband,)
         else:
             fcov_shape=(nband,nband)
-        
+
         fname, Tname=self._get_lnames()
 
         models=self._get_all_models(coadd)
         for model in models:
             n=Namer(model)
             np=simple_npars
-            
+
             dt+=[(n('flags'),'i4'),
                  (n('pars'),'f8',np),
                  (n('pars_cov'),'f8',(np,np)),
@@ -826,7 +826,7 @@ class NGMixBootFitter(BaseFitter):
                  (n('s2n_r'),'f8'),
                  (n(Tname+'_r'),'f8'),
                  (n('psf_T_r'),'f8')]
-            
+
             if self['do_shear']:
                 dt += [(n('g_sens'), 'f8', 2)]
 
@@ -835,14 +835,14 @@ class NGMixBootFitter(BaseFitter):
                        (n('fracdev_noclip'),'f4'),
                        (n('fracdev_err'),'f4'),
                        (n('TdByTe'),'f4')]
-                
+
         return dt
 
     def _make_struct(self,coadd):
         """
         make the output structure
         """
-        num = 1        
+        num = 1
         dt = self._get_fit_data_dtype(coadd=coadd)
         data = numpy.zeros(num,dtype=dt)
 
@@ -850,7 +850,7 @@ class NGMixBootFitter(BaseFitter):
             n = Namer('coadd_psf')
         else:
             n = Namer('psf')
-        
+
         data[n('flags')] = NO_ATTEMPT
         data[n('flux')] = DEFVAL
         data[n('flux_err')] = DEFVAL
@@ -859,11 +859,11 @@ class NGMixBootFitter(BaseFitter):
             n = Namer('coadd')
         else:
             n = Namer('')
-            
+
         data[n('mask_frac')] = DEFVAL
         data[n('psfrec_T')] = DEFVAL
         data[n('psfrec_g')] = DEFVAL
-        
+
         fname, Tname=self._get_lnames()
 
         models=self._get_all_models(coadd)
@@ -871,7 +871,7 @@ class NGMixBootFitter(BaseFitter):
             n=Namer(model)
 
             data[n('flags')] = NO_ATTEMPT
-            
+
             data[n('pars')] = DEFVAL
             data[n('pars_cov')] = DEFVAL
 
@@ -880,7 +880,7 @@ class NGMixBootFitter(BaseFitter):
 
             data[n('s2n_w')] = DEFVAL
             data[n('chi2per')] = DEFVAL
-            
+
             data[n('max_flags')] = NO_ATTEMPT
             data[n('max_pars')] = DEFVAL
             data[n('max_pars_cov')] = DEFVAL
@@ -889,7 +889,7 @@ class NGMixBootFitter(BaseFitter):
             data[n('s2n_r')] = DEFVAL
             data[n(Tname+'_r')] = DEFVAL
             data[n('psf_T_r')] = DEFVAL
-            
+
             if self['do_shear']:
                 data[n('g_sens')] = DEFVAL
 
@@ -901,25 +901,25 @@ class NGMixBootFitter(BaseFitter):
 
         return data
 
-    def get_default_fit_data(self,me,coadd):                
+    def get_default_fit_data(self,me,coadd):
         dt = self.get_fit_data_dtype(me,coadd)
         d = numpy.zeros(1,dtype=dt)
         if me:
             dme = self._make_struct(False)
-            for tag in dme.dtype.names:                
+            for tag in dme.dtype.names:
                 d[tag] = dme[tag]
 
         if coadd:
             dcoadd = self._make_struct(True)
-            for tag in dcoadd.dtype.names:                
-                d[tag] = dcoadd[tag]        
+            for tag in dcoadd.dtype.names:
+                d[tag] = dcoadd[tag]
 
         return d
 
-    def get_default_epoch_fit_data(self):                
+    def get_default_epoch_fit_data(self):
         d = self._make_epoch_struct()
         return d
-    
+
 class MaxNGMixBootFitter(NGMixBootFitter):
     def _fit_max(self, model, guess=None):
         """
@@ -949,13 +949,13 @@ class MaxNGMixBootFitter(NGMixBootFitter):
 
         rpars=self['round_pars']
         self.boot.set_round_s2n(fitter_type=rpars['fitter_type'])
-        
+
         self.gal_fitter=self.boot.get_max_fitter()
 
         if self['make_plots']:
             self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
             self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
-        
+
 class ISampNGMixBootFitter(MaxNGMixBootFitter):
     def _fit_galaxy(self, model, coadd, guess=None):
         self._fit_max(model,guess=guess)
@@ -964,7 +964,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
 
         self.gal_fitter=self.boot.get_isampler()
 
-        if self['make_plots']:        
+        if self['make_plots']:
             self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
             self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
             self._plot_trials(self.new_mb_obs_list.meta['id'], self.boot.get_isampler(), model, coadd, 'isample', self.boot.get_isampler().get_iweights())
@@ -1038,7 +1038,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
             n=Namer(model)
             dt += [(n('efficiency'),'f4'),
                 (n('neff'),'f4')]
-            
+
         return dt
 
     def _make_struct(self,coadd):
@@ -1050,4 +1050,3 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
             d[n('neff')] = DEFVAL
 
         return d
-

@@ -31,7 +31,7 @@ class NGMixer(dict):
                  init_only=False,
                  profile=False,
                  make_plots=False):
-        
+
         # parameters
         self.update(files.read_yaml(config_file))
         self['config_file'] = config_file
@@ -42,18 +42,18 @@ class NGMixer(dict):
         self['max_box_size']=self.get('max_box_size',2048)
         self.profile = profile
         pprint.pprint(self)
-        
+
         # read the data
         imageio_class = imageio.get_imageio_class(self['imageio_type'])
-        self.imageio = imageio_class(self,data_files,fof_range=fof_range,fof_file=fof_file,extra_data=extra_data)        
+        self.imageio = imageio_class(self,data_files,fof_range=fof_range,fof_file=fof_file,extra_data=extra_data)
         self.curr_fofindex = 0
         self['nband'] = self.imageio.get_num_bands()
         self.iband = range(self['nband'])
-        
+
         # priors
         from .priors import set_priors
         set_priors(self)
-        
+
         # get the fitter
         fitter_class = fitting.get_fitter_class(self['fitter_type'])
         self.fitter = fitter_class(self)
@@ -68,7 +68,7 @@ class NGMixer(dict):
         self.output_file = output_file
         self.start_fofindex = 0
         self._setup_checkpoints()
-        
+
         # build data
         if self.checkpoint_data is None:
             self.data = []
@@ -88,7 +88,7 @@ class NGMixer(dict):
         self.write_data()
         if self.done:
             self.cleanup_checkpoint()
-        
+
     def go_profile(self):
         import cProfile
         import pstats
@@ -109,23 +109,23 @@ class NGMixer(dict):
 
     def get_file_meta_data(self):
         return self.imageio.get_file_meta_data()
-    
+
     def do_fits(self):
         """
         Fit all objects in our list
         """
 
         self.done = False
-        
+
         log.info('doing fits')
-        
+
         t0=time.time()
         num = 0
         numtot = self.imageio.get_num_fofs()
-        
+
         log.info('fof index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
-        for coadd_mb_obs_lists,mb_obs_lists in self.imageio:            
-            foflen = len(mb_obs_lists)            
+        for coadd_mb_obs_lists,mb_obs_lists in self.imageio:
+            foflen = len(mb_obs_lists)
 
             # get data to fill
             self.curr_data = self._make_struct(num=foflen)
@@ -150,19 +150,19 @@ class NGMixer(dict):
             # append data and incr.
             self.data.extend(list(self.curr_data))
             self.curr_fofindex += 1
-            
-            tm=time.time()-t0                
+
+            tm=time.time()-t0
             self._try_checkpoint(tm)
-            
+
             if self.curr_fofindex-self.start_fofindex < numtot:
                 log.info('fof index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
-            
+
         tm=time.time()-t0
         log.info("time: %f" % tm)
         log.info("time per: %f" % (tm/num))
 
         self.done = True
-        
+
     def fit_obj(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None):
         """
         fit a single object
@@ -176,7 +176,7 @@ class NGMixer(dict):
             box_size = self._get_box_size(coadd_mb_obs_list)
         self.curr_data['box_size'][self.curr_data_index] = box_size
         log.info('    box_size: %d' % self.curr_data['box_size'][self.curr_data_index])
-        
+
         # check flags
         flags = 0
         if box_size < 0:
@@ -184,23 +184,23 @@ class NGMixer(dict):
 
         if mb_obs_list.meta['obj_flags'] != 0:
             flags |= BAD_OBJ
-            log.info('    skipping bad object')        
-            
+            log.info('    skipping bad object')
+
         if flags == 0 and self['fit_coadd_galaxy']:
             flags |= self._obj_check(coadd_mb_obs_list)
-        
+
         if flags == 0 and self['fit_me_galaxy']:
             flags |= self._obj_check(mb_obs_list)
-        
+
         if flags == 0:
             fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data)
             flags |= fit_flags
-        
+
         # add in data
         self.curr_data['flags'][self.curr_data_index] = flags
-        self.curr_data['time'][self.curr_data_index] = time.time()-t0        
+        self.curr_data['time'][self.curr_data_index] = time.time()-t0
         self.curr_data['obj_flags'][self.curr_data_index] = mb_obs_list.meta['obj_flags']
-        
+
         # fill in from mb_obs_meta
         for tag in mb_obs_list.meta['meta_data'].dtype.names:
             self.curr_data[tag][self.curr_data_index] = mb_obs_list.meta['meta_data'][tag][0]
@@ -217,12 +217,12 @@ class NGMixer(dict):
 
                     for tag in obs.meta['fit_data'].dtype.names:
                         ed[tag] = obs.meta['fit_data'][tag][0]
-                        
+
                     for tag in obs.meta['meta_data'].dtype.names:
                         ed[tag] = obs.meta['meta_data'][tag][0]
-                        
+
                     self.epoch_data.extend(list(ed))
-                            
+
     def fit_all_obs_lists(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None):
         """
         fit all obs lists
@@ -237,11 +237,11 @@ class NGMixer(dict):
 
                 # fill in epoch data
                 self._fill_epoch_data(mb_obs_list)
-                
+
                 # fill in fit data
                 for tag in mb_obs_list.meta['fit_data'].dtype.names:
                     self.curr_data[tag][self.curr_data_index] = mb_obs_list.meta['fit_data'][tag][0]
-                
+
             except UtterFailure as err:
                 log.info("    me fit got utter failure error: %s" % str(err))
                 me_fit_flags = UTTER_FAILURE
@@ -257,11 +257,11 @@ class NGMixer(dict):
 
                 # fill in epoch data
                 self._fill_epoch_data(coadd_mb_obs_list)
-                
+
                 # fill in fit data
                 for tag in coadd_mb_obs_list.meta['fit_data'].dtype.names:
                     self.curr_data[tag][self.curr_data_index] = coadd_mb_obs_list.meta['fit_data'][tag][0]
-                
+
             except UtterFailure as err:
                 log.info("    coadd fit got utter failure error: %s" % str(err))
                 coadd_fit_flags = UTTER_FAILURE
@@ -272,7 +272,7 @@ class NGMixer(dict):
 
         if fit_flags is None:
             fit_flags = NO_ATTEMPT
-        
+
         return fit_flags
 
     def _get_box_size(self, mb_obs_list):
@@ -283,7 +283,7 @@ class NGMixer(dict):
                     box_size = obs.image.shape[0]
                     break
         return box_size
-    
+
     def _obj_check(self, mb_obs_list):
         """
         Check box sizes, number of cutouts
@@ -300,23 +300,23 @@ class NGMixer(dict):
         Check box sizes, number of cutouts, flags on images
         """
         flags=0
-        
+
         ncutout = len(obs_list)
-        
+
         if ncutout == 0:
             log.info('    no cutouts')
             flags |= NO_CUTOUTS
             return flags
-        
+
         num_use = 0
         for obs in obs_list:
             if obs.meta['flags'] == 0:
                 num_use += 1
-                
+
         if num_use < ncutout:
             log.info("    for band %d removed %d/%d images due to flags"
                      % (band, ncutout-num_use, ncutout))
-            
+
         if num_use == 0:
             flags |= IMAGE_FLAGS
             return flags
@@ -325,9 +325,9 @@ class NGMixer(dict):
         if box_size > self['max_box_size']:
             log.info('    box size too big: %d' % box_size)
             flags |= BOX_SIZE_TOO_BIG
-            
+
         return flags
-    
+
     def _get_epoch_dtype(self):
         """
         makes epoch dtype
@@ -335,7 +335,7 @@ class NGMixer(dict):
         dt = self.imageio.get_epoch_meta_data_dtype()
         dt += self.fitter.get_epoch_fit_data_dtype()
         return dt
-    
+
     def _make_epoch_struct(self,ncutout=1):
         """
         returns ncutout epoch structs to be filled
@@ -343,7 +343,7 @@ class NGMixer(dict):
         dt = self._get_epoch_dtype()
         epoch_data = numpy.zeros(ncutout, dtype=dt)
         return epoch_data
-    
+
     def _get_dtype(self):
         dt = self.imageio.get_meta_data_dtype()
         dt += [('flags','i4'),
@@ -352,7 +352,7 @@ class NGMixer(dict):
                ('obj_flags','i4')]
         dt += self.fitter.get_fit_data_dtype(self['fit_me_galaxy'],self['fit_coadd_galaxy'])
         return dt
-    
+
     def _make_struct(self,num=1):
         """
         make an output structure
@@ -364,7 +364,7 @@ class NGMixer(dict):
         data['box_size'] = DEFVAL
         data['obj_flags'] = NO_ATTEMPT
         return data
-    
+
     def _setup_checkpoints(self):
         """
         Set up the checkpoint times in minutes and data
@@ -390,7 +390,7 @@ class NGMixer(dict):
         import cPickle
 
         self.checkpoint_data = None
-        
+
         if self.output_file is not None:
             self.checkpoint_file = self.output_file.replace('.fits','-checkpoint.fits')
             if os.path.exists(self.checkpoint_file):
@@ -411,7 +411,7 @@ class NGMixer(dict):
             fitsio.fitslib.array_to_native(self.data, inplace=True)
             self.data_dtype = self._get_dtype()
             self.data = list(self.data)
-            
+
             # for nband==1 the written array drops the arrayness
             if self['nband']==1:
                 raise ValueError("fix checkpoints for 1 band!")
@@ -432,10 +432,10 @@ class NGMixer(dict):
             self.curr_fofindex = self.checkpoint_data['checkpoint_data']['curr_fofindex'][0]
             self.imageio.set_fof_start(self.curr_fofindex)
             self.start_fofindex = self.checkpoint_data['checkpoint_data']['curr_fofindex'][0]
-            
+
     def _try_checkpoint(self, tm):
         """
-        Checkpoint at certain intervals.  
+        Checkpoint at certain intervals.
         Potentially modified self.checkpointed
         """
 
@@ -475,22 +475,22 @@ class NGMixer(dict):
         import fitsio
         from .files import StagedOutFile
         import cPickle
-        
+
         log.info('checkpointing at %f minutes' % (tm/60))
         log.info(self.checkpoint_file)
 
-        # make checkpoint data        
+        # make checkpoint data
         cd = numpy.zeros(1,dtype=[('curr_fofindex','i8'),('random_state','|S16384')])
         cd['curr_fofindex'][0] = self.curr_fofindex
         cd['random_state'][0] = cPickle.dumps(numpy.random.get_state())
-        
+
         with StagedOutFile(self.checkpoint_file, tmpdir=self['work_dir']) as sf:
-            with fitsio.FITS(sf.path,'rw',clobber=True) as fobj:                
+            with fitsio.FITS(sf.path,'rw',clobber=True) as fobj:
                 fobj.write(numpy.array(self.data,dtype=self.data_dtype), extname="model_fits")
                 if len(self.epoch_data) > 0:
                     fobj.write(numpy.array(self.epoch_data,dtype=self.epoch_data_dtype), extname="epoch_data")
                 fobj.write(cd, extname="checkpoint_data")
-        
+
     def cleanup_checkpoint(self):
         """
         if we get this far, we have succeeded in writing the data. We can remove
@@ -499,24 +499,23 @@ class NGMixer(dict):
         if os.path.exists(self.checkpoint_file):
             log.info('removing checkpoint file: %s' % self.checkpoint_file)
             os.remove(self.checkpoint_file)
-    
+
     def write_data(self):
         """
         write the actual data.  clobber existing
         """
         if self.output_file is not None:
             self.meta = self.get_file_meta_data()
-            
+
             from .files import StagedOutFile
             work_dir = self['work_dir']
             with StagedOutFile(self.output_file, tmpdir=work_dir) as sf:
                 log.info('writing: %s' % sf.path)
                 with fitsio.FITS(sf.path,'rw',clobber=True) as fobj:
                     fobj.write(self.get_data(),extname="model_fits")
-                    
+
                     if self.epoch_data is not None:
                         fobj.write(self.get_epoch_data(),extname="epoch_data")
 
                     if self.meta is not None:
                         fobj.write(self.meta,extname="meta_data")
-            

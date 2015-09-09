@@ -11,7 +11,7 @@ DEFAULT_NPER = 10
 
 class ConcatError(Exception):
     def __init__(self, value):
-         self.value = value
+        self.value = value
     def __str__(self):
         return repr(self.value)
 
@@ -58,7 +58,7 @@ class Concat(object):
         self.config['fit_models']=list(self.config['model_pars'].keys())
 
         self.set_files(run, root_dir)
-        
+
         self.make_collated_dir()
         self.set_collated_file()
 
@@ -110,7 +110,7 @@ class Concat(object):
 
                 dlist.append(data)
 
-                if (epoch_data is not None 
+                if (epoch_data is not None
                         and epoch_data.dtype.names is not None):
                     elist.append(epoch_data)
             except ConcatError as err:
@@ -160,7 +160,7 @@ class Concat(object):
 
         names=data.dtype.names
         for model in models:
-            
+
             n=Namer(model)
 
             w,=numpy.where(data[n('flags')] == 0)
@@ -231,7 +231,7 @@ class Concat(object):
         import esutil as eu
 
         nbands=self.nbands
-        
+
         models=self.get_models(data0)
 
         names=list( data0.dtype.names )
@@ -252,7 +252,7 @@ class Concat(object):
 
         dt.insert(flux_ind+2, ('psf_mag','f8',nbands) )
         names.insert(flux_ind+2,'psf_mag')
-        
+
         do_T=False
         do_flux=False
         for ft in models:
@@ -264,23 +264,23 @@ class Concat(object):
                 wtf = (n('weight'), 'f8')
                 dt.insert(gcind+1, wtf)
                 names.insert(gcind+1, n('weight'))
-            
+
             if n('flux') in names:
                 flux_ind = names.index(n('flux'))
             else:
                 do_flux = True
                 pars_cov_ind = names.index(n('pars_cov'))
-                
+
                 offset = 1
                 dt.insert(pars_cov_ind+offset, (n('flux'), 'f8', nbands) )
                 names.insert(pars_cov_ind+offset,n('flux'))
-                
+
                 offset += 1
                 dt.insert(pars_cov_ind+offset, (n('flux_cov'), 'f8', (nbands,nbands)) )
                 names.insert(pars_cov_ind+offset,n('flux_cov'))
-                
+
                 flux_ind = names.index(n('flux'))
-                
+
             offset=1
             dt.insert(flux_ind+offset, (n('flux_s2n'), 'f8', nbands) )
             names.insert(flux_ind+offset,n('flux_s2n'))
@@ -294,7 +294,7 @@ class Concat(object):
             logsbf = (n('logsb'), 'f8', nbands)
             dt.insert(flux_ind+offset, logsbf)
             names.insert(flux_ind+offset, n('logsb'))
-           
+
             if n('T') not in data0.dtype.names:
                 fadd=[(n('T'),'f8'),
                       (n('T_err'),'f8'),
@@ -359,7 +359,7 @@ class Concat(object):
             if w.size > 0:
                 if n('g_cov') in data.dtype.names:
                     c=data[n('g_cov')]
-                    weight=1.0/(2.*SHAPENOISE2 + c[w,0,0] + 2*c[w,0,1] + c[w,1,1])                    
+                    weight=1.0/(2.*SHAPENOISE2 + c[w,0,0] + 2*c[w,0,1] + c[w,1,1])
                     data[n('weight')][w] = weight
 
     def calc_mag_and_flux_stuff(self, data, meta, model, band, do_flux=False):
@@ -407,8 +407,8 @@ class Concat(object):
                     data[n('flux_cov')][w,1,1] = data[n('pars_cov')][w,5,5]
                 else:
                     data[n('flux')][w,band] = data[n('pars')][w,5+band]
-                    data[n('flux_cov')][w,:,:] = data[n('pars_cov')][w,5:5+nband,5:5+nband] 
-            
+                    data[n('flux_cov')][w,:,:] = data[n('pars_cov')][w,5:5+nband,5:5+nband]
+
             if nband == 1:
                 flux = ( data[n('flux')][w]/PIXSCALE2 ).clip(min=0.001)
             else:
@@ -502,7 +502,7 @@ class Concat(object):
         else:
             epoch_data = epoch_data0
 
-            
+
         return data, epoch_data, meta
 
     def set_chunks(self):
@@ -537,7 +537,7 @@ class Concat(object):
             extra='blind'
         else:
             extra=None
-            
+
         self.collated_file = self._files.get_collated_file(sub_dir=self.sub_dir,
                                                            extra=extra)
         self.tmpdir=files.get_temp_dir()
@@ -556,7 +556,7 @@ class Concat(object):
 
     def set_files(self, run, root_dir):
         self._files=files.Files(run, root_dir=root_dir)
-    
+
 
 def get_tile_key(tilename,band):
     key='%s-%s' % (tilename,band)
@@ -604,5 +604,3 @@ def get_blind_factor():
     g = f*1e-8
     #get value between 0.9 and 1
     return 0.9 + 0.1*g
-
-

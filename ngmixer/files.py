@@ -52,7 +52,7 @@ class StagedOutFile(object):
         fpath = os.path.split(fname)[0]
         if fpath == '':
             fpath = '.'
-            
+
         if self.tmpdir is None or os.path.samefile(self.tmpdir,fpath):
             self.is_temp=False
             self.path=self.final_path
@@ -123,4 +123,3 @@ def read_yaml(config_path):
     with open(config_path) as fobj:
         conf=yaml.load(fobj)
     return conf
-

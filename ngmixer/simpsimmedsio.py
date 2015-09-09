@@ -26,14 +26,14 @@ class SimpSimMEDSImageIO(ImageIO):
     """
     Class for MEDS image I/O.
     """
-    
+
     def __init__(self,*args,**kwargs):
         super(SimpSimMEDSImageIO, self).__init__(*args,**kwargs)
-        
+
         self.conf = args[0]
         self.conf['min_weight'] = self.conf.get('min_weight',-numpy.inf)
-        
-        meds_files = args[1]        
+
+        meds_files = args[1]
         if not isinstance(meds_files, list):
             self.meds_files = [meds_files]
         else:
@@ -41,7 +41,7 @@ class SimpSimMEDSImageIO(ImageIO):
 
         # do sub range files if needed
         self._setup_work_files()
-        
+
         # load meds files and image flags array
         self._load_meds_files()
 
@@ -55,7 +55,7 @@ class SimpSimMEDSImageIO(ImageIO):
 
         # deal with extra data
         if 'extra_data' in kwargs:
-            self.extra_data = kwargs['extra_data']            
+            self.extra_data = kwargs['extra_data']
         else:
             self.extra_data = None
 
@@ -64,7 +64,7 @@ class SimpSimMEDSImageIO(ImageIO):
 
         # make sure if we are doing nbrs we have the info we need
         if 'model_nbrs' in self.conf:
-            assert 'extra_data' in kwargs            
+            assert 'extra_data' in kwargs
             assert 'nbrs' in self.extra_data
 
     def _load_psf_data(self):
@@ -76,7 +76,7 @@ class SimpSimMEDSImageIO(ImageIO):
             self.psf_file = os.path.join(pth,bname)
         log.info('psf file: %s' % self.psf_file)
         self.psf_data = fitsio.read(self.psf_file)
-            
+
     def get_file_meta_data(self):
         meds_meta_list = self.meds_meta_list
         dt = meds_meta_list[0].dtype.descr
@@ -84,7 +84,7 @@ class SimpSimMEDSImageIO(ImageIO):
         if 'config_file' in self.conf:
             clen=len(self.conf['config_file'])
             dt += [('ngmixer_config','S%d' % clen)]
-            
+
         flen=max([len(mf) for mf in self.meds_files_full] )
         dt += [('meds_file','S%d' % flen)]
 
@@ -157,7 +157,7 @@ class SimpSimMEDSImageIO(ImageIO):
                 meds_files = meds_files[:-1]
             self.meds_files = meds_files
             self.extracted = extracted
-        
+
     def _set_and_check_index_lookups(self):
         """
         Deal with common indexing issues in one place
@@ -165,32 +165,32 @@ class SimpSimMEDSImageIO(ImageIO):
 
         """
         Indexing notes:
-        
-        Each MEDS file consists of a list of objects to be fit, which are indexed by 
-        
+
+        Each MEDS file consists of a list of objects to be fit, which are indexed by
+
            self.mindex = 0-offset from start of file
-           
+
         The code runs by processing groups of objects, which we call FoFs. Note however
-        that these groupings can be arbitrary. The FoFs are specified by a numpy array 
+        that these groupings can be arbitrary. The FoFs are specified by a numpy array
         (read from a FITS table) which has two columns
-        
+
             fofid - the ID of the fof group, 0-offset
             number - the ID number of the object in the coadd detection tile seg map
-            
+
         We require that the FoF file number column matches the MEDS file, line-by-line.
-        
+
         We do however build some lookup tables to enable easy translation. They are
-    
+
             self.fofid2mindex = this is a dict keyed on the fofid - it returns the set of mindexes
                 that give the members of the FoF group
             self.number2mindex = lookup table for converting numbers to mindexes
-        These are both dictionaries which use python's hashing of keys. There may be a performance 
+        These are both dictionaries which use python's hashing of keys. There may be a performance
         issue here, in terms of building the dicts, for large numbers of objects.
         """
 
         # warn the user
         log.info('making fof indexes')
-        
+
         if self.fof_file is not None:
             read_fofs = True
             self.fof_data = fitsio.read(self.fof_file)
@@ -200,7 +200,7 @@ class SimpSimMEDSImageIO(ImageIO):
             self.fof_data = numpy.zeros(nobj,dtype=[('fofid','i8'),('number','i8')])
             self.fof_data['fofid'][:] = numpy.arange(nobj)
             self.fof_data['number'][:] = self.meds_list[0]['number'][:]
-        
+
         # first, we error check
         for band,meds in enumerate(self.meds_list):
             assert numpy.array_equal(meds['number'],self.fof_data['number']),"FoF number is not the same as MEDS number for band %d!" % band
@@ -240,10 +240,10 @@ class SimpSimMEDSImageIO(ImageIO):
 
             if 'obj_flags' in self.extra_data:
                 self._flag_objects(coadd_mb_obs_lists,me_mb_obs_lists,mindexes)
-                
-            if self.conf['model_nbrs']:                
+
+            if self.conf['model_nbrs']:
                 self._add_nbrs_info(coadd_mb_obs_lists,me_mb_obs_lists,mindexes)
-                
+
             self.fofindex += 1
             return coadd_mb_obs_lists,me_mb_obs_lists
 
@@ -257,8 +257,8 @@ class SimpSimMEDSImageIO(ImageIO):
                 assert len(q) == 1
                 assert me_mb_obs_list.meta['id'] ==  self.extra_data['obj_flags']['id'][qnz[q[0]]]
                 coadd_mb_obs_list.meta['obj_flags'] = self.extra_data['obj_flags']['flags'][qnz[q[0]]]
-                me_mb_obs_list.meta['obj_flags'] = self.extra_data['obj_flags']['flags'][qnz[q[0]]]        
-    
+                me_mb_obs_list.meta['obj_flags'] = self.extra_data['obj_flags']['flags'][qnz[q[0]]]
+
     def _add_nbrs_info(self,coadd_mb_obs_lists,me_mb_obs_lists,mindexes):
         """
         adds nbr info to obs lists
@@ -275,8 +275,8 @@ class SimpSimMEDSImageIO(ImageIO):
             for obs_list in mb_obs_list:
                 for obs in obs_list:
                     obs.image_orig = obs.image.copy()
-                    obs.weight_orig = obs.weight.copy()        
-        
+                    obs.weight_orig = obs.weight.copy()
+
         # do indexes
         if len(mindexes) == 1:
             for cen,mindex in enumerate(mindexes):
@@ -297,14 +297,14 @@ class SimpSimMEDSImageIO(ImageIO):
                         nbrs_ids.append(self.meds_list[0]['id'][mindexes[qi[0]]])
                         assert coadd_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
                         assert me_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
-                
+
                 coadd_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids,'cen_ind':cen})
                 me_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids,'cen_ind':cen})
                 assert cen not in nbrs_inds,'weird error where cen_ind is in nbrs_ind!'
-                
+
         # now do psfs and jacobians
         self._add_nbrs_psfs_and_jacs(coadd_mb_obs_lists,mindexes)
-        self._add_nbrs_psfs_and_jacs(me_mb_obs_lists,mindexes)        
+        self._add_nbrs_psfs_and_jacs(me_mb_obs_lists,mindexes)
 
     def _add_nbrs_psfs_and_jacs(self,mb_obs_lists,mindexes):
         # for each object
@@ -327,7 +327,7 @@ class SimpSimMEDSImageIO(ImageIO):
                                 nbrs_flags.append(1)
                             else:
                                 nbrs_flags.append(0)
-                        
+
                         obs.update_meta_data({'nbrs_psfs':nbrs_psfs,'nbrs_flags':nbrs_flags,'nbrs_jacs':nbrs_jacs})
 
     def _get_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
@@ -345,7 +345,7 @@ class SimpSimMEDSImageIO(ImageIO):
             nbr_psf_obs = nbr_obs.get_psf()
             nbr_icut = nbr_obs.meta['icut']
             assert self.meds_list[band]['file_id'][nbr_mindex,nbr_icut] == cen_file_id
-            
+
             # construct jacobian
             # get fiducial location of object in postage stamp
             row = self.meds_list[band]['orig_row'][nbr_mindex,nbr_icut] - cen_obs.meta['orig_start_row']
@@ -359,31 +359,31 @@ class SimpSimMEDSImageIO(ImageIO):
             #pixscale = jacob.get_scale()
             #row += pars_obj[0]/pixscale
             #col += pars_obj[1]/pixscale
-            #nbr_jac.set_cen(row,col)            
+            #nbr_jac.set_cen(row,col)
 
             return nbr_psf_obs,nbr_jac
         else:
             # FIXME
             log.info('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
             return None,None
-    
+
     def get_num_fofs(self):
         return copy.copy(self.num_fofs - self.fof_start)
-    
+
     def get_num_bands(self):
         """"
         returns number of bands for galaxy images
         """
         return copy.copy(self.conf['nband'])
-    
+
     def get_meta_data_dtype(self):
-        row = self._get_meta_row()        
+        row = self._get_meta_row()
         return copy.copy(row.dtype.descr)
 
     def get_epoch_meta_data_dtype(self):
         row = self._get_epoch_meta_row()
         return copy.copy(row.dtype.descr)
-    
+
     def _get_meta_row(self,num=1):
         # build the meta data
         dt=[('id','i8'),
@@ -393,16 +393,16 @@ class SimpSimMEDSImageIO(ImageIO):
         for tag in meta_row.dtype.names:
             meta_row[tag][:] = DEFVAL
         return meta_row
-    
+
     def _get_multi_band_observations(self, mindex):
         """
         Get an ObsList object for the Coadd observations
         Get a MultiBandObsList object for the SE observations.
         """
-        
+
         coadd_mb_obs_list=MultiBandObsList()
         mb_obs_list=MultiBandObsList()
-        
+
         for band in self.iband:
             cobs_list, obs_list = self._get_band_observations(band, mindex)
             coadd_mb_obs_list.append(cobs_list)
@@ -416,12 +416,12 @@ class SimpSimMEDSImageIO(ImageIO):
         else:
             meta_row['nimage_tot'][0,:] = numpy.array([self.meds_list[b]['ncutout'][mindex] for b in xrange(self.conf['nband'])],dtype='i4')
         meta = {'meta_data':meta_row,'meds_index':mindex,'id':self.meds_list[0]['id'][mindex],'obj_flags':0}
-        
+
         coadd_mb_obs_list.update_meta_data(meta)
         mb_obs_list.update_meta_data(meta)
 
         return coadd_mb_obs_list, mb_obs_list
-    
+
     def _get_band_observations(self, band, mindex):
         """
         Get an ObsList for the coadd observations in each band
@@ -449,11 +449,11 @@ class SimpSimMEDSImageIO(ImageIO):
 
             # fill the meta data
             self._fill_obs_meta_data(obs,band,mindex,icut)
-            
+
             # set flags
             meta = {'flags':flags}
             obs.update_meta_data(meta)
-            
+
             if icut==0:
                 coadd_obs_list.append(obs)
             else:
@@ -474,7 +474,7 @@ class SimpSimMEDSImageIO(ImageIO):
         for tag in meta_row.dtype.names:
             meta_row[tag][:] = DEFVAL
         return meta_row
-    
+
     def _get_band_observation(self, band, mindex, icut):
         """
         Get an Observation for a single band.
@@ -490,7 +490,7 @@ class SimpSimMEDSImageIO(ImageIO):
         wt=wt.clip(min=0.0)
 
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
-        
+
         obs=Observation(im,
                         weight=wt,
                         jacobian=jacob,
@@ -498,9 +498,9 @@ class SimpSimMEDSImageIO(ImageIO):
         obs.weight_us = wt_us
         obs.weight_raw = wt
         obs.seg = seg
-        
+
         obs.filename=fname
-        
+
         return obs
 
     def _fill_obs_meta_data(self,obs, band, mindex, icut):
@@ -519,7 +519,7 @@ class SimpSimMEDSImageIO(ImageIO):
         meta_row['orig_col'][0] = meds['orig_col'][mindex,icut]
         file_id  = meds['file_id'][mindex,icut].astype('i4')
         meta_row['file_id'][0]  = file_id
-        
+
         meta={'icut':icut,
               'orig_start_row':meds['orig_start_row'][mindex, icut],
               'orig_start_col':meds['orig_start_col'][mindex, icut],
@@ -527,7 +527,7 @@ class SimpSimMEDSImageIO(ImageIO):
               'id':meds['id'][mindex],
               'band_id':icut}
         obs.update_meta_data(meta)
-        
+
     def _get_meds_image(self, meds, mindex, icut):
         """
         Get an image cutout from the input MEDS file
@@ -535,7 +535,7 @@ class SimpSimMEDSImageIO(ImageIO):
         im = meds.get_cutout(mindex, icut)
         im = im.astype('f8', copy=False)
         return im
-    
+
     def _get_meds_weight(self, meds, mindex, icut):
         """
         Get a weight map from the input MEDS file
@@ -547,9 +547,9 @@ class SimpSimMEDSImageIO(ImageIO):
             wt=meds.get_cutout(mindex, icut, type='weight')
         else:
             raise ValueError("support other region types")
-        
+
         wt=wt.astype('f8', copy=False)
-        
+
         w=numpy.where(wt < self.conf['min_weight'])
         if w[0].size > 0:
             wt[w] = 0.0
@@ -572,11 +572,11 @@ class SimpSimMEDSImageIO(ImageIO):
             wt = wt_us
         else:
             raise ValueError("no support for region type %s" % self.conf['region'])
-            
+
         seg = meds.get_cweight_cutout(mindex, icut)
 
         return wt,wt_us,seg
-        
+
     def _convert_jacobian_dict(self, jdict):
         """
         Get the jacobian for the input meds index and cutout index
@@ -588,7 +588,7 @@ class SimpSimMEDSImageIO(ImageIO):
                        jdict['dvdrow'],
                        jdict['dvdcol'])
         return jacob
-    
+
     def _get_jacobian(self, meds, mindex, icut):
         """
         Get a Jacobian object for the requested object
@@ -596,7 +596,7 @@ class SimpSimMEDSImageIO(ImageIO):
         jdict = meds.get_jacobian(mindex, icut)
         jacob = self._convert_jacobian_dict(jdict)
         return jacob
-    
+
     def _get_psf_observation(self, band, mindex, icut, image_jacobian):
         """
         Get an Observation representing the PSF and the "sigma"
@@ -615,7 +615,7 @@ class SimpSimMEDSImageIO(ImageIO):
 
         psf_obs.update_meta_data({'sigma_sky':sigma_sky})
         psf_obs.update_meta_data({'Tguess':sigma_sky*sigma_sky})
-        
+
         return psf_obs
 
     def _get_psf_image(self, band, mindex, icut):
@@ -626,14 +626,14 @@ class SimpSimMEDSImageIO(ImageIO):
         meds=self.meds_list[band]
         ind_psf = meds['ind_psf'][mindex,icut]
 
-        im = self.psf_data['im'][ind_psf].copy()        
+        im = self.psf_data['im'][ind_psf].copy()
         cen = numpy.zeros(2)
         cen[0] = im.shape[0]/2.0
         cen[1] = im.shape[1]/2.0
         sigma_pix=2.0
 
         return im, cen, sigma_pix, self.psf_file
-            
+
     def _load_meds_files(self):
         """
         Load all listed meds files
@@ -643,13 +643,13 @@ class SimpSimMEDSImageIO(ImageIO):
 
         self.meds_list=[]
         self.meds_meta_list=[]
-        
+
         for i,funexp in enumerate(self.meds_files):
             f = os.path.expandvars(funexp)
             log.info('band %d meds: %s' % (i,f))
             medsi=meds.MEDS(f)
             medsi_meta=medsi.get_meta()
-            
+
             if i==0:
                 nobj_tot=medsi.size
             else:
@@ -659,6 +659,5 @@ class SimpSimMEDSImageIO(ImageIO):
                                      "sizes: %d/%d" % (nobj_tot,nobj))
             self.meds_list.append(medsi)
             self.meds_meta_list.append(medsi_meta)
-            
-        self.nobj_tot = self.meds_list[0].size
 
+        self.nobj_tot = self.meds_list[0].size

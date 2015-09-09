@@ -16,10 +16,10 @@ def get_dummy_fofs(numbers):
 class MedsNbrs(object):
     """
     Gets nbrs of any postage stamp in the MEDS.
-    
+
     A nbr is defined as any stamp which overlaps the stamp under consideration
     given a buffer or is in the seg map. See the code below.
-    
+
     Options:
         buff_type - how to compute buffer length for stamp overlap
             'min': minimum of two stamps
@@ -27,17 +27,17 @@ class MedsNbrs(object):
             'tot': sum of two stamps
 
         buff_frac - fraction by whch to multiply the buffer
-    
+
         maxsize_to_replace - postage stamp size to replace with maxsize
         maxsize - size ot use instead of maxsize_to_replace to compute overlap
-    
+
         check_seg - use object's seg map to get nbrs in addition to postage stamp overlap
-    """    
+    """
 
     def __init__(self,meds_list,conf):
         self.meds_list = meds_list
         self.conf = conf
-        
+
         self._init_bounds()
         #print config
         #print "    buff_type:",buff_type
@@ -52,7 +52,7 @@ class MedsNbrs(object):
         self.t = {}
         self.b = {}
         self.sze = {}
-        
+
         for band,m in enumerate(self.meds_list):
             #expand the stamps and get edges
             dsize = (self.conf['new_maxsize']-self.conf['maxsize_to_replace'])/2
@@ -61,13 +61,13 @@ class MedsNbrs(object):
             self.r[band] = m['orig_start_row'][:,0].copy()
             self.b[band] = m['orig_start_col'][:,0].copy()
             self.t[band] = m['orig_start_col'][:,0].copy()
-    
+
             q, = numpy.where(self.sze[band] == self.conf['maxsize_to_replace'])
             if q.size > 0:
                 self.sze[band][q[:]] = self.conf['new_maxsize']
                 self.l[band][q[:]] -= dsize
                 self.b[band][q[:]] -= dsize
-                
+
             self.r[band] += self.sze[band]
             self.t[band] += self.sze[band]
 
@@ -76,7 +76,7 @@ class MedsNbrs(object):
         nbrs_data = []
         dtype = [('number','i8'),('nbr_number','i8')]
         print "config:",self.conf
-    
+
         #loop through objects, get nbrs in each meds list
         if verbose:
             pgr = PBar(self.meds_list[0].size,"finding nbrs")
@@ -90,40 +90,40 @@ class MedsNbrs(object):
                 assert m['number'][mindex] == self.meds_list[0]['number'][mindex]
                 assert m['id'][mindex] == self.meds_list[0]['id'][mindex]
                 assert m['number'][mindex] == mindex+1
-                
+
                 #add on the nbrs
                 nbrs.extend(list(self.check_mindex(mindex,band)))
 
             #only keep unique nbrs
             nbrs = numpy.unique(numpy.array(nbrs))
-                
+
             #add to final list
             for nbr in nbrs:
                 nbrs_data.append((m['number'][mindex],nbr))
-                
+
         if verbose:
             pgr.finish()
-        
+
         #return array sorted by number
         nbrs_data = numpy.array(nbrs_data,dtype=dtype)
         i = numpy.argsort(nbrs_data['number'])
         nbrs_data = nbrs_data[i]
-        
+
         return nbrs_data
-        
+
     def check_mindex(self,mindex,band):
         m = self.meds_list[band]
-        
+
         #check that current gal has OK stamp, or return bad crap
         if m['orig_start_row'][mindex,0] == -9999 or m['orig_start_col'][mindex,0] == -9999:
             nbr_numbers = numpy.array([-1],dtype=int)
-            return nbr_numbers        
-    
+            return nbr_numbers
+
         #get the nbrs from two sources
         # 1) intersection of postage stamps
         # 2) seg map vals
         nbr_numbers = []
-        
+
         #box intersection test and exclude yourself
         #use buffer of 1/4 of smaller of pair of stamps
         buff = self.sze[band].copy()
@@ -140,8 +140,8 @@ class MedsNbrs(object):
         else:
             assert False, "buff_type '%s' not supported!" % self.conf['buff_type']
         buff = buff*self.conf['buff_frac']
-        q, = numpy.where((~((self.l[band][mindex] > self.r[band]-buff) | (self.r[band][mindex] < self.l[band]+buff) | 
-                            (self.t[band][mindex] < self.b[band]+buff) | (self.b[band][mindex] > self.t[band]-buff))) & 
+        q, = numpy.where((~((self.l[band][mindex] > self.r[band]-buff) | (self.r[band][mindex] < self.l[band]+buff) |
+                            (self.t[band][mindex] < self.b[band]+buff) | (self.b[band][mindex] > self.t[band]-buff))) &
                          (m['number'][mindex] != m['number']) &
                          (m['orig_start_row'][:,0] != -9999) & (m['orig_start_col'][:,0] != -9999))
 
@@ -154,10 +154,10 @@ class MedsNbrs(object):
                 segmap = m.get_cutout(mindex,0,type='seg')
                 q = numpy.where((segmap > 0) & (segmap != m['number'][mindex]))
                 if len(q) > 0:
-                    nbr_numbers.extend(list(numpy.unique(segmap[q])))    
+                    nbr_numbers.extend(list(numpy.unique(segmap[q])))
             except:
                 pass
-    
+
         #cut weird crap
         if len(nbr_numbers) > 0:
             nbr_numbers = numpy.array(nbr_numbers,dtype=int)
@@ -168,14 +168,14 @@ class MedsNbrs(object):
                 nbr_numbers = list(nbr_numbers[q])
             else:
                 nbr_numbers = []
-    
+
         #if have stuff return unique else return -1
         if len(nbr_numbers) == 0:
             nbr_numbers = numpy.array([-1],dtype=int)
         else:
             nbr_numbers = numpy.array(nbr_numbers,dtype=int)
             nbr_numbers = numpy.unique(nbr_numbers)
-    
+
         return nbr_numbers
 
 class NbrsFoF(object):
@@ -186,9 +186,9 @@ class NbrsFoF(object):
         #records fofid of entry
         self.linked = numpy.zeros(self.Nobj,dtype='i8')
         self.fofs = {}
-        
+
         self._fof_data = None
-        
+
     def get_fofs(self,verbose=True):
         self._make_fofs(verbose=verbose)
         return self._fof_data
@@ -203,32 +203,32 @@ class NbrsFoF(object):
             bar.start()
 
         for i in xrange(self.Nobj):
-            if verbose: 
+            if verbose:
                 bar.update(i+1)
             self._link_fof(i)
 
-        if verbose: 
+        if verbose:
             bar.finish()
 
         for fofid,k in enumerate(self.fofs):
             inds = numpy.array(list(self.fofs[k]),dtype=int)
             self.linked[inds[:]] = fofid
         self.fofs = {}
-        
+
         self._make_fof_data()
 
     def _link_fof(self,mind):
         #get nbrs for this object
         nbrs = set(self._get_nbrs_index(mind))
-        
-        #always make a base fof 
+
+        #always make a base fof
         if self.linked[mind] == -1:
             fofid = copy.copy(mind)
             self.fofs[fofid] = set([mind])
             self.linked[mind] = fofid
         else:
             fofid = copy.copy(self.linked[mind])
-        
+
         #loop through nbrs
         for nbr in nbrs:
             if self.linked[nbr] == -1 or self.linked[nbr] == fofid:
@@ -255,7 +255,7 @@ class NbrsFoF(object):
     def _init_fofs(self):
         self.linked[:] = -1
         self.fofs = {}
-        
+
     def _get_nbrs_index(self,mind):
         q, = numpy.where((self.nbrs_data['number'] == mind+1) & (self.nbrs_data['nbr_number'] > 0))
         if len(q) > 0:
@@ -275,7 +275,7 @@ class NbrsFoFExtractor(object):
         self.sub_file = sub_file
         self.cleanup = cleanup
         self._check_inputs()
-        
+
         self._extract()
 
     def __enter__(self):
@@ -305,9 +305,9 @@ class NbrsFoFExtractor(object):
         inds = inds[q]
         self.numbers = data['number'][inds]
         return inds
-                    
+
     def _extract(self):
-        
+
         with fitsio.FITS(self.fof_file) as infits:
             print 'opening sub file:',self.sub_file
             with fitsio.FITS(self.sub_file,'rw',clobber=True) as outfits:
@@ -322,4 +322,3 @@ class NbrsFoFExtractor(object):
 
         if self.start > self.end:
             raise ValueError("one must extract at least one object")
-

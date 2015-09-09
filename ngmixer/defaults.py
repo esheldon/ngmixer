@@ -11,7 +11,7 @@ if not USE_OLD_FLAGS:
     BOX_SIZE_TOO_BIG     = 2**28
     UTTER_FAILURE        = 2**29
     NO_ATTEMPT           = 2**30
-    
+
     # flags for fitting codes
     PSF_FIT_FAILURE      = 2**0
     GAL_FIT_FAILURE      = 2**1
@@ -23,12 +23,12 @@ else:
     BOX_SIZE_TOO_BIG=2**4
     UTTER_FAILURE=2**7
     NO_ATTEMPT=2**30
-    
+
     PSF_FIT_FAILURE=2**1
     GAL_FIT_FAILURE=2**3
     PSF_FLUX_FIT_FAILURE=2**9
     LOW_PSF_FLUX=2**6
-    
+
 # defaults
 DEFVAL = -9999
 PDEFVAL = 9999

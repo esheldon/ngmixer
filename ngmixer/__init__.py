@@ -43,4 +43,3 @@ FITTERS = {}
 from . import bootfit
 FITTERS['MAXNGMIXBOOT'] = bootfit.MaxNGMixBootFitter
 FITTERS['ISAMPNGMIXBOOT'] = bootfit.ISampNGMixBootFitter
-

@@ -12,7 +12,7 @@ log = logging.getLogger(LOGGERNAME)
 def set_priors(conf):
     """
     Sets priors for each model.
-    
+
     Currently only separable priors can be set.
     """
 
@@ -23,15 +23,15 @@ def set_priors(conf):
     model_pars=conf['model_pars']
 
     assert 'nband' in conf,'# of bands nband must be in config dict conf when setting priors'
-    
+
     # set comps
     for model,params in model_pars.iteritems():
         log.info("loading prior for: %s" % model)
-        
+
         set_cen_prior(params)
         set_g_prior(params)
         set_T_prior(params)
-        
+
         counts_prior_repeat=params.get('counts_prior_repeat',False)
         if counts_prior_repeat:
             log.info("repeating counts prior for model '%s'" % model)
@@ -47,20 +47,20 @@ def set_priors(conf):
         mess=("counts prior must be length "
               "%d, got %d" % (conf['nband'],len(cp)) )
         assert len(cp) == conf['nband'],mess
-            
+
         log.info("    full")
         prior = PriorSimpleSep(params['cen_prior'],
                                params['g_prior'],
                                params['T_prior'],
                                cp)
-        
+
         # for the exploration, for which we do not apply g prior during
         log.info("    gflat")
         gflat_prior = PriorSimpleSep(params['cen_prior'],
                                      g_prior_flat,
                                      params['T_prior'],
                                      cp)
-        
+
         params['prior'] = prior
         params['gflat_prior'] = gflat_prior
 
@@ -71,7 +71,7 @@ def set_T_prior(params):
         params['T_prior']=ngmix.priors.FlatPrior(pars[0], pars[1])
     elif typ=='TwoSidedErf':
         pars=params['T_prior_pars']
-        params['T_prior']=ngmix.priors.TwoSidedErf(*pars)        
+        params['T_prior']=ngmix.priors.TwoSidedErf(*pars)
     elif typ =='lognormal':
         pars=params['T_prior_pars']
         params['T_prior']=ngmix.priors.LogNormal(pars[0], pars[1])
@@ -85,14 +85,14 @@ def set_T_prior(params):
 def set_counts_prior(params, repeat=False):
     typ=params['counts_prior_type']
     pars=params['counts_prior_pars']
-    
+
     if typ == 'flat':
         pclass = ngmix.priors.FlatPrior
     elif typ=='TwoSidedErf':
         pclass = ngmix.priors.TwoSidedErf
     else:
         raise ValueError("bad counts prior type: %s" % typ)
-    
+
     if repeat:
         # we assume this is one that will be repeated
         params['counts_prior']=pclass(*pars)
@@ -103,21 +103,21 @@ def set_counts_prior(params, repeat=False):
             cp = pclass(*tpars)
             plist.append(cp)
         params['counts_prior'] = plist
-            
+
 def set_fracdev_prior(params):
     if 'fracdev_prior_file' in params:
         fname=os.path.expanduser( params['fracdev_prior_file'] )
         fname=os.path.expandvars( fname )
         print("reading fracdev_prior:",fname)
         data = fitsio.read(fname)
-        
+
         weights=data['weights']
         means=data['means']
         covars=data['covars']
-        
+
         if len(means.shape) == 1:
             means = means.reshape( (means.size, 1) )
-        
+
         prior = ngmix.gmix.GMixND(weights,
                                   means,
                                   covars)
@@ -125,7 +125,7 @@ def set_fracdev_prior(params):
         raise ValueError("implement fracdev prior '%s'" % params['fracdev_prior_type'])
 
     params['fracdev_prior'] = prior
-    
+
 def set_g_prior(params):
     typ=params['g_prior_type']
 
@@ -146,7 +146,7 @@ def set_g_prior(params):
     else:
         raise ValueError("implement gprior '%s'" % typ)
     params['g_prior']=g_prior
-    
+
 def set_cen_prior(params):
     width=params['cen_prior_pars'][0]
     p=ngmix.priors.CenPrior(0.0, 0.0, width, width)
