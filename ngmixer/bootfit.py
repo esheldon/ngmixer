@@ -1037,7 +1037,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         for model in self._get_all_models(coadd):
             n=Namer(model)
             dt += [(n('efficiency'),'f4'),
-                (n('neff'),'f4')]
+                   (n('neff'),'f4')]
 
         return dt
 
@@ -1050,3 +1050,124 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
             d[n('neff')] = DEFVAL
 
         return d
+
+class MetacalNGMixBootFitter(MaxNGMixBootFitter):
+    def __init__(self, conf):
+        super(MetacalNGMixBootFitter,self).__init__(conf)
+        self['nrand'] = self.get('nrand',1)
+        if self['nrand'] is None:
+            self['nrand']=1
+
+    def _fit_galaxy(self, model, coadd, guess=None):
+        super(MetacalNGMixBootFitter,self)._fit_galaxy(model,coadd,guess=guess)
+        self._do_metacal(model)
+
+        metacal_res = self.boot.get_metacal_max_result()
+
+        res=self.gal_fitter.get_result()
+        res.update(metacal_res)
+
+    def _do_metacal(self, model):
+        """
+        the basic fitter for this class
+        """
+
+        boot=self.boot
+        prior=self['model_pars'][model]['prior']
+
+        Tguess=4.0
+        ppars=self['psf_pars']
+        psf_fit_pars = ppars.get('fit_pars',None)
+        max_pars=self['max_pars']
+
+        # need to make this more general, rather than a single extra noise value
+        extra_noise=self.get('extra_noise',None)
+        print("    adding extra noise:",extra_noise, "nrand:",self['nrand'])
+
+        try:
+            boot.fit_metacal_max(ppars['model'],
+                                 model,
+                                 max_pars,
+                                 Tguess,
+                                 psf_fit_pars=psf_fit_pars,
+                                 prior=prior,
+                                 ntry=max_pars['ntry'],
+                                 extra_noise=extra_noise,
+                                 metacal_pars=self['metacal_pars'],
+                                 nrand=self['nrand'],
+                                 verbose=False)
+
+
+        except BootPSFFailure as err:
+            # the _run_boot code catches this one
+            raise BootGalFailure(str(err))
+
+
+    def _get_fit_data_dtype(self,coadd):
+        dt=super(MetacalNGMixBootFitter,self)._get_fit_data_dtype(coadd)
+
+        dt_mcal = self._get_metacal_dtype(coadd)
+        dt += dt_mcal
+        return dt
+
+    def _copy_galaxy_result(self, model, coadd):
+        super(MetacalNGMixBootFitter,self)._copy_galaxy_result(model,coadd)
+
+        dindex=0
+        res=self.gal_fitter.get_result()
+
+        if coadd:
+            n=Namer('coadd_%s_mcal' % model)
+        else:
+            n=Namer('%s_mcal' % model)
+
+        if res['flags'] == 0:
+            for f in ['pars','pars_cov','g','g_cov',
+                      'c','s2n_r','s2n_simple','R','Rpsf']:
+                mf = 'mcal_%s' % f
+                self.data[n(f)][dindex] = res[mf]
+
+
+    def _get_metacal_dtype(self, coadd):
+
+        nband=self['nband']
+        simple_npars=5+nband
+        np=simple_npars
+
+        dt=[]
+        for model in self._get_all_models(coadd):
+            n=Namer('%s_mcal' % (model))
+            dt += [
+                (n('pars'),'f8',np),
+                (n('pars_cov'),'f8',(np,np)),
+                (n('g'),'f8',2),
+                (n('g_cov'),'f8', (2,2) ),
+                (n('c'),'f8',2),
+                (n('s2n_r'),'f8'),
+                (n('s2n_simple'),'f8'),
+                (n('R'),'f8',(2,2)),
+                (n('Rpsf'),'f8',2),
+            ]
+
+        return dt
+
+
+    def _make_struct(self,coadd):
+        data=super(MetacalNGMixBootFitter,self)._make_struct(coadd)
+
+        models=self._get_all_models(coadd)
+        for model in models:
+            n=Namer('%s_mcal' % (model))
+
+            data[n('pars')] = DEFVAL
+            data[n('pars_cov')] = DEFVAL
+
+            data[n('g')] = DEFVAL
+            data[n('g_cov')] = DEFVAL
+            data[n('c')] = DEFVAL
+            data[n('s2n_r')] = DEFVAL
+            data[n('s2n_simple')] = DEFVAL
+            data[n('R')] = DEFVAL
+            data[n('Rpsf')] = DEFVAL
+
+        return data

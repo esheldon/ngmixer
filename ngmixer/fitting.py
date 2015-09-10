@@ -10,7 +10,7 @@ def get_fitter_class(ftype):
     """
     from .__init__ import FITTERS
 
-    cftype = ftype.upper()
+    cftype = ftype.lower()
     assert cftype in FITTERS,'could not find fitter class %s' % cftype
 
     return FITTERS[cftype]

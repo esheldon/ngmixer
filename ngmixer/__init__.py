@@ -25,14 +25,14 @@ IMAGEIO = {}
 
 # MEDS formats
 from . import medsio
-IMAGEIO['MEDS'] = medsio.MEDSImageIO
-IMAGEIO['SVMEDS'] = medsio.SVMEDSImageIO
-IMAGEIO['SVMOFMEDS'] = medsio.SVMOFMEDSImageIO
-IMAGEIO['Y1MEDS'] = medsio.Y1MEDSImageIO
+IMAGEIO['meds'] = medsio.MEDSImageIO
+IMAGEIO['meds-sv'] = medsio.SVMEDSImageIO
+IMAGEIO['meds-sv-mof'] = medsio.SVMOFMEDSImageIO
+IMAGEIO['meds-y1'] = medsio.Y1MEDSImageIO
 
 # MEDS sim formats
 from . import simpsimmedsio
-IMAGEIO['SIMPSIMMEDS'] = simpsimmedsio.SimpSimMEDSImageIO
+IMAGEIO['meds-simp-sim'] = simpsimmedsio.SimpSimMEDSImageIO
 
 #######################################################
 # setup fitter dict
@@ -41,5 +41,6 @@ FITTERS = {}
 
 # boot fitters
 from . import bootfit
-FITTERS['MAXNGMIXBOOT'] = bootfit.MaxNGMixBootFitter
-FITTERS['ISAMPNGMIXBOOT'] = bootfit.ISampNGMixBootFitter
+FITTERS['max-ngmix-boot'] = bootfit.MaxNGMixBootFitter
+FITTERS['metacal-ngmix-boot'] = bootfit.MetacalNGMixBootFitter
+FITTERS['isamp-ngmix-boot'] = bootfit.ISampNGMixBootFitter

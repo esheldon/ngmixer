@@ -8,7 +8,7 @@ def get_imageio_class(ftype):
     """
     from .__init__ import IMAGEIO
 
-    cftype = ftype.upper()
+    cftype = ftype.lower()
     assert cftype in IMAGEIO,'could not find image i/o class %s' % cftype
 
     return IMAGEIO[cftype]
