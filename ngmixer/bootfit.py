@@ -47,10 +47,6 @@ class NGMixBootFitter(BaseFitter):
     """
     def __init__(self,*args,**kw):
         super(NGMixBootFitter,self).__init__(*args,**kw)
-        self['replace_cov'] = self.get('replace_cov',False)
-        self['use_logpars'] = self.get('use_logpars',False)
-        self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
-        self['min_psf_s2n'] = self.get('min_psf_s2n',-numpy.inf)
 
     def get_models_for_checking(self):
         models = [modl for modl in self['fit_models']]
@@ -434,8 +430,8 @@ class NGMixBootFitter(BaseFitter):
                     self._fit_galaxy(model,coadd,guess=guess)
                     self._copy_galaxy_result(model,coadd)
                     self._print_galaxy_result()
-                except (BootGalFailure,GMixRangeError):
-                    log.info("    galaxy fitting failed")
+                except (BootGalFailure,GMixRangeError) as err:
+                    log.info("    galaxy fitting failed: %s" % err)
                     flags = GAL_FIT_FAILURE
 
         except BootPSFFailure:
@@ -945,6 +941,9 @@ class MaxNGMixBootFitter(NGMixBootFitter):
             boot.try_replace_cov(cov_pars)
 
     def _fit_galaxy(self, model, coadd, guess=None):
+        if self['pre_find_center']:
+            self.boot.find_cen()
+
         self._fit_max(model,guess=guess)
 
         rpars=self['round_pars']
@@ -1052,8 +1051,9 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         return d
 
 class MetacalNGMixBootFitter(MaxNGMixBootFitter):
-    def __init__(self, conf):
-        super(MetacalNGMixBootFitter,self).__init__(conf)
+    def _setup(self):
+        super(MetacalNGMixBootFitter,self)._setup()
+
         self['nrand'] = self.get('nrand',1)
         if self['nrand'] is None:
             self['nrand']=1
