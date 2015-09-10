@@ -2,6 +2,7 @@
 code for fitting
 """
 
+import numpy
 from .util import UtterFailure
 
 def get_fitter_class(ftype):
