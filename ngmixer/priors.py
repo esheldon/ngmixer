@@ -77,6 +77,8 @@ def get_T_prior(params):
     elif typ=="cosmos_dev":
         prior = ngmix.priors.TPriorCosmosDev()
 
+    elif typ=="gmixnd":
+        prior = load_gmixnd(params)
     else:
         raise ValueError("bad T prior type: %s" % typ)
 
@@ -156,3 +158,15 @@ def get_cen_prior(params):
     width=params['width']
     prior=ngmix.priors.CenPrior(0.0, 0.0, width, width)
     return prior
+
+def load_gmixnd(spec):
+
+    fname = os.path.expandvars(spec['file']) 
+
+    pdf=ngmix.gmix.GMixND(file=fname)
+
+    if 'cov_factor' in spec:
+        print("    using cov factor:",spec['cov_factor'])
+        pdf.covars *= spec['cov_factor']
+
+    return pdf
