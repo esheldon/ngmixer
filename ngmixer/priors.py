@@ -28,63 +28,63 @@ def set_priors(conf):
     for model,params in model_pars.iteritems():
         log.info("loading prior for: %s" % model)
 
-        set_cen_prior(params)
-        set_g_prior(params)
-        set_T_prior(params)
-
-        counts_prior_repeat=params.get('counts_prior_repeat',False)
-        if counts_prior_repeat:
-            log.info("repeating counts prior for model '%s'" % model)
-        set_counts_prior(params, repeat=counts_prior_repeat)
+        params['cen_prior'] = get_cen_prior(params['cen'])
+        params['g_prior'] = get_g_prior(params['g'])
+        params['T_prior'] = get_T_prior(params['T'])
+        params['counts_prior'] = get_counts_prior(params['counts'],
+                                                  conf['nband'])
 
         if model == 'cm':
-            set_fracdev_prior(params)
-
-        cp = params['counts_prior']
-        if counts_prior_repeat:
-            cp = [cp]*conf['nband']
-
-        mess=("counts prior must be length "
-              "%d, got %d" % (conf['nband'],len(cp)) )
-        assert len(cp) == conf['nband'],mess
+            params['fracdev_prior'] = get_fracdev_prior(params['fracdev'])
 
         log.info("    full")
         prior = PriorSimpleSep(params['cen_prior'],
                                params['g_prior'],
                                params['T_prior'],
-                               cp)
+                               params['counts_prior'])
 
         # for the exploration, for which we do not apply g prior during
         log.info("    gflat")
         gflat_prior = PriorSimpleSep(params['cen_prior'],
                                      g_prior_flat,
                                      params['T_prior'],
-                                     cp)
+                                     params['counts_prior'])
 
         params['prior'] = prior
         params['gflat_prior'] = gflat_prior
 
-def set_T_prior(params):
-    typ=params['T_prior_type']
+def get_T_prior(params):
+
+    typ=params['type']
+
     if typ == 'flat':
-        pars=params['T_prior_pars']
-        params['T_prior']=ngmix.priors.FlatPrior(pars[0], pars[1])
+        pars=params['pars']
+        prior = ngmix.priors.FlatPrior(*pars)
+
     elif typ=='TwoSidedErf':
-        pars=params['T_prior_pars']
-        params['T_prior']=ngmix.priors.TwoSidedErf(*pars)
+        pars=params['pars']
+        prior = ngmix.priors.TwoSidedErf(*pars)
+
     elif typ =='lognormal':
-        pars=params['T_prior_pars']
-        params['T_prior']=ngmix.priors.LogNormal(pars[0], pars[1])
+
+        mean=params['mean']
+        sigma=params['sigma']
+        prior = ngmix.priors.LogNormal(mean, sigma)
+
     elif typ=="cosmos_exp":
-        params['T_prior']=ngmix.priors.TPriorCosmosExp()
+        prior = ngmix.priors.TPriorCosmosExp()
+
     elif typ=="cosmos_dev":
-        params['T_prior']=ngmix.priors.TPriorCosmosDev()
+        prior = ngmix.priors.TPriorCosmosDev()
+
     else:
         raise ValueError("bad T prior type: %s" % typ)
 
-def set_counts_prior(params, repeat=False):
-    typ=params['counts_prior_type']
-    pars=params['counts_prior_pars']
+    return prior
+
+def get_counts_prior(params, nband):
+    typ=params['type']
+    pars=params['pars']
 
     if typ == 'flat':
         pclass = ngmix.priors.FlatPrior
@@ -93,21 +93,28 @@ def set_counts_prior(params, repeat=False):
     else:
         raise ValueError("bad counts prior type: %s" % typ)
 
-    if repeat:
+    if params['repeat']:
         # we assume this is one that will be repeated
-        params['counts_prior']=pclass(*pars)
+        prior_list = [pclass(*pars)]*nband
     else:
         # assume this is a list of lists
-        plist=[]
+        prior_list=[]
         for tpars in pars:
             cp = pclass(*tpars)
-            plist.append(cp)
-        params['counts_prior'] = plist
+            prior_list.append(cp)
 
-def set_fracdev_prior(params):
-    if 'fracdev_prior_file' in params:
-        fname=os.path.expanduser( params['fracdev_prior_file'] )
+        mess=("counts prior must be length "
+              "%d, got %d" % (nband,len(prior_list)) )
+        assert len(prior_list) == nband,mess
+
+
+    return prior_list
+
+def get_fracdev_prior(params):
+    if 'file' in params:
+        fname=os.path.expanduser( params['file'] )
         fname=os.path.expandvars( fname )
+
         print("reading fracdev_prior:",fname)
         data = fitsio.read(fname)
 
@@ -124,30 +131,28 @@ def set_fracdev_prior(params):
     else:
         raise ValueError("implement fracdev prior '%s'" % params['fracdev_prior_type'])
 
-    params['fracdev_prior'] = prior
+    return prior
 
-def set_g_prior(params):
-    typ=params['g_prior_type']
+def get_g_prior(params):
+    typ=params['type']
 
-    if typ =='exp':
-        parr=numpy.array(params['g_prior_pars'],dtype='f8')
-        g_prior = ngmix.priors.GPriorM(parr)
-    elif typ=='cosmos-sersic':
+    if typ=='cosmos-sersic':
         g_prior = ngmix.priors.make_gprior_cosmos_sersic(type='erf')
     elif typ=='cosmos-exp':
         g_prior = ngmix.priors.make_gprior_cosmos_exp()
     elif typ=='cosmos-dev':
         g_prior = ngmix.priors.make_gprior_cosmos_dev()
     elif typ =='ba':
-        sigma=params['g_prior_pars']
+        sigma=params['sigma']
         g_prior = ngmix.priors.GPriorBA(sigma)
     elif typ=='flat':
         g_prior=ngmix.priors.ZDisk2D(1.0)
     else:
         raise ValueError("implement gprior '%s'" % typ)
-    params['g_prior']=g_prior
 
-def set_cen_prior(params):
-    width=params['cen_prior_pars'][0]
-    p=ngmix.priors.CenPrior(0.0, 0.0, width, width)
-    params['cen_prior'] = p
+    return g_prior
+
+def get_cen_prior(params):
+    width=params['width']
+    prior=ngmix.priors.CenPrior(0.0, 0.0, width, width)
+    return prior
