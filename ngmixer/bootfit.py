@@ -1081,8 +1081,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         max_pars=self['max_pars']
 
         # need to make this more general, rather than a single extra noise value
-        extra_noise=self.get('extra_noise',None)
-        print("    adding extra noise:",extra_noise, "nrand:",self['nrand'])
+        target_noise=self.get('target_noise',None)
+        print("    nrand:",self['nrand'])
 
         try:
             boot.fit_metacal_max(ppars['model'],
@@ -1092,7 +1092,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                                  psf_fit_pars=psf_fit_pars,
                                  prior=prior,
                                  ntry=max_pars['ntry'],
-                                 extra_noise=extra_noise,
+                                 target_noise=target_noise,
                                  metacal_pars=self['metacal_pars'],
                                  nrand=self['nrand'],
                                  verbose=False)
