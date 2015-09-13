@@ -23,19 +23,11 @@ from ngmix.gmix import GMixModel, GMix, GMixCM
 def get_bootstrapper(obs, type='boot', **keys):
     from ngmix.bootstrap import Bootstrapper
     from ngmix.bootstrap import CompositeBootstrapper
-    from ngmix.bootstrap import BestBootstrapper
-
-    use_logpars=keys.get('use_logpars',True)
 
     if type=='boot':
-        boot=Bootstrapper(obs,use_logpars=use_logpars)
+        boot=Bootstrapper(obs, **keys)
     elif type=='composite':
-        fracdev_prior = keys.get('fracdev_prior',None)
-        fracdev_grid  = keys.get('fracdev_grid',None)
-        boot=CompositeBootstrapper(obs,
-                                   fracdev_prior=fracdev_prior,
-                                   fracdev_grid=fracdev_grid,
-                                   use_logpars=use_logpars)
+        boot=CompositeBootstrapper(obs, **keys)
     else:
         raise ValueError("bad bootstrapper type: '%s'" % type)
 
@@ -389,14 +381,16 @@ class NGMixBootFitter(BaseFitter):
         get the bootstrapper for fitting psf through galaxy
         """
 
+        find_cen=self.get('pre_find_center',False)
         if model == 'cm':
             fracdev_prior=self['model_pars']['cm']['fracdev_prior']
             boot=get_bootstrapper(mb_obs_list,
                                   type='composite',
                                   fracdev_prior=fracdev_prior,
+                                  find_cen=find_cen,
                                   **self)
         else:
-            boot=get_bootstrapper(mb_obs_list, **self)
+            boot=get_bootstrapper(mb_obs_list, find_cen=find_cen, **self)
 
         return boot
 
@@ -941,9 +935,6 @@ class MaxNGMixBootFitter(NGMixBootFitter):
             boot.try_replace_cov(cov_pars)
 
     def _fit_galaxy(self, model, coadd, guess=None):
-        if self['pre_find_center']:
-            self.boot.find_cen()
-
         self._fit_max(model,guess=guess)
 
         rpars=self['round_pars']
