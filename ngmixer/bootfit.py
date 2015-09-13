@@ -1085,8 +1085,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                                  ntry=max_pars['ntry'],
                                  target_noise=target_noise,
                                  metacal_pars=self['metacal_pars'],
-                                 nrand=self['nrand'],
-                                 verbose=False)
+                                 nrand=self['nrand'])
 
 
         except BootPSFFailure as err:
