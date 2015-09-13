@@ -30,7 +30,8 @@ class NGMixer(dict):
                  random_seed=None,
                  init_only=False,
                  profile=False,
-                 make_plots=False):
+                 make_plots=False,
+                 verbose=None):
 
         # parameters
         self.update(files.read_yaml(config_file))
@@ -40,6 +41,11 @@ class NGMixer(dict):
         self['fit_coadd_galaxy'] = self.get('fit_coadd_galaxy',False)
         self['fit_me_galaxy'] = self.get('fit_me_galaxy',True)
         self['max_box_size']=self.get('max_box_size',2048)
+
+        if verbose is not None:
+            # over-ride anything in the config
+            self['verbose'] = verbose
+
         self.profile = profile
         pprint.pprint(self)
 

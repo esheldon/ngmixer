@@ -40,6 +40,9 @@ parser.add_option("--psf-file", default=None,
 parser.add_option("--obj-flags", default=None,
                   help=("file with flags for each object; flags != 0 are ignored"))
 
+parser.add_option("--verbose", action='store_true',
+                  help=("force verbosity, over-riding config file"))
+
 def get_range(rng_string):
     if rng_string is not None:
         rng = rng_string.split(',')
@@ -81,7 +84,8 @@ if __name__ == '__main__':
             random_seed=seed,
             extra_data=extra_data,
             profile=options.profile,
-            make_plots=options.make_plots)
+            make_plots=options.make_plots,
+            verbose=options.verbose)
     
     
 
