@@ -1113,7 +1113,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         if res['flags'] == 0:
             for f in ['pars','pars_cov','g','g_cov',
-                      'c','s2n_r','s2n_simple','R','Rpsf']:
+                      'c','s2n_r','s2n_simple','R',
+                      'Rpsf','gpsf']:
                 mf = 'mcal_%s' % f
                 self.data[n(f)][dindex] = res[mf]
 
@@ -1137,6 +1138,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 (n('s2n_simple'),'f8'),
                 (n('R'),'f8',(2,2)),
                 (n('Rpsf'),'f8',2),
+                (n('gpsf'),'f8',2),
             ]
 
         return dt
@@ -1159,5 +1161,6 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             data[n('s2n_simple')] = DEFVAL
             data[n('R')] = DEFVAL
             data[n('Rpsf')] = DEFVAL
+            data[n('gpsf')] = DEFVAL
 
         return data
