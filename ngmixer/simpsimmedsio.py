@@ -593,7 +593,7 @@ class SimpSimMEDSImageIO(ImageIO):
             raise ValueError("no support for region type %s" % self.conf['region'])
 
         try:
-           seg = meds.get_cseg_cutout(mindex, icut)
+            seg = meds.get_cseg_cutout(mindex, icut)
         except:
             seg = meds.get_cutout(mindex, icut, type='seg')
 
