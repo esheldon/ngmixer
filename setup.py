@@ -1,6 +1,7 @@
 import os
 import glob
-from distutils.core import setup
+#from distutils.core import setup
+from setuptools import setup
 
 scripts=glob.glob('./bin/*')
 scripts = [os.path.basename(f) for f in scripts if f[-1] != '~']
