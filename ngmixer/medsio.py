@@ -496,6 +496,7 @@ class MEDSImageIO(ImageIO):
             ('orig_col','f8'),
             ('file_id','i4'),   # id in meds file
             ('image_id','i8'),  # image_id specified in meds creation, e.g. for image table
+            ('pixel_scale','f8')
             ]
         meta_row = numpy.zeros(num,dtype=dt)
         for tag in meta_row.dtype.names:
@@ -512,7 +513,14 @@ class MEDSImageIO(ImageIO):
         im = self._get_meds_image(meds, mindex, icut)
         wt,wt_us,seg = self._get_meds_weight(meds, mindex, icut)
         jacob = self._get_jacobian(meds, mindex, icut)
-
+        
+        # multiply by jacobian scale^2 in order to apply zero-points correctly
+        pixel_scale2 = jacob.get_det()
+        pixel_scale4 = pixel_scale2*pixel_scale2
+        im *= pixel_scale2
+        wt /= pixel_scale4
+        wt_us /= pixel_scale4
+        
         # for the psf fitting code
         wt=wt.clip(min=0.0)
 
@@ -547,7 +555,7 @@ class MEDSImageIO(ImageIO):
         image_id = meds._image_info[file_id]['image_id']
         meta_row['file_id'][0]  = file_id
         meta_row['image_id'][0]  = image_id
-
+        meta_row['pixel_scale'][0] = obs.get_jacobian().get_scale()
         meta={'icut':icut,
               'orig_start_row':meds['orig_start_row'][mindex, icut],
               'orig_start_col':meds['orig_start_col'][mindex, icut],
@@ -641,7 +649,8 @@ class MEDSImageIO(ImageIO):
 
         psf_obs.update_meta_data({'sigma_sky':sigma_sky})
         psf_obs.update_meta_data({'Tguess':sigma_sky*sigma_sky})
-
+        psf_obs.update_meta_data({'psf_norm':im.sum()})
+        
         return psf_obs
 
     def _get_psf_image(self, band, mindex, icut):

@@ -59,6 +59,9 @@ class NGMixBootFitter(BaseFitter):
         # find the center and reset jacobians before doing model fits
         self['pre_find_center'] = self.get('pre_find_center',False)
         
+        # do we normalize the psf to unity when doing the PSF mags?
+        self['normalize_psf'] = self.get('normalize_psf',True)
+        
     def get_models_for_checking(self):
         models = [modl for modl in self['fit_models']]
         pars = [modl+'_max_pars' for modl in self['fit_models']]
@@ -454,7 +457,7 @@ class NGMixBootFitter(BaseFitter):
         return flags, boot
 
     def _fit_psf_flux(self,coadd):
-        self.boot.fit_gal_psf_flux()
+        self.boot.fit_gal_psf_flux(normalize_psf=self['normalize_psf'])
 
         res=self.boot.get_psf_flux_result()
 
@@ -497,7 +500,8 @@ class NGMixBootFitter(BaseFitter):
                       None,
                       Tguess_key='Tguess',
                       ntry=self['psf_pars']['ntry'],
-                      fit_pars=psf_pars)
+                      fit_pars=psf_pars,
+                      norm_key='psf_norm')
 
         if self['make_plots'] and (('made_psf_plots' not in self.mb_obs_list.meta) or \
                                    ('made_psf_plots' in self.mb_obs_list.meta and self.mb_obs_list.meta['made_psf_plots'] == False)):
