@@ -16,7 +16,9 @@ class ConcatError(Exception):
         return repr(self.value)
 
 # need to fix up the images instead of this
-from .constants import PIXSCALE2, SHAPENOISE2
+#from .constants import PIXSCALE2, SHAPENOISE2
+# hacking this out for now - need to fix on refactor
+PIXSCALE2 = 1.0
 
 class Concat(object):
     """
