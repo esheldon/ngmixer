@@ -6,7 +6,7 @@ from __future__ import print_function
 import os
 import sys
 import fitsio
-from ngmixer.ngmixing import NGMixer
+from ngmixer.ngmixing import NGMixer,MOFNgmixer
 
 from optparse import OptionParser
 parser = OptionParser(__doc__)
@@ -75,17 +75,35 @@ if __name__ == '__main__':
     if options.psf_file is not None:
         extra_data['psf_file'] = options.psf_file
         
-    NGMixer(config_file,
-            data_files,
-            output_file=out_file,
-            fof_range=fof_range,
-            fof_file=options.fof_file,
-            work_dir=options.work_dir,
-            random_seed=seed,
-            extra_data=extra_data,
-            profile=options.profile,
-            make_plots=options.make_plots,
-            verbose=options.verbose)
+    config = ngmixer.files.read_yaml(config_file)
+    doMOF = config.get('model_nbrs',False)
+    
+    if doMOF:
+        MOFNGMixer(config_file,
+                   data_files,
+                   output_file=out_file,
+                   fof_range=fof_range,
+                   fof_file=options.fof_file,
+                   work_dir=options.work_dir,
+                   random_seed=seed,
+                   extra_data=extra_data,
+                   profile=options.profile,
+                   make_plots=options.make_plots,
+                   verbose=options.verbose,
+                   config=config)
+    else:
+        NGMixer(config_file,
+                data_files,
+                output_file=out_file,
+                fof_range=fof_range,
+                fof_file=options.fof_file,
+                work_dir=options.work_dir,
+                random_seed=seed,
+                extra_data=extra_data,
+                profile=options.profile,
+                make_plots=options.make_plots,
+                verbose=options.verbose,
+                config=config)
     
     
 

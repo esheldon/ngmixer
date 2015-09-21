@@ -31,10 +31,14 @@ class NGMixer(dict):
                  init_only=False,
                  profile=False,
                  make_plots=False,
-                 verbose=None):
+                 verbose=None,
+                 config=None):
 
         # parameters
-        self.update(files.read_yaml(config_file))
+        if config is not None:
+            self.update(config)
+        else:
+            self.update(files.read_yaml(config_file))
         self['config_file'] = config_file
         self['work_dir'] = work_dir
         self['make_plots'] = self.get('make_plots',make_plots)
