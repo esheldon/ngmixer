@@ -39,7 +39,26 @@ class NGMixBootFitter(BaseFitter):
     """
     def __init__(self,*args,**kw):
         super(NGMixBootFitter,self).__init__(*args,**kw)
+        
+    def _setup(self):
+        """
+        ngmix-specific setups for all ngmix fitters
+        """
+        # LM doesn't calculate a very good covariance matrix
+        self['replace_cov'] = self.get('replace_cov',False)
 
+        # in the fitters use log(flux) and log(T)
+        self['use_logpars'] = self.get('use_logpars',False)
+
+        # which models to fit
+        self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
+
+        # allow pre-selection based on psf flux
+        self['min_psf_s2n'] = self.get('min_psf_s2n',-numpy.inf)
+
+        # find the center and reset jacobians before doing model fits
+        self['pre_find_center'] = self.get('pre_find_center',False)
+        
     def get_models_for_checking(self):
         models = [modl for modl in self['fit_models']]
         pars = [modl+'_max_pars' for modl in self['fit_models']]
