@@ -175,11 +175,7 @@ python -u $cmd &> $lfile
         args['meds_files'] = ' '.join([medsf.replace(files['DESDATA'],'${DESDATA}') for medsf in files['meds_files']])
         args['base_name'] = self.get_chunk_output_basename(files['coadd_tile'],self['run'],rng)
         args['tmpcmd'] = self.get_tmp_dir()
-
-        if self['model_nbrs']:
-            args['cmd'] = 'mofngmixit'
-        else:
-            args['cmd'] = 'ngmixit'
+        args['cmd'] = 'ngmixit'
 
         if os.path.exists(files['fof_file']):
             args['fof_opt'] = '--fof-file=%s'% files['fof_file'].replace(files['DESDATA'],'${DESDATA}')
