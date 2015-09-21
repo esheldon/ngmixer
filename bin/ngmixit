@@ -6,7 +6,9 @@ from __future__ import print_function
 import os
 import sys
 import fitsio
-from ngmixer.ngmixing import NGMixer,MOFNgmixer
+from ngmixer.ngmixing import NGMixer
+from ngmixer.mofngmixing import MOFNGMixer
+import ngmixer
 
 from optparse import OptionParser
 parser = OptionParser(__doc__)
