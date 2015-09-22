@@ -123,3 +123,11 @@ def read_yaml(config_path):
     with open(config_path) as fobj:
         conf=yaml.load(fobj)
     return conf
+
+def get_temp_dir():
+    tmpdir=os.environ.get('_CONDOR_SCRATCH_DIR',None)
+    if tmpdir is None:
+        tmpdir=os.environ.get('TMPDIR',None)
+        if tmpdir is None:
+            import tempfile
+            return tempfile.mkdtemp()

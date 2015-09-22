@@ -19,6 +19,8 @@ class ConcatError(Exception):
 #from .constants import PIXSCALE2, SHAPENOISE2
 # hacking this out for now - need to fix on refactor
 PIXSCALE2 = 1.0
+SHAPENOISE=0.16
+SHAPENOISE2=SHAPENOISE**2
 
 class Concat(object):
     """
