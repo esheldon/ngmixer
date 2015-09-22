@@ -470,7 +470,20 @@ class MEDSImageIO(ImageIO):
 
         if self.conf['reject_outliers'] and len(obs_list) > 0:
             self._reject_outliers(obs_list)
-
+            
+        # divide by jacobian scale^2 in order to apply zero-points correctly
+        for olist in [coadd_obs_list,obs_list]:
+            for obs in olist:
+                if obs.meta['flags'] == 0:
+                    pixel_scale2 = obs.jacobian.get_det()
+                    pixel_scale4 = pixel_scale2*pixel_scale2
+                    obs.image /= pixel_scale2
+                    obs.weight *= pixel_scale4
+                    if obs.weight_raw is not None:
+                        obs.weight_raw *= pixel_scale4
+                    if obs.weight_us is not None:
+                        obs.weight_raw *= pixel_scale4        
+        
         return coadd_obs_list, obs_list
 
     def _get_image_flags(self, band, mindex):
@@ -514,24 +527,20 @@ class MEDSImageIO(ImageIO):
         wt,wt_us,seg = self._get_meds_weight(meds, mindex, icut)
         jacob = self._get_jacobian(meds, mindex, icut)
         
-        # multiply by jacobian scale^2 in order to apply zero-points correctly
-        pixel_scale2 = jacob.get_det()
-        pixel_scale4 = pixel_scale2*pixel_scale2
-        im *= pixel_scale2
-        wt /= pixel_scale4
-        wt_us /= pixel_scale4
-        
         # for the psf fitting code
         wt=wt.clip(min=0.0)
 
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
 
         obs=Observation(im,
-                        weight=wt,
+                        weight=wt.copy(),
                         jacobian=jacob,
                         psf=psf_obs)
-        obs.weight_us = wt_us
-        obs.weight_raw = wt
+        if wt_us is not None:
+            obs.weight_us = wt_us.copy()
+        else:
+            obs.weight_us = None
+        obs.weight_raw = wt.copy()
         obs.seg = seg
         obs.filename=fname
 
@@ -584,30 +593,38 @@ class MEDSImageIO(ImageIO):
         """
         Get a weight map from the input MEDS file
         """
-
-        wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
-        wt_us = wt_us.astype('f8', copy=False)
-        w = numpy.where(wt_us < self.conf['min_weight'])
-        if w[0].size > 0:
-            wt_us[w] = 0.0
-
+        
         if self.conf['region'] == 'mof':
             wt = meds.get_cutout(mindex, icut, type='weight')
+            wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
         elif self.conf['region'] == "cweight-nearest":
-            wt = wt_us
+            wt = meds.get_cweight_cutout_nearest(mindex, icut)
+            wt_us = None
         elif self.conf['region'] == 'seg_and_sky':
             wt=meds.get_cweight_cutout(mindex, icut)
+            wt_us = None
         elif self.conf['region'] == 'weight':
             wt=meds.get_cutout(mindex, icut, type='weight')
+            wt_us = None
         else:
             raise ValueError("no support for region type %s" % self.conf['region'])
 
+        
         wt = wt.astype('f8', copy=False)
         w = numpy.where(wt < self.conf['min_weight'])
         if w[0].size > 0:
-            wt[w] = 0.0
-
-        seg = meds.get_cseg_cutout(mindex, icut)
+            wt[w] = 0.0        
+            
+        if wt_us is not None:
+            wt_us = wt_us.astype('f8', copy=False)
+            w = numpy.where(wt_us < self.conf['min_weight'])
+            if w[0].size > 0:
+                wt_us[w] = 0.0            
+            
+        try:
+            seg = meds.get_cseg_cutout(mindex, icut)
+        except:
+            seg = meds.get_cutout(mindex, icut, type='seg')
 
         return wt,wt_us,seg
 
