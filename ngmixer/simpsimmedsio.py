@@ -637,7 +637,8 @@ class SimpSimMEDSImageIO(ImageIO):
 
         psf_obs.update_meta_data({'sigma_sky':sigma_sky})
         psf_obs.update_meta_data({'Tguess':sigma_sky*sigma_sky})
-
+        psf_obs.update_meta_data({'psf_norm':1.0})
+        
         return psf_obs
 
     def _get_psf_image(self, band, mindex, icut):
