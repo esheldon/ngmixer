@@ -13,8 +13,8 @@ from ngmix import Observation, ObsList, MultiBandObsList
 
 # local imports
 from .imageio import ImageIO
-from .defaults import DEFVAL,IMAGE_FLAGS,LOGGERNAME, PSF_IND_FIELD, PSF_IM_FIELD
-from . import nbrsfofs
+from ..defaults import DEFVAL,IMAGE_FLAGS,LOGGERNAME, PSF_IND_FIELD, PSF_IM_FIELD
+from .. import nbrsfofs
 
 # internal flagging
 IMAGE_FLAGS_SET=2**0

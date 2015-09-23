@@ -2,17 +2,6 @@
 code for image i/o
 """
 
-def get_imageio_class(ftype):
-    """
-    returns the imageio class for a given a ftype
-    """
-    from .__init__ import IMAGEIO
-
-    cftype = ftype.lower()
-    assert cftype in IMAGEIO,'could not find image i/o class %s' % cftype
-
-    return IMAGEIO[cftype]
-
 class ImageIO(object):
     """
     abstract base class for reading images
