@@ -1,9 +1,11 @@
+import imageio
 import medsio
 import simpsimmedsio
-import imageio
+import desmedsio
 
 from .imageio import ImageIO
-from .medsio import MEDSImageIO, SVMEDSImageIO, SVMOFMEDSImageIO, Y1MEDSImageIO
+from .medsio import MEDSImageIO
+from .desmedsio import SVMEDSImageIO, SVMOFMEDSImageIO, Y1MEDSImageIO
 from .simpsimmedsio import SimpSimMEDSImageIO
 
 #######################################################
