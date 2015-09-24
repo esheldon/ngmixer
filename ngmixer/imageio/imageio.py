@@ -100,7 +100,7 @@ class ImageIO(object):
         if 'extra_data' in kwargs:
             self.extra_data = kwargs['extra_data']
         else:
-            self.extra_data = None
+            self.extra_data = {}
 
     def get_file_meta_data(self):
         """

@@ -5,7 +5,7 @@ import desmedsio
 
 from .imageio import ImageIO
 from .medsio import MEDSImageIO
-from .desmedsio import SVMEDSImageIO, SVMOFMEDSImageIO, Y1MEDSImageIO
+from .desmedsio import SVDESMEDSImageIO, MOFSVDESMEDSImageIO, Y1DESMEDSImageIO
 from .simpsimmedsio import SimpSimMEDSImageIO
 
 #######################################################
@@ -15,9 +15,9 @@ IMAGEIO = {}
 
 # MEDS formats
 IMAGEIO['meds'] = MEDSImageIO
-IMAGEIO['meds-sv'] = SVMEDSImageIO
-IMAGEIO['meds-sv-mof'] = SVMOFMEDSImageIO
-IMAGEIO['meds-y1'] = Y1MEDSImageIO
+IMAGEIO['meds-des-sv'] = SVDESMEDSImageIO
+IMAGEIO['meds-des-sv-mof'] = MOFSVDESMEDSImageIO
+IMAGEIO['meds-des-y1'] = Y1DESMEDSImageIO
 
 # MEDS sim formats
 IMAGEIO['meds-simp-sim'] = SimpSimMEDSImageIO

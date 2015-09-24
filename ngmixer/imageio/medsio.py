@@ -25,14 +25,30 @@ log = logging.getLogger(LOGGERNAME)
 class MEDSImageIO(ImageIO):
     """
     Class for MEDS image I/O.
+    
+    The following methods must be defined in a subclass (see the docstrings for the 
+    precise function signature).
+    
+        MEDSImageIO._load_psf_data() - load the psf files if needed
+
+        MEDSImageIO._get_psf_image(band,mindex,icut) - get PSF image for band, index 
+            in MEDS file (mindex) and cutout index (icut)
+    
+    
     """
 
     def __init__(self,*args,**kwargs):
         super(MEDSImageIO, self).__init__(*args,**kwargs)
-
         self.conf = args[0]
-        self.conf['min_weight'] = self.conf.get('min_weight',-numpy.inf)
-
+        self._set_defaults()
+        if self.conf['reject_outliers']:
+            log.info("will reject outliers")            
+        
+        # deal with extra data
+        # leaving this just in case we need it
+        if self.extra_data is None:
+            self.extra_data = {}
+            
         meds_files = args[1]
         if not isinstance(meds_files, list):
             self.meds_files = [meds_files]
@@ -49,61 +65,36 @@ class MEDSImageIO(ImageIO):
         self.iband = range(len(self.meds_list))
         self.conf['nband'] = len(self.meds_list)
 
-        self.conf['reject_outliers'] = self.conf.get('reject_outliers',True) # from cutouts
-        if self.conf['reject_outliers']:
-            log.info("will reject outliers")
-
+        # indexing of fofs
         self._set_and_check_index_lookups()
 
-        self.psfex_lists = self._get_psfex_lists()
-
-        # deal with extra data
-        if 'extra_data' in kwargs:
-            self.extra_data = kwargs['extra_data']
-        else:
-            self.extra_data = None
-
-        if self.extra_data is None:
-            self.extra_data = {}
-
+        # psfs
+        self._load_psf_data()
+        
         # make sure if we are doing nbrs we have the info we need
-        if 'model_nbrs' in self.conf and self.conf['model_nbrs']:
-            assert 'extra_data' in kwargs
-            assert 'nbrs' in self.extra_data
+        if self.conf['model_nbrs']:
+            assert 'nbrs' in self.extra_data,"You must supply a nbrs file to model nbrs!"
 
-    def get_file_meta_data(self):
-        meds_meta_list = self.meds_meta_list
-        dt = meds_meta_list[0].dtype.descr
+    def _set_defaults(self):
+        self.conf['min_weight'] = self.conf.get('min_weight',-numpy.inf)
+        self.conf['reject_outliers'] = self.conf.get('reject_outliers',True) # from cutouts
+        self.conf['model_nbrs'] = self.conf.get('model_nbrs',False)
 
-        if 'config_file' in self.conf:
-            tmp,config_file = os.path.split(self.conf['config_file'])
-            clen=len(config_file)
-            dt += [('ngmixer_config','S%d' % clen)]
+    def _load_psf_data(self):
+        pass
 
-        flen=max([len(mf.replace(os.environ['DESDATA'],'${DESDATA}')) for mf in self.meds_files_full] )
-        dt += [('meds_file','S%d' % flen)]
-
-        mydesdata = os.environ['DESDATA']
-        dt += [('ngmixer_DESDATA','S%d' % len(mydesdata))]
-
-        nband=len(self.meds_files_full)
-        meta=numpy.zeros(nband, dtype=dt)
-
-        for band in xrange(nband):
-            meds_file = self.meds_files_full[band]
-            meds_meta=meds_meta_list[band]
-            mnames=meta.dtype.names
-            for name in meds_meta.dtype.names:
-                if name in mnames:
-                    meta[name][band] = meds_meta[name][0]
-
-            if 'config_file' in self.conf:
-                meta['ngmixer_config'][band] = config_file
-            meta['meds_file'][band] = meds_file.replace(os.environ['DESDATA'],'${DESDATA}')
-            meta['ngmixer_DESDATA'][band] = mydesdata
-
-        return meta
-
+    def _get_psf_image(self, band, mindex, icut):
+        """
+        Get an image representing the psf
+        
+        should return
+        
+        image, center of psf, estimate of width in pixels, filename
+        
+        The filename is optional and is just for debugging purposes.
+        """
+        raise NotImplementedError("_get_psf_image method of ImageIO must be defined in subclass.")
+    
     def _get_sub_fname(self,fname):
         rng_string = '%s-%s' % (self.fof_range[0], self.fof_range[1])
         bname = os.path.basename(fname)
@@ -224,34 +215,10 @@ class MEDSImageIO(ImageIO):
                 self.fofid2mindex.append([fofid])
                 assert self.fofid2mindex[fofid][0] == fofid
 
-    def __next__(self):
-        if self.fofindex >= self.num_fofs:
-            raise StopIteration
-        else:
-            fofid = self.fofids[self.fofindex]
-            mindexes = self.fofid2mindex[fofid]
-            coadd_mb_obs_lists = []
-            me_mb_obs_lists = []
-            for mindex in mindexes:
-                c,me = self._get_multi_band_observations(mindex)
-                coadd_mb_obs_lists.append(c)
-                me_mb_obs_lists.append(me)
-
-            if 'obj_flags' in self.extra_data:
-                self._flag_objects(coadd_mb_obs_lists,me_mb_obs_lists,mindexes)
-
-            if self.conf['model_nbrs']:
-                self._add_nbrs_info(coadd_mb_obs_lists,me_mb_obs_lists,mindexes)
-
-            self.fofindex += 1
-            return coadd_mb_obs_lists,me_mb_obs_lists
-
-    next = __next__
-
     def _flag_objects(coadd_mb_obs_lists,me_mb_obs_lists,mindexes):
         qnz, = numpy.where(self.extra_data['obj_flags']['flags'] != 0)
         for mindex,coadd_mb_obs_list,me_mb_obs_list in zip(mindexes,coadd_mb_obs_lists,me_mb_obs_lists):
-            q, = np.where(self.extra_data['obj_flags']['id'][qnz] == me_mb_obs_list.meta['id'])
+            q, = numpy.where(self.extra_data['obj_flags']['id'][qnz] == me_mb_obs_list.meta['id'])
             if len(q) > 0:
                 assert len(q) == 1
                 assert me_mb_obs_list.meta['id'] ==  self.extra_data['obj_flags']['id'][qnz[q[0]]]
@@ -376,23 +343,90 @@ class MEDSImageIO(ImageIO):
         return copy.copy(self.conf['nband'])
 
     def get_meta_data_dtype(self):
-        row = self._get_meta_row()
-        return copy.copy(row.dtype.descr)
-
-    def get_epoch_meta_data_dtype(self):
-        row = self._get_epoch_meta_row()
-        return copy.copy(row.dtype.descr)
-
-    def _get_meta_row(self,num=1):
-        # build the meta data
         dt=[('id','i8'),
             ('number','i4'),
-            ('nimage_tot','i4',self.conf['nband'])]
+            ('nimage_tot','i4',(self.conf['nband'],))]
+        return dt
+    
+    def _get_meta_row(self,num=1):
+        # build the meta data
+        dt = self.get_meta_data_dtype()
         meta_row = numpy.zeros(num,dtype=dt)
         for tag in meta_row.dtype.names:
             meta_row[tag][:] = DEFVAL
         return meta_row
 
+    def get_epoch_meta_data_dtype(self):
+        dt=[('id','i8'),     # could be coadd_objects_id
+            ('number','i4'), # 1-n as in sextractor
+            ('band_num','i2'),
+            ('cutout_index','i4'), # this is the index in meds
+            ('orig_row','f8'),
+            ('orig_col','f8'),
+            ('file_id','i4'),
+            ('pixel_scale','f8')]   # id in meds file
+        return dt
+    
+    def _get_epoch_meta_row(self,num=1):
+        # build the meta data
+        dt = self.get_epoch_meta_data_dtype()
+        meta_row = numpy.zeros(num,dtype=dt)
+        for tag in meta_row.dtype.names:
+            meta_row[tag][:] = DEFVAL
+        return meta_row
+    
+    def get_file_meta_data(self):
+        meds_meta_list = self.meds_meta_list
+        dt = meds_meta_list[0].dtype.descr
+
+        if 'config_file' in self.conf:
+            clen=len(self.conf['config_file'])
+            dt += [('ngmixer_config','S%d' % clen)]
+
+        flen=max([len(mf) for mf in self.meds_files_full] )
+        dt += [('meds_file','S%d' % flen)]
+
+        nband=len(self.meds_files_full)
+        meta=numpy.zeros(nband, dtype=dt)
+
+        for band in xrange(nband):
+            meds_file = self.meds_files_full[band]
+            meds_meta=meds_meta_list[band]
+            mnames=meta.dtype.names
+            for name in meds_meta.dtype.names:
+                if name in mnames:
+                    meta[name][band] = meds_meta[name][0]
+
+            if 'config_file' in self.conf:
+                meta['ngmixer_config'][band] = self.conf['config_file']
+            meta['meds_file'][band] = meds_file
+        
+        return meta
+
+    def __next__(self):
+        if self.fofindex >= self.num_fofs:
+            raise StopIteration
+        else:
+            fofid = self.fofids[self.fofindex]
+            mindexes = self.fofid2mindex[fofid]
+            coadd_mb_obs_lists = []
+            me_mb_obs_lists = []
+            for mindex in mindexes:
+                c,me = self._get_multi_band_observations(mindex)
+                coadd_mb_obs_lists.append(c)
+                me_mb_obs_lists.append(me)
+
+            if 'obj_flags' in self.extra_data:
+                self._flag_objects(coadd_mb_obs_lists,me_mb_obs_lists,mindexes)
+
+            if self.conf['model_nbrs']:
+                self._add_nbrs_info(coadd_mb_obs_lists,me_mb_obs_lists,mindexes)
+
+            self.fofindex += 1
+            return coadd_mb_obs_lists,me_mb_obs_lists
+
+    next = __next__
+    
     def _get_multi_band_observations(self, mindex):
         """
         Get an ObsList object for the Coadd observations
@@ -431,6 +465,9 @@ class MEDSImageIO(ImageIO):
         if nreject > 0:
             log.info('    rejected: %d' % nreject)
 
+    def _get_image_flags(self, band, mindex):
+        return numpy.zeros(self.conf['nband'])
+            
     def _get_band_observations(self, band, mindex):
         """
         Get an ObsList for the coadd observations in each band
@@ -471,51 +508,14 @@ class MEDSImageIO(ImageIO):
         if self.conf['reject_outliers'] and len(obs_list) > 0:
             self._reject_outliers(obs_list)
             
-        # divide by jacobian scale^2 in order to apply zero-points correctly
-        for olist in [coadd_obs_list,obs_list]:
-            for obs in olist:
-                if obs.meta['flags'] == 0:
-                    pixel_scale2 = obs.jacobian.get_det()
-                    pixel_scale4 = pixel_scale2*pixel_scale2
-                    obs.image /= pixel_scale2
-                    obs.weight *= pixel_scale4
-                    if obs.weight_raw is not None:
-                        obs.weight_raw *= pixel_scale4
-                    if obs.weight_us is not None:
-                        obs.weight_raw *= pixel_scale4        
-        
         return coadd_obs_list, obs_list
 
-    def _get_image_flags(self, band, mindex):
+    def _get_meds_orig_filename(self, meds, mindex, icut):
         """
-        find images associated with the object and get the image flags
-        Also add in the psfex flags, eventually incorporated into meds
+        Get the original filename
         """
-        meds=self.meds_list[band]
-        ncutout=meds['ncutout'][mindex]
-
-        file_ids = meds['file_id'][mindex, 0:ncutout]
-        image_flags = self.all_image_flags[band][file_ids]
-
-        return image_flags
-
-    def _get_epoch_meta_row(self,num=1):
-        # build the meta data
-        dt=[('id','i8'),     # could be coadd_objects_id
-            ('number','i4'), # 1-n as in sextractor
-            ('band_num','i2'),
-            ('cutout_index','i4'), # this is the index in meds
-            ('orig_row','f8'),
-            ('orig_col','f8'),
-            ('file_id','i4'),   # id in meds file
-            ('image_id','i8'),  # image_id specified in meds creation, e.g. for image table
-            ('pixel_scale','f8')
-            ]
-        meta_row = numpy.zeros(num,dtype=dt)
-        for tag in meta_row.dtype.names:
-            meta_row[tag][:] = DEFVAL
-        return meta_row
-
+        return ''
+        
     def _get_band_observation(self, band, mindex, icut):
         """
         Get an Observation for a single band.
@@ -543,7 +543,7 @@ class MEDSImageIO(ImageIO):
         obs.weight_raw = wt.copy()
         obs.seg = seg
         obs.filename=fname
-
+        
         return obs
 
     def _fill_obs_meta_data(self,obs, band, mindex, icut):
@@ -561,9 +561,7 @@ class MEDSImageIO(ImageIO):
         meta_row['orig_row'][0] = meds['orig_row'][mindex,icut]
         meta_row['orig_col'][0] = meds['orig_col'][mindex,icut]
         file_id  = meds['file_id'][mindex,icut].astype('i4')
-        image_id = meds._image_info[file_id]['image_id']
         meta_row['file_id'][0]  = file_id
-        meta_row['image_id'][0]  = image_id
         meta_row['pixel_scale'][0] = obs.get_jacobian().get_scale()
         meta={'icut':icut,
               'orig_start_row':meds['orig_start_row'][mindex, icut],
@@ -572,14 +570,6 @@ class MEDSImageIO(ImageIO):
               'id':meds['id'][mindex],
               'band_id':icut}
         obs.update_meta_data(meta)
-
-    def _get_meds_orig_filename(self, meds, mindex, icut):
-        """
-        Get the original filename
-        """
-        file_id=meds['file_id'][mindex, icut]
-        ii=meds.get_image_info()
-        return ii['image_path'][file_id]
 
     def _get_meds_image(self, meds, mindex, icut):
         """
@@ -609,7 +599,6 @@ class MEDSImageIO(ImageIO):
         else:
             raise ValueError("no support for region type %s" % self.conf['region'])
 
-        
         wt = wt.astype('f8', copy=False)
         w = numpy.where(wt < self.conf['min_weight'])
         if w[0].size > 0:
@@ -651,7 +640,7 @@ class MEDSImageIO(ImageIO):
     def _get_psf_observation(self, band, mindex, icut, image_jacobian):
         """
         Get an Observation representing the PSF and the "sigma"
-        from the psfex object
+        from the psf model
         """
         im, cen, sigma_pix, fname = self._get_psf_image(band, mindex, icut)
 
@@ -670,53 +659,18 @@ class MEDSImageIO(ImageIO):
         
         return psf_obs
 
-    def _get_psf_image(self, band, mindex, icut):
-        """
-        Get an image representing the psf
-        """
-
-        meds=self.meds_list[band]
-        file_id=meds['file_id'][mindex,icut]
-
-        pex=self.psfex_lists[band][file_id]
-
-        row=meds['orig_row'][mindex,icut]
-        col=meds['orig_col'][mindex,icut]
-
-        im=pex.get_rec(row,col).astype('f8', copy=False)
-        cen=pex.get_center(row,col)
-        sigma_pix=pex.get_sigma()
-
-        return im, cen, sigma_pix, pex['filename']
-
-    def _get_replacement_flags(self, filenames):
-        from .util import CombinedImageFlags
-
-        if not hasattr(self,'_replacement_flags'):
-            fname=os.path.expandvars(self.conf['replacement_flags'])
-            log.info("reading replacement flags: %s" % fname)
-            self._replacement_flags=CombinedImageFlags(fname)
-
-        default=self.conf['image_flags2check']
-        return self._replacement_flags.get_flags_multi(filenames,default=default)
-
     def _load_meds_files(self):
         """
         Load all listed meds files
-        We check the flags indicated by image_flags2check.  the saved
-        flags are 0 or IMAGE_FLAGS_SET
         """
-
         self.meds_list=[]
         self.meds_meta_list=[]
-        self.all_image_flags=[]
-
+        
         for i,funexp in enumerate(self.meds_files):
             f = os.path.expandvars(funexp)
             log.info('band %d meds: %s' % (i,f))
             medsi=meds.MEDS(f)
             medsi_meta=medsi.get_meta()
-            image_info=medsi.get_image_info()
 
             if i==0:
                 nobj_tot=medsi.size
@@ -727,104 +681,6 @@ class MEDSImageIO(ImageIO):
                                      "sizes: %d/%d" % (nobj_tot,nobj))
             self.meds_list.append(medsi)
             self.meds_meta_list.append(medsi_meta)
-            image_flags=image_info['image_flags'].astype('i8')
-
-            if 'replacement_flags' in self.conf and self.conf['replacement_flags'] is not None and image_flags.size > 1:
-                log.info("    replacing image flags")
-                image_flags[1:] = \
-                    self._get_replacement_flags(image_info['image_path'][1:])
-
-            # now we reduce the flags to zero or IMAGE_FLAGS_SET
-            # copy out and check image flags just for cutouts
-            cimage_flags=image_flags[1:].copy()
-
-            w,=numpy.where( (cimage_flags & self.conf['image_flags2check']) != 0)
-
-            log.info("    flags set for: %d/%d" % (w.size,cimage_flags.size))
-
-            cimage_flags[:] = 0
-            if w.size > 0:
-                cimage_flags[w] = IMAGE_FLAGS_SET
-
-            # copy back in reduced flags
-            image_flags[1:] = cimage_flags
-            self.all_image_flags.append(image_flags)
 
         self.nobj_tot = self.meds_list[0].size
-
-    def _get_psfex_lists(self):
-        """
-        Load psfex objects for each of the SE images
-        include the coadd so we get  the index right
-        """
-        log.info('loading psfex')
-        desdata=os.environ['DESDATA']
-        meds_desdata=self.meds_list[0]._meta['DESDATA'][0]
-
-        psfex_lists=[]
-
-        for band in self.iband:
-            meds=self.meds_list[band]
-
-            psfex_list = self._get_psfex_objects(meds,band)
-            psfex_lists.append( psfex_list )
-
-        return psfex_lists
-
-    def _psfex_path_from_image_path(self, meds, image_path):
-        """
-        infer the psfex path from the image path.
-        """
-        desdata=os.environ['DESDATA']
-        meds_desdata=meds._meta['DESDATA'][0]
-
-        psfpath=image_path.replace('.fits.fz','_psfcat.psf')
-
-        if desdata not in psfpath:
-            psfpath=psfpath.replace(meds_desdata,desdata)
-
-        if self.conf['use_psf_rerun'] and 'coadd' not in psfpath:
-            psfparts=psfpath.split('/')
-            psfparts[-6] = 'EXTRA' # replace 'OPS'
-            psfparts[-3] = 'psfex-rerun/%s' % self.conf['psf_rerun_version'] # replace 'red'
-
-            psfpath='/'.join(psfparts)
-
-        return psfpath
-
-    def _get_psfex_objects(self, meds, band):
-        """
-        Load psfex objects for all images, including coadd
-        """
-        from psfex import PSFExError, PSFEx
-
-        psfex_list=[]
-
-        info=meds.get_image_info()
-        nimage=info.size
-
-        for i in xrange(nimage):
-
-            pex=None
-
-            # don't even bother if we are going to skip this image
-            flags = self.all_image_flags[band][i]
-            if (flags & self.conf['image_flags2check']) == 0:
-
-                impath=info['image_path'][i].strip()
-                psfpath = self._psfex_path_from_image_path(meds, impath)
-
-                if not os.path.exists(psfpath):
-                    log.info("warning: missing psfex: %s" % psfpath)
-                    self.all_image_flags[band][i] |= self.conf['image_flags2check']
-                else:
-                    log.debug("loading: %s" % psfpath)
-                    try:
-                        pex=PSFEx(psfpath)
-                    except PSFExError as err:
-                        log.info("problem with psfex file: %s " % str(err))
-                        pex=None
-
-            psfex_list.append(pex)
-
-        return psfex_list
+ 
