@@ -613,7 +613,7 @@ class MEDSImageIO(ImageIO):
                 wt_us[w] = 0.0            
             
         try:
-            seg = meds.get_cseg_cutout(mindex, icut)
+            seg = meds.interpolate_coadd_seg(mindex, icut)
         except:
             seg = meds.get_cutout(mindex, icut, type='seg')
 
