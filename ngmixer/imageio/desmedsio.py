@@ -10,6 +10,8 @@ from .medsio import MEDSImageIO
 from ..defaults import LOGGERNAME
 from .. import nbrsfofs
 
+import meds
+
 # logging
 log = logging.getLogger(LOGGERNAME)
 
@@ -71,7 +73,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
         return ii['image_path'][file_id]
     
     def _get_band_observations(self, band, mindex):
-        coadd_obs_list, obs_list = super(SVDESMEDImageIO, self)._get_band_observations(band,mindex)
+        coadd_obs_list, obs_list = super(SVDESMEDSImageIO, self)._get_band_observations(band,mindex)
 
         # divide by jacobian scale^2 in order to apply zero-points correctly
         for olist in [coadd_obs_list,obs_list]:
@@ -98,6 +100,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
         fill meta data to be included in output files
         """
         super(SVDESMEDSImageIO, self)._fill_obs_meta_data(obs, band, mindex, icut)
+        meds=self.meds_list[band]
         file_id  = meds['file_id'][mindex,icut].astype('i4')
         image_id = meds._image_info[file_id]['image_id']
         obs.meta['meta_data']['image_id'][0]  = image_id
