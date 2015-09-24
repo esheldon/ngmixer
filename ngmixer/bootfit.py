@@ -248,15 +248,18 @@ class NGMixBootFitter(BaseFitter):
             seg_new = seg.copy()
             seg_new = seg_new.astype(float)
             uvals = numpy.unique(seg)
-            mval = 1.0*(len(uvals)-1)
-            ind = 1.0
-            for uval in uvals:
-                if uval > 0:
-                    qx,qy = numpy.where(seg == uval)
-                    seg_new[qx[:],qy[:]] = ind/mval
-                    ind += 1
+            if len(uvals) > 1:
+                mval = 1.0*(len(uvals)-1)
+                ind = 1.0
+                for uval in uvals:
+                    if uval > 0:
+                        qx,qy = numpy.where(seg == uval)
+                        seg_new[qx[:],qy[:]] = ind/mval
+                        ind += 1
+            else:
+                seg_new[:,:] = 1.0
 
-            return seg_new
+            return seg_new        
 
         icut_cen = obs.meta['icut']
 
