@@ -22,35 +22,6 @@ class SimpSimMEDSImageIO(MEDSImageIO):
         self.conf['psf_ind_field'] = self.conf.get('psf_ind_field',PSF_IND_FIELD)
         self.conf['psf_im_field'] = self.conf.get('psf_im_field',PSF_IM_FIELD)
 
-    def get_file_meta_data(self):
-        meds_meta_list = self.meds_meta_list
-        dt = meds_meta_list[0].dtype.descr
-
-        if 'config_file' in self.conf:
-            tmp,config_file = os.path.split(self.conf['config_file'])
-            clen=len(config_file)
-            dt += [('ngmixer_config','S%d' % clen)]
-
-        flen=max([len(mf) for mf in self.meds_files_full] )
-        dt += [('meds_file','S%d' % flen)]
-
-        nband=len(self.meds_files_full)
-        meta=numpy.zeros(nband, dtype=dt)
-
-        for band in xrange(nband):
-            meds_file = self.meds_files_full[band]
-            meds_meta=meds_meta_list[band]
-            mnames=meta.dtype.names
-            for name in meds_meta.dtype.names:
-                if name in mnames:
-                    meta[name][band] = meds_meta[name][0]
-
-            if 'config_file' in self.conf:
-                meta['ngmixer_config'][band] = config_file
-            meta['meds_file'][band] = meds_file
-
-        return meta
-
     def _load_psf_data(self):
         if 'psf_file' in self.extra_data:
             self.psf_file = self.extra_data['psf_file']

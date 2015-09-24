@@ -374,13 +374,15 @@ class MEDSImageIO(ImageIO):
         for tag in meta_row.dtype.names:
             meta_row[tag][:] = DEFVAL
         return meta_row
-    
+
+
     def get_file_meta_data(self):
         meds_meta_list = self.meds_meta_list
         dt = meds_meta_list[0].dtype.descr
 
         if 'config_file' in self.conf:
-            clen=len(self.conf['config_file'])
+            tmp,config_file = os.path.split(self.conf['config_file'])
+            clen=len(config_file)
             dt += [('ngmixer_config','S%d' % clen)]
 
         flen=max([len(mf) for mf in self.meds_files_full] )
@@ -398,11 +400,11 @@ class MEDSImageIO(ImageIO):
                     meta[name][band] = meds_meta[name][0]
 
             if 'config_file' in self.conf:
-                meta['ngmixer_config'][band] = self.conf['config_file']
+                meta['ngmixer_config'][band] = config_file
             meta['meds_file'][band] = meds_file
-        
-        return meta
 
+        return meta
+    
     def __next__(self):
         if self.fofindex >= self.num_fofs:
             raise StopIteration
