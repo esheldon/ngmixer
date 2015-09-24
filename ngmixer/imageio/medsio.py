@@ -619,24 +619,17 @@ class MEDSImageIO(ImageIO):
 
         return wt,wt_us,seg
 
-    def _convert_jacobian_dict(self, jdict):
-        """
-        Get the jacobian for the input meds index and cutout index
-        """
-        jacob=Jacobian(jdict['row0'],
-                       jdict['col0'],
-                       jdict['dudrow'],
-                       jdict['dudcol'],
-                       jdict['dvdrow'],
-                       jdict['dvdcol'])
-        return jacob
-
     def _get_jacobian(self, meds, mindex, icut):
         """
         Get a Jacobian object for the requested object
         """
         jdict = meds.get_jacobian(mindex, icut)
-        jacob = self._convert_jacobian_dict(jdict)
+        jacob = Jacobian(jdict['row0'],
+                         jdict['col0'],
+                         jdict['dudrow'],
+                         jdict['dudcol'],
+                         jdict['dvdrow'],
+                         jdict['dvdcol'])
         return jacob
 
     def _get_psf_observation(self, band, mindex, icut, image_jacobian):
