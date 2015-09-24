@@ -244,7 +244,6 @@ class NGMixBootFitter(BaseFitter):
         ptype = '%s-%s-%s' % (ptype,model,'max')
         title='%d %s' % (obj_id,ptype)
 
-        """
         def plot_seg(seg):
             seg_new = seg.copy()
             seg_new = seg_new.astype(float)
@@ -258,7 +257,6 @@ class NGMixBootFitter(BaseFitter):
                     ind += 1
 
             return seg_new
-        """
 
         icut_cen = obs.meta['icut']
 
@@ -274,12 +272,7 @@ class NGMixBootFitter(BaseFitter):
         tab[0,0] = images.view(obs.image_orig,title='original image',show=False,nonlinear=0.075)
         tab[0,1] = images.view(totim-cenim,title='models of nbrs',show=False,nonlinear=0.075)
 
-        """
-        if coadd:
-            tab[0,2] = images.view(plot_seg(seg),title='seg map',show=False)
-        else:
-            tab[0,2] = images.view(plot_seg(meds.interpolate_coadd_seg(self.mindex,icut_cen)),title='seg map',show=False)
-        """
+        tab[0,2] = images.view(plot_seg(obs.seg),title='seg map',show=False)
 
         tab[1,0] = images.view(obs.image,title='corrected image',show=False,nonlinear=0.075)
         msk = totim != 0
