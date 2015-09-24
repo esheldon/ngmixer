@@ -3,7 +3,18 @@
 # this is here for testing, it will be removed one day
 USE_OLD_FLAGS = False
 
-if not USE_OLD_FLAGS:
+if USE_OLD_FLAGS:
+    IMAGE_FLAGS=2**8
+    NO_CUTOUTS=2**0
+    BOX_SIZE_TOO_BIG=2**4
+    UTTER_FAILURE=2**7
+    NO_ATTEMPT=2**30
+
+    PSF_FIT_FAILURE=2**1
+    GAL_FIT_FAILURE=2**3
+    PSF_FLUX_FIT_FAILURE=2**9
+    LOW_PSF_FLUX=2**6
+else:
     # flags used by NGMixer
     BAD_OBJ              = 2**25
     IMAGE_FLAGS          = 2**26
@@ -17,17 +28,6 @@ if not USE_OLD_FLAGS:
     GAL_FIT_FAILURE      = 2**1
     PSF_FLUX_FIT_FAILURE = 2**2
     LOW_PSF_FLUX         = 2**3
-else:
-    IMAGE_FLAGS=2**8
-    NO_CUTOUTS=2**0
-    BOX_SIZE_TOO_BIG=2**4
-    UTTER_FAILURE=2**7
-    NO_ATTEMPT=2**30
-
-    PSF_FIT_FAILURE=2**1
-    GAL_FIT_FAILURE=2**3
-    PSF_FLUX_FIT_FAILURE=2**9
-    LOW_PSF_FLUX=2**6
 
 # defaults
 DEFVAL = -9999
