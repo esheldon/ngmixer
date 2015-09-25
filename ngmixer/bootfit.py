@@ -196,7 +196,8 @@ class NGMixBootFitter(BaseFitter):
                 # do central image first
                 if nbrs_fit_data[fit_flags_tag][cen_ind] == 0:
                     assert obs.has_psf_gmix()
-                    cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1],obs.get_psf_gmix(),obs.get_jacobian(),coadd)
+                    cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1], \
+                        obs.get_psf_gmix(),obs.get_jacobian(),coadd)
                 else:
                     log.info('        bad fit data: %d' % (cen_ind))
                     cenim = obs.image_orig.copy()
@@ -212,10 +213,12 @@ class NGMixBootFitter(BaseFitter):
                             nbrs_psf_gmix = nbrs_psf.get_gmix()
                         else:
                             # FIXME - need to fit psf from off chip nbrs
-                            log.info('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' % (nbrs_ind+1,cen_ind+1))
+                            log.info('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
+                                % (nbrs_ind+1,cen_ind+1))
                             continue
 
-                        totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1],nbrs_psf_gmix,nbrs_jac,coadd)
+                        totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1], \
+                            nbrs_psf_gmix,nbrs_jac,coadd)
 
                 if self['model_nbrs_method'] == 'subtract':
                     obs.image = obs.image_orig - totim + cenim
@@ -500,7 +503,8 @@ class NGMixBootFitter(BaseFitter):
                       norm_key='psf_norm')
 
         if self['make_plots'] and (('made_psf_plots' not in self.mb_obs_list.meta) or \
-                                   ('made_psf_plots' in self.mb_obs_list.meta and self.mb_obs_list.meta['made_psf_plots'] == False)):
+                                   ('made_psf_plots' in self.mb_obs_list.meta and \
+                                    self.mb_obs_list.meta['made_psf_plots'] == False)):
             self.mb_obs_list.update_meta_data({'made_psf_plots':True})
             for band,obs_list in enumerate(boot.mb_obs_list):
                 for obs in obs_list:
@@ -976,7 +980,8 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         if self['make_plots']:
             self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
             self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
-            self._plot_trials(self.new_mb_obs_list.meta['id'], self.boot.get_isampler(), model, coadd, 'isample', self.boot.get_isampler().get_iweights())
+            self._plot_trials(self.new_mb_obs_list.meta['id'], self.boot.get_isampler(), model, coadd, 'isample', \
+                self.boot.get_isampler().get_iweights())
 
     def _do_isample(self, model):
         """
