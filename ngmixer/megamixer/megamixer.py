@@ -261,7 +261,7 @@ python -u $cmd &> $lfile
             fname = os.path.join(dr,base+'.fits')
             clist.append((rng[0],rng[1],fname))
 
-        from collate_general import ConcatGeneral
+        from .collate_general import ConcatGeneral
         tc = ConcatGeneral(self['run'],
                            self['ngmix_config'],
                            files['meds_files'],

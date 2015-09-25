@@ -9,7 +9,6 @@ from . import defaults
 from . import bootfit
 from . import mofngmixing
 from . import megamixer
-from . import slacmegamixer
 
 #######################################################
 # setup logger
