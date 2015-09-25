@@ -13,4 +13,4 @@ setup(name="ngmixer",
       author="Matthew R. Becker, Erin Scott Sheldon",
       author_email="becker.mr@gmail.com, erin.sheldon@gmail.com",
       scripts=scripts,
-      packages=['ngmixer'])
+      packages=['ngmixer','ngmixer.imageio'])

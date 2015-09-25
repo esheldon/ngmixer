@@ -19,22 +19,6 @@ log = logging.getLogger(defaults.LOGGERNAME)
 log.setLevel(logging.INFO)
 
 #######################################################
-# setup image i/o dict
-# each time you create a new image i/o class, add it to this dict
-IMAGEIO = {}
-
-# MEDS formats
-from . import medsio
-IMAGEIO['meds'] = medsio.MEDSImageIO
-IMAGEIO['meds-sv'] = medsio.SVMEDSImageIO
-IMAGEIO['meds-sv-mof'] = medsio.SVMOFMEDSImageIO
-IMAGEIO['meds-y1'] = medsio.Y1MEDSImageIO
-
-# MEDS sim formats
-from . import simpsimmedsio
-IMAGEIO['meds-simp-sim'] = simpsimmedsio.SimpSimMEDSImageIO
-
-#######################################################
 # setup fitter dict
 # each time you create a new fitter class, add it to this dict
 FITTERS = {}
