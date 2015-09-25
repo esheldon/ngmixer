@@ -39,7 +39,7 @@ class NGMixBootFitter(BaseFitter):
     """
     def __init__(self,*args,**kw):
         super(NGMixBootFitter,self).__init__(*args,**kw)
-        
+
     def _setup(self):
         """
         ngmix-specific setups for all ngmix fitters
@@ -58,10 +58,10 @@ class NGMixBootFitter(BaseFitter):
 
         # find the center and reset jacobians before doing model fits
         self['pre_find_center'] = self.get('pre_find_center',False)
-        
+
         # do we normalize the psf to unity when doing the PSF mags?
         self['normalize_psf'] = self.get('normalize_psf',True)
-        
+
     def get_models_for_checking(self):
         models = [modl for modl in self['fit_models']]
         pars = [modl+'_max_pars' for modl in self['fit_models']]
@@ -259,7 +259,7 @@ class NGMixBootFitter(BaseFitter):
             else:
                 seg_new[:,:] = 1.0
 
-            return seg_new        
+            return seg_new
 
         icut_cen = obs.meta['icut']
 
