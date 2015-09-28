@@ -6,6 +6,7 @@ import fitsio
 import numpy as np
 import glob
 from .files import read_yaml
+from .concat_io import get_concat_class
 
 class BaseNGMegaMixer(dict):
     def __init__(self,conf,extra_cmds=''):
@@ -259,22 +260,18 @@ python -u $cmd &> $lfile
             dr = self.get_chunk_output_dir(files['coadd_tile'],chunk,rng)
             base = self.get_chunk_output_basename(files['coadd_tile'],self['run'],rng)
             fname = os.path.join(dr,base+'.fits')
-            clist.append((rng[0],rng[1],fname))
+            clist.append(fname)
 
-        from .collate_general import ConcatGeneral
-        tc = ConcatGeneral(self['run'],
-                           self['ngmix_config'],
-                           files['meds_files'],
-                           bands=self['bands'],
-                           nper=None,
-                           sub_dir=None,
-                           blind=blind,
-                           clobber=clobber,
-                           skip_errors=skip_errors,
-                           chunk_file=None,
-                           chunk_list=clist,
-                           out_dir=self.get_main_output_dir(coadd_tile),
-                           out_file=coadd_tile)
+        tc = get_concat_class(self['concat_type'])
+        tc = tc(self['run'],
+                self['ngmix_config'],
+                clist,
+                self.get_main_output_dir(coadd_tile)
+                coadd_tile,
+                bands=self['bands'],
+                blind=blind,
+                clobber=clobber,
+                skip_errors=skip_errors)
 
         if verify:
             tc.verify()
