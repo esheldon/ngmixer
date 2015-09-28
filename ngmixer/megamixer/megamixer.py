@@ -5,7 +5,7 @@ import meds
 import fitsio
 import numpy as np
 import glob
-from .files import read_yaml
+from ..files import read_yaml
 from .concat_io import get_concat_class
 
 class BaseNGMegaMixer(dict):
@@ -266,7 +266,7 @@ python -u $cmd &> $lfile
         tc = tc(self['run'],
                 self['ngmix_config'],
                 clist,
-                self.get_main_output_dir(coadd_tile)
+                self.get_main_output_dir(coadd_tile),
                 coadd_tile,
                 bands=self['bands'],
                 blind=blind,

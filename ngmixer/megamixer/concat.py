@@ -3,8 +3,8 @@ import os
 import sys
 import numpy
 import fitsio
-from . import files
-from .util import Namer
+from .. import files
+from ..util import Namer
 
 class ConcatError(Exception):
     def __init__(self, value):
@@ -33,7 +33,7 @@ class Concat(object):
         self.output_file = output_file
         self.clobber = clobber
         self.skip_errors = skip_errors
-        self.chunk_file_list = chunk_file_list
+        self.chunk_file_list = chunk_list
 
         self.config = files.read_yaml(config_file)
 
@@ -153,9 +153,7 @@ class Concat(object):
         write the data, first to a local file then staging out
         the the final location
         """
-        from files import StagedOutFile
-
-        with StagedOutFile(self.collated_file, tmpdir=self.tmpdir) as sf:
+        with files.StagedOutFile(self.collated_file, tmpdir=self.tmpdir) as sf:
             with fitsio.FITS(sf.path,'rw',clobber=True) as fits:
                 fits.write(data,extname="model_fits")
                 fits.write(epoch_data,extname='epoch_data')
