@@ -2,7 +2,6 @@
 from __future__ import print_function
 import os
 import numpy
-import logging
 import copy
 import fitsio
 
@@ -13,28 +12,25 @@ from ngmix import Observation, ObsList, MultiBandObsList
 
 # local imports
 from .imageio import ImageIO
-from ..defaults import DEFVAL,IMAGE_FLAGS,LOGGERNAME
+from ..defaults import DEFVAL,IMAGE_FLAGS
 from .. import nbrsfofs
 
 # internal flagging
 IMAGE_FLAGS_SET=2**0
 
-# logging
-log = logging.getLogger(LOGGERNAME)
-
 class MEDSImageIO(ImageIO):
     """
     Class for MEDS image I/O.
-    
-    The following methods must be defined in a subclass (see the docstrings for the 
+
+    The following methods must be defined in a subclass (see the docstrings for the
     precise function signature).
-    
+
         MEDSImageIO._load_psf_data() - load the psf files if needed
 
-        MEDSImageIO._get_psf_image(band,mindex,icut) - get PSF image for band, index 
+        MEDSImageIO._get_psf_image(band,mindex,icut) - get PSF image for band, index
             in MEDS file (mindex) and cutout index (icut)
-    
-    
+
+
     """
 
     def __init__(self,*args,**kwargs):
@@ -42,13 +38,13 @@ class MEDSImageIO(ImageIO):
         self.conf = args[0]
         self._set_defaults()
         if self.conf['reject_outliers']:
-            log.info("will reject outliers")            
-        
+            print("will reject outliers")
+
         # deal with extra data
         # leaving this just in case we need it
         if self.extra_data is None:
             self.extra_data = {}
-            
+
         meds_files = args[1]
         if not isinstance(meds_files, list):
             self.meds_files = [meds_files]
@@ -70,7 +66,7 @@ class MEDSImageIO(ImageIO):
 
         # psfs
         self._load_psf_data()
-        
+
         # make sure if we are doing nbrs we have the info we need
         if self.conf['model_nbrs']:
             assert 'nbrs' in self.extra_data,"You must supply a nbrs file to model nbrs!"
@@ -86,15 +82,15 @@ class MEDSImageIO(ImageIO):
     def _get_psf_image(self, band, mindex, icut):
         """
         Get an image representing the psf
-        
+
         should return
-        
+
         image, center of psf, estimate of width in pixels, filename
-        
+
         The filename is optional and is just for debugging purposes.
         """
         raise NotImplementedError("_get_psf_image method of ImageIO must be defined in subclass.")
-    
+
     def _get_sub_fname(self,fname):
         rng_string = '%s-%s' % (self.fof_range[0], self.fof_range[1])
         bname = os.path.basename(fname)
@@ -111,20 +107,20 @@ class MEDSImageIO(ImageIO):
 
         if self.fof_file is None:
             for f in self.meds_files:
-                log.info(f)
+                print(f)
                 newf = self._get_sub_fname(f)
                 ex=meds.MEDSExtractor(f, self.fof_range[0], self.fof_range[1], newf, cleanup=True)
                 extracted.append(ex)
             extracted.append(None)
         else:
             # do the fofs first
-            log.info(self.fof_file)
+            print(self.fof_file)
             newf = self._get_sub_fname(self.fof_file)
             fofex = nbrsfofs.NbrsFoFExtractor(self.fof_file, self.fof_range[0], self.fof_range[1], newf, cleanup=True)
 
             # now do the meds
             for f in self.meds_files:
-                log.info(f)
+                print(f)
                 newf = self._get_sub_fname(f)
                 ex=meds.MEDSNumberExtractor(f, fofex.numbers, newf, cleanup=True)
                 extracted.append(ex)
@@ -179,7 +175,7 @@ class MEDSImageIO(ImageIO):
         """
 
         # warn the user
-        log.info('making fof indexes')
+        print('making fof indexes')
 
         if self.fof_file is not None:
             read_fofs = True
@@ -330,7 +326,7 @@ class MEDSImageIO(ImageIO):
             return nbr_psf_obs,nbr_jac
         else:
             # FIXME
-            log.info('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
+            print('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
             return None,None
 
     def get_num_fofs(self):
@@ -347,7 +343,7 @@ class MEDSImageIO(ImageIO):
             ('number','i4'),
             ('nimage_tot','i4',(self.conf['nband'],))]
         return dt
-    
+
     def _get_meta_row(self,num=1):
         # build the meta data
         dt = self.get_meta_data_dtype()
@@ -366,7 +362,7 @@ class MEDSImageIO(ImageIO):
             ('file_id','i4'),
             ('pixel_scale','f8')]   # id in meds file
         return dt
-    
+
     def _get_epoch_meta_row(self,num=1):
         # build the meta data
         dt = self.get_epoch_meta_data_dtype()
@@ -404,7 +400,7 @@ class MEDSImageIO(ImageIO):
             meta['meds_file'][band] = meds_file
 
         return meta
-    
+
     def __next__(self):
         if self.fofindex >= self.num_fofs:
             raise StopIteration
@@ -428,7 +424,7 @@ class MEDSImageIO(ImageIO):
             return coadd_mb_obs_lists,me_mb_obs_lists
 
     next = __next__
-    
+
     def _get_multi_band_observations(self, mindex):
         """
         Get an ObsList object for the Coadd observations
@@ -465,11 +461,11 @@ class MEDSImageIO(ImageIO):
         # weight map is modified
         nreject=meds.reject_outliers(imlist,wtlist)
         if nreject > 0:
-            log.info('    rejected: %d' % nreject)
+            print('    rejected: %d' % nreject)
 
     def _get_image_flags(self, band, mindex):
         return numpy.zeros(self.conf['nband'])
-            
+
     def _get_band_observations(self, band, mindex):
         """
         Get an ObsList for the coadd observations in each band
@@ -509,7 +505,7 @@ class MEDSImageIO(ImageIO):
 
         if self.conf['reject_outliers'] and len(obs_list) > 0:
             self._reject_outliers(obs_list)
-            
+
         return coadd_obs_list, obs_list
 
     def _get_meds_orig_filename(self, meds, mindex, icut):
@@ -517,7 +513,7 @@ class MEDSImageIO(ImageIO):
         Get the original filename
         """
         return ''
-        
+
     def _get_band_observation(self, band, mindex, icut):
         """
         Get an Observation for a single band.
@@ -528,7 +524,7 @@ class MEDSImageIO(ImageIO):
         im = self._get_meds_image(meds, mindex, icut)
         wt,wt_us,seg = self._get_meds_weight(meds, mindex, icut)
         jacob = self._get_jacobian(meds, mindex, icut)
-        
+
         # for the psf fitting code
         wt=wt.clip(min=0.0)
 
@@ -545,7 +541,7 @@ class MEDSImageIO(ImageIO):
         obs.weight_raw = wt.copy()
         obs.seg = seg
         obs.filename=fname
-        
+
         return obs
 
     def _fill_obs_meta_data(self,obs, band, mindex, icut):
@@ -585,7 +581,7 @@ class MEDSImageIO(ImageIO):
         """
         Get a weight map from the input MEDS file
         """
-        
+
         if self.conf['region'] == 'mof':
             wt = meds.get_cutout(mindex, icut, type='weight')
             wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
@@ -604,14 +600,14 @@ class MEDSImageIO(ImageIO):
         wt = wt.astype('f8', copy=False)
         w = numpy.where(wt < self.conf['min_weight'])
         if w[0].size > 0:
-            wt[w] = 0.0        
-            
+            wt[w] = 0.0
+
         if wt_us is not None:
             wt_us = wt_us.astype('f8', copy=False)
             w = numpy.where(wt_us < self.conf['min_weight'])
             if w[0].size > 0:
-                wt_us[w] = 0.0            
-            
+                wt_us[w] = 0.0
+
         try:
             seg = meds.interpolate_coadd_seg(mindex, icut)
         except:
@@ -651,7 +647,7 @@ class MEDSImageIO(ImageIO):
         psf_obs.update_meta_data({'sigma_sky':sigma_sky})
         psf_obs.update_meta_data({'Tguess':sigma_sky*sigma_sky})
         psf_obs.update_meta_data({'psf_norm':im.sum()})
-        
+
         return psf_obs
 
     def _load_meds_files(self):
@@ -660,10 +656,10 @@ class MEDSImageIO(ImageIO):
         """
         self.meds_list=[]
         self.meds_meta_list=[]
-        
+
         for i,funexp in enumerate(self.meds_files):
             f = os.path.expandvars(funexp)
-            log.info('band %d meds: %s' % (i,f))
+            print('band %d meds: %s' % (i,f))
             medsi=meds.MEDS(f)
             medsi_meta=medsi.get_meta()
 
@@ -678,4 +674,3 @@ class MEDSImageIO(ImageIO):
             self.meds_meta_list.append(medsi_meta)
 
         self.nobj_tot = self.meds_list[0].size
- 

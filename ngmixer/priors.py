@@ -3,11 +3,6 @@ from __future__ import print_function
 import os
 import ngmix
 import fitsio
-import logging
-
-# logging
-from .defaults import LOGGERNAME
-log = logging.getLogger(LOGGERNAME)
 
 def set_priors(conf):
     """
@@ -26,7 +21,7 @@ def set_priors(conf):
 
     # set comps
     for model,params in model_pars.iteritems():
-        log.info("loading prior for: %s" % model)
+        print("loading prior for: %s" % model)
 
         params['cen_prior'] = get_cen_prior(params['cen'])
         params['g_prior'] = get_g_prior(params['g'])
@@ -37,14 +32,14 @@ def set_priors(conf):
         if model == 'cm':
             params['fracdev_prior'] = get_fracdev_prior(params['fracdev'])
 
-        log.info("    full")
+        print("    full")
         prior = PriorSimpleSep(params['cen_prior'],
                                params['g_prior'],
                                params['T_prior'],
                                params['counts_prior'])
 
         # for the exploration, for which we do not apply g prior during
-        log.info("    gflat")
+        print("    gflat")
         gflat_prior = PriorSimpleSep(params['cen_prior'],
                                      g_prior_flat,
                                      params['T_prior'],
@@ -161,7 +156,7 @@ def get_cen_prior(params):
 
 def load_gmixnd(spec):
 
-    fname = os.path.expandvars(spec['file']) 
+    fname = os.path.expandvars(spec['file'])
 
     pdf=ngmix.gmix.GMixND(file=fname)
 

@@ -2,7 +2,6 @@
 from __future__ import print_function
 import os
 import numpy
-import logging
 import copy
 import fitsio
 
@@ -11,10 +10,7 @@ import meds
 
 # local imports
 from .medsio import MEDSImageIO
-from ..defaults import LOGGERNAME, PSF_IND_FIELD, PSF_IM_FIELD
-
-# logging
-log = logging.getLogger(LOGGERNAME)
+from ..defaults import PSF_IND_FIELD, PSF_IM_FIELD
 
 class SimpSimMEDSImageIO(MEDSImageIO):
     def _set_defaults(self):
@@ -29,9 +25,9 @@ class SimpSimMEDSImageIO(MEDSImageIO):
             pth,bname = os.path.split(self.meds_files_full[0])
             bname = bname.replace('meds','psf')
             self.psf_file = os.path.join(pth,bname)
-        log.info('psf file: %s' % self.psf_file)
-        self.psf_data = fitsio.read(self.psf_file)    
-    
+        print('psf file: %s' % self.psf_file)
+        self.psf_data = fitsio.read(self.psf_file)
+
     def _get_psf_image(self, band, mindex, icut):
         """
         Get an image representing the psf
@@ -49,6 +45,5 @@ class SimpSimMEDSImageIO(MEDSImageIO):
         cen[0] = meds['cutout_row'][mindex,icut]
         cen[1] = meds['cutout_col'][mindex,icut]
         sigma_pix = 2.5
-        
-        return im, cen, sigma_pix, self.psf_file
 
+        return im, cen, sigma_pix, self.psf_file
