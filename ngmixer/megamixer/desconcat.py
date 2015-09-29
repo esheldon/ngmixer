@@ -15,7 +15,7 @@ class DESConcat(Concat):
     """
     Concat for DES, database prep and blinding
     """
-    def __init__(self,*args,**kwargs):        
+    def __init__(self,*args,**kwargs):
         assert 'bands' in kwargs,"band names must be supplied to DESConcat"
         self.bands = kwargs.pop('bands')
         self.nbands = len(self.bands)
@@ -58,7 +58,7 @@ class DESConcat(Concat):
 
         if self.blind:
             self.blind_data(d)
-            
+
         return d,ed,m
 
     def blind_data(self,data):
