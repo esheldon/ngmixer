@@ -3,8 +3,8 @@ import os
 import sys
 import numpy
 import fitsio
-from . import files
-from .util import Namer
+from .. import files
+from ..util import Namer
 
 from .concat import Concat,ConcatError
 
@@ -15,28 +15,28 @@ class DESConcat(Concat):
     """
     Concat for DES, database prep and blinding
     """
-    def __init__(self,*args,bands=None,blind=True,*kwargs):
+    def __init__(self,*args,**kwargs):        
+        assert 'bands' in kwargs,"band names must be supplied to DESConcat"
+        self.bands = kwargs.pop('bands')
+        self.nbands = len(self.bands)
+        self.blind = kwargs.pop('blind',True)
+        if self.blind:
+            self.blind_factor = self.get_blind_factor()
         super(DESConcat,self).__init__(*args,**kwargs)
         self.config['fit_models'] = list(self.config['model_pars'].keys())
-        assert bands is not None,"band names must be supplied to DESConcat"
-        self.bands = bands
-        self.blind = blind
-        if self.blind:
-            self.blind_factor = get_blind_factor()
 
-    def get_blind_factor():
+    def get_blind_factor(self):
         """
         by joe zuntz
         """
         import sys
         import hashlib
 
-        assert 'DESBLINDPHRASE' in os.environ,"You must specify a DES blinding phrase!"
         try:
             with open(os.environ['DESBLINDPHRASE'],'r') as fp:
                 code_phrase = fp.read()
             code_phrase = code_phrase.strip()
-        else:
+        except:
             code_phrase = "DES is blinded"
 
         #hex number derived from code phrase
@@ -58,6 +58,8 @@ class DESConcat(Concat):
 
         if self.blind:
             self.blind_data(d)
+            
+        return d,ed,m
 
     def blind_data(self,data):
         """

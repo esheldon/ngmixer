@@ -5,7 +5,7 @@ import meds
 import fitsio
 import numpy as np
 import glob
-from .files import read_yaml
+from ..files import read_yaml
 
 from .megamixer import NGMegaMixer
 
