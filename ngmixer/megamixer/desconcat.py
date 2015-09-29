@@ -3,153 +3,63 @@ import os
 import sys
 import numpy
 import fitsio
-import json
-from . import files
-from .util import Namer
+from .. import files
+from ..util import Namer
 
-DEFAULT_NPER = 10
+from .concat import Concat,ConcatError
 
-class ConcatError(Exception):
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
-
-# need to fix up the images instead of this
-#from .constants import PIXSCALE2, SHAPENOISE2
-# hacking this out for now - need to fix on refactor
-PIXSCALE2 = 1.0
 SHAPENOISE=0.16
 SHAPENOISE2=SHAPENOISE**2
 
-class Concat(object):
+class DESConcat(Concat):
     """
-    Concatenate the split files
-
-    This is the more generic interface
+    Concat for DES, database prep and blinding
     """
-    def __init__(self,
-                 run,
-                 config_file,
-                 meds_files,
-                 bands=None, # band names for each meds file
-                 root_dir=None,
-                 nper=DEFAULT_NPER,
-                 sub_dir=None,
-                 blind=True,
-                 clobber=False,
-                 skip_errors=False):
+    def __init__(self,*args,**kwargs):
+        assert 'bands' in kwargs,"band names must be supplied to DESConcat"
+        self.bands = kwargs.pop('bands')
+        self.nbands = len(self.bands)
+        self.blind = kwargs.pop('blind',True)
+        if self.blind:
+            self.blind_factor = self.get_blind_factor()
+        super(DESConcat,self).__init__(*args,**kwargs)
+        self.config['fit_models'] = list(self.config['model_pars'].keys())
 
-        self.run=run
-        self.config_file=config_file
-        self.meds_file_list=meds_files
-        self.nbands=len(meds_files)
-        if bands is None:
-            bands = [str(i) for i in xrange(self.nbands)]
-        else:
-            emess=("wrong number of bands: %d "
-                   "instead of %d" % (len(bands),self.nbands))
-            assert len(bands)==self.nbands,emess
-        self.bands=bands
+    def get_blind_factor(self):
+        """
+        by joe zuntz
+        """
+        import sys
+        import hashlib
 
-        self.sub_dir=sub_dir
-        self.nper=nper
-        self.blind=blind
-        self.clobber=clobber
-        self.skip_errors=skip_errors
+        try:
+            with open(os.environ['DESBLINDPHRASE'],'r') as fp:
+                code_phrase = fp.read()
+            code_phrase = code_phrase.strip()
+        except:
+            code_phrase = "DES is blinded"
 
-        self.config = files.read_yaml(config_file)
-        self.config['fit_models']=list(self.config['model_pars'].keys())
+        #hex number derived from code phrase
+        m = hashlib.md5(code_phrase).hexdigest()
+        #convert to decimal
+        s = int(m, 16)
+        # last 8 digits
+        f = s%100000000
+        # turn 8 digit number into value between 0 and 1
+        g = f*1e-8
+        #get value between 0.9 and 1
+        return 0.9 + 0.1*g
 
-        self.set_files(run, root_dir)
-
-        self.make_collated_dir()
-        self.set_collated_file()
-
-        self.load_meds()
-        self.set_chunks()
+    def read_chunk(self, fname):
+        """
+        Read the chunk data
+        """
+        d,ed,m = super(DESConcat,self).read_chunk(fname)
 
         if self.blind:
-            self.blind_factor = get_blind_factor()
+            self.blind_data(d)
 
-
-    def verify(self):
-        """
-        just run through and read the data, verifying we can read it
-        """
-
-        nchunk=len(self.chunk_list)
-        for i,split in enumerate(self.chunk_list):
-
-            print('\t%d/%d ' %(i+1,nchunk), end='')
-            try:
-                data, epoch_data, meta = self.read_chunk(split)
-            except ConcatError as err:
-                print("error found: %s" % str(err))
-
-    def concat(self):
-        """
-        actually concatenate the data, and add any new fields
-        """
-        print('writing:',self.collated_file)
-
-        if os.path.exists(self.collated_file) and not self.clobber:
-            print('file already exists, skipping')
-            return
-
-        dlist=[]
-        elist=[]
-
-        nchunk=len(self.chunk_list)
-        for i,split in enumerate(self.chunk_list):
-
-            print('\t%d/%d ' %(i+1,nchunk), end='')
-            sys.stdout.flush()
-            try:
-                data, epoch_data, meta = self.read_chunk(split)
-
-
-                if self.blind:
-                    self.blind_data(data)
-
-                dlist.append(data)
-
-                if (epoch_data is not None
-                        and epoch_data.dtype.names is not None):
-                    elist.append(epoch_data)
-            except ConcatError as err:
-                if not self.skip_errors:
-                    raise err
-                print("skipping problematic chunk")
-
-        # note using meta from last file
-        self._write_data(dlist, elist, meta)
-
-    def _write_data(self, dlist, elist, meta):
-        """
-        write the data, first to a local file then staging out
-        the the final location
-        """
-        import esutil as eu
-        from files import StagedOutFile
-
-        data=eu.numpy_util.combine_arrlist(dlist)
-        if len(elist) > 0:
-            do_epochs=True
-            epoch_data=eu.numpy_util.combine_arrlist(elist)
-        else:
-            do_epochs=False
-
-        with StagedOutFile(self.collated_file, tmpdir=self.tmpdir) as sf:
-            with fitsio.FITS(sf.path,'rw',clobber=True) as fits:
-                fits.write(data,extname="model_fits")
-
-                if do_epochs:
-                    fits.write(epoch_data,extname='epoch_data')
-
-                fits.write(meta,extname="meta_data")
-
-        print('output is in:',self.collated_file)
+        return d,ed,m
 
     def blind_data(self,data):
         """
@@ -185,7 +95,6 @@ class Concat(object):
         """
         pick out some fields, add some fields, rename some fields
         """
-        import esutil as eu
 
         wkeep,=numpy.where(epoch_data0['cutout_index'] >= 0)
         if wkeep.size==0:
@@ -202,10 +111,11 @@ class Concat(object):
         dt.insert( ind, ('band','S1') )
 
         epoch_data = numpy.zeros(epoch_data0.size, dtype=dt)
-        eu.numpy_util.copy_fields(epoch_data0, epoch_data)
+        for nm in epoch_data0.dtype.names:
+            if nm in epoch_data.dtype.names:
+                epoch_data0[nm] = epoch_data[nm]
 
         for band_num in xrange(self.nbands):
-
             w,=numpy.where(epoch_data['band_num'] == band_num)
             if w.size > 0:
                 epoch_data['band'][w] = self.bands[band_num]
@@ -414,9 +324,9 @@ class Concat(object):
                     data[n('flux_cov')][w,:,:] = data[n('pars_cov')][w,5:5+nband,5:5+nband]
 
             if nband == 1:
-                flux = ( data[n('flux')][w]/PIXSCALE2 ).clip(min=0.001)
+                flux = (data[n('flux')][w]).clip(min=0.001)
             else:
-                flux = ( data[n('flux')][w,band]/PIXSCALE2 ).clip(min=0.001)
+                flux = (data[n('flux')][w,band]).clip(min=0.001)
             magzero=meta['magzp_ref'][band]
 
             if nband==1:
@@ -468,143 +378,3 @@ class Concat(object):
                         flux=flux[w2]
                         flux_err=numpy.sqrt(flux_var[w2])
                         data[n('flux_s2n')][w[w2], band] = flux/flux_err
-
-
-    def read_data(self, fname, split):
-        """
-        Read the chunk data
-        """
-
-        if not os.path.exists(fname):
-            raise ConcatError("file not found: %s" % fname)
-
-        try:
-            with fitsio.FITS(fname) as fobj:
-                data0       = fobj['model_fits'][:]
-                if 'epoch_data' in fobj:
-                    epoch_data0 = fobj['epoch_data'][:]
-                else:
-                    print("    file has no epochs")
-                    epoch_data0 = None
-                meta        = fobj['meta_data'][:]
-        except IOError as err:
-            raise ConcatError(str(err))
-
-        # watching for an old byte order bug
-        expected_index = numpy.arange(split[0],split[1]+1)+1
-        w,=numpy.where(data0['number'] != expected_index)
-        if w.size > 0:
-            raise ConcatError("number field is corrupted in file: %s" % fname)
-
-        data = self.pick_fields(data0,meta)
-
-        if epoch_data0 is not None:
-            if epoch_data0.dtype.names is not None:
-                epoch_data = self.pick_epoch_fields(epoch_data0)
-            else:
-                epoch_data = epoch_data0
-        else:
-            epoch_data = epoch_data0
-
-
-        return data, epoch_data, meta
-
-    def set_chunks(self):
-        """
-        set the chunks in which the meds file was processed
-        """
-        self.chunk_list=files.get_chunks(self.nrows, self.nper)
-
-    def load_meds(self):
-        """
-        Load the associated meds files
-        """
-        import meds
-        print('loading meds')
-
-        self.meds_list=[]
-        for fname in self.meds_file_list:
-            m=meds.MEDS(fname)
-            self.meds_list.append(m)
-
-        self.nrows=self.meds_list[0]['id'].size
-
-    def make_collated_dir(self):
-        collated_dir = self._files.get_collated_dir()
-        files.try_makedir(collated_dir)
-
-    def set_collated_file(self):
-        """
-        set the output file and the temporary directory
-        """
-        if self.blind:
-            extra='blind'
-        else:
-            extra=None
-
-        self.collated_file = self._files.get_collated_file(sub_dir=self.sub_dir,
-                                                           extra=extra)
-        self.tmpdir=files.get_temp_dir()
-
-
-    def read_chunk(self, split):
-        """
-        read data and epoch data from a given split
-        """
-        chunk_file=self._files.get_output_file(split,sub_dir=self.sub_dir)
-
-        # continuing line from above
-        print(chunk_file)
-        data, epoch_data, meta=self.read_data(chunk_file, split)
-        return data, epoch_data, meta
-
-    def set_files(self, run, root_dir):
-        self._files=files.Files(run, root_dir=root_dir)
-
-
-def get_tile_key(tilename,band):
-    key='%s-%s' % (tilename,band)
-    return key
-
-def key_by_tile_band(data0, ftype):
-    """
-    Group files from a goodlist by tilename-band and sort the lists
-    """
-    print('grouping by tile/band')
-    data={}
-
-    for d in data0:
-        fname=d['output_files'][ftype]
-        key=get_tile_key(d['tilename'],d['band'])
-
-        if key not in data:
-            data[key] = [fname]
-        else:
-            data[key].append(fname)
-
-    for key in data:
-        data[key].sort()
-
-    print('found %d tile/band combinations' % len(data))
-
-    return data
-
-def get_blind_factor():
-    """
-    by joe zuntz
-    """
-    import sys
-    import hashlib
-
-    code_phrase = "DES is blinded"
-
-    #hex number derived from code phrase
-    m = hashlib.md5(code_phrase).hexdigest()
-    #convert to decimal
-    s = int(m, 16)
-    # last 8 digits
-    f = s%100000000
-    # turn 8 digit number into value between 0 and 1
-    g = f*1e-8
-    #get value between 0.9 and 1
-    return 0.9 + 0.1*g

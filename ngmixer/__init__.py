@@ -2,7 +2,6 @@
 # imports
 from . import files
 from . import ngmixing
-from . import medsio
 from . import priors
 from . import util
 from . import defaults

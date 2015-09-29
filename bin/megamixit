@@ -38,7 +38,7 @@ parser.add_option('--skip-errors',action='store_true',
                   help="skip over errors")
 
 from ngmixer.megamixer import NGMegaMixer
-from ngmixer.slacmegamixer import SLACNGMegaMixer
+from ngmixer.megamixer import SLACNGMegaMixer
 
 if __name__ == '__main__':
     from ngmixer.files import read_yaml
