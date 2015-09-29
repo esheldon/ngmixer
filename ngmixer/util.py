@@ -9,8 +9,15 @@ import sys
 import ngmix
 from ngmix import srandu, GMixRangeError
 from ngmix.priors import LOWVAL
-
 from .defaults import VERBOSITY
+
+def print_with_verbosity(*args,**kwargs):
+    """
+    print with verbosity=XXX keyword
+    """
+    verbosity=kwargs.pop('verbosity',0)
+    if verbosity <= VERBOSITY():
+        print(*args,**kwargs)
 
 class PBar(object):
     """
@@ -138,7 +145,6 @@ class UtterFailure(Exception):
     def __str__(self):
         return repr(self.value)
 
-
 class Namer(object):
     """
     create strings with a specified front prefix
@@ -150,14 +156,6 @@ class Namer(object):
             return name
         else:
             return '%s_%s' % (self.front, name)
-
-def print_with_verbosity(*args,**kwargs):
-    """
-    print with verbosity=XXX keyword
-    """
-    verbosity=kwargs.pop('verbosity',0)
-    if verbosity <= VERBOSITY:
-        print(*args,**kwargs)
 
 def print_pars(pars, fmt='%8.3g', front=None, verbosity=0):
     """

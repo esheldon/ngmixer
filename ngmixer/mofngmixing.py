@@ -14,7 +14,8 @@ from . import files
 from .ngmixing import NGMixer
 from .defaults import DEFVAL,_CHECKPOINTS_DEFAULT_MINUTES
 from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS
-from .util import UtterFailure,Namer,print_pars,print_with_verbosity
+from .util import UtterFailure,Namer,print_pars
+from .util import print_with_verbosity
 
 class MOFNGMixer(NGMixer):
     def _get_models_to_check(self):

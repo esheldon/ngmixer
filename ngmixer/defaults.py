@@ -43,4 +43,11 @@ PSF_IM_FIELD='psf_im'
 
 #######################################################
 # setup logging/verbosity
-VERBOSITY = 0 # set higher for more output
+class _VERBOSITY(object):
+    def __init__(self,level=0):
+        self.level = level
+
+    def __call__(self):
+        return self.level
+
+VERBOSITY = _VERBOSITY(0)

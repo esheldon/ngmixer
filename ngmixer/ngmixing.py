@@ -27,7 +27,7 @@ class NGMixer(dict):
                  init_only=False,
                  profile=False,
                  make_plots=False,
-                 verbose=None,
+                 verbosity=0,
                  config=None):
 
         # parameters
@@ -42,9 +42,9 @@ class NGMixer(dict):
         self['fit_me_galaxy'] = self.get('fit_me_galaxy',True)
         self['max_box_size']=self.get('max_box_size',2048)
 
-        if verbose is not None:
+        if verbosity > 0:
             # over-ride anything in the config
-            self['verbose'] = verbose
+            self['verbose'] = True
 
         self.profile = profile
         pprint.pprint(self)

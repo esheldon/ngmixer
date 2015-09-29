@@ -30,7 +30,7 @@ parser.add_option("--profile", action='store_true',
 parser.add_option("--make-plots", action='store_true',
                   help=("make some plots"))
 
-parser.add_option("--seed", default=None, 
+parser.add_option("--seed", default=None,
                   help=("random seed"))
 
 parser.add_option("--nbrs-file", default=None,
@@ -42,8 +42,8 @@ parser.add_option("--psf-file", default=None,
 parser.add_option("--obj-flags", default=None,
                   help=("file with flags for each object; flags != 0 are ignored"))
 
-parser.add_option("--verbose", action='store_true',
-                  help=("force verbosity, over-riding config file"))
+parser.add_option("--verbosity", default=0,
+                  help=("set verbosity level, --verbosity=1 implies verbose=True in config file"))
 
 def get_range(rng_string):
     if rng_string is not None:
@@ -73,13 +73,15 @@ if __name__ == '__main__':
     if options.nbrs_file is not None:
         extra_data['nbrs'] = fitsio.read(os.path.expandvars(options.nbrs_file))
     if options.obj_flags is not None:
-        extra_data['obj_flags'] = fitsio.read(os.path.expandvars(options.obj_flags))    
+        extra_data['obj_flags'] = fitsio.read(os.path.expandvars(options.obj_flags))
     if options.psf_file is not None:
         extra_data['psf_file'] = options.psf_file
-        
+
+    ngmixer.defaults.VERBOSITY.level = int(options.verbosity)
+
     config = ngmixer.files.read_yaml(config_file)
     doMOF = config.get('model_nbrs',False)
-    
+
     if doMOF:
         MOFNGMixer(config_file,
                    data_files,
@@ -91,7 +93,7 @@ if __name__ == '__main__':
                    extra_data=extra_data,
                    profile=options.profile,
                    make_plots=options.make_plots,
-                   verbose=options.verbose,
+                   verbosity=options.verbosity,
                    config=config)
     else:
         NGMixer(config_file,
@@ -104,20 +106,5 @@ if __name__ == '__main__':
                 extra_data=extra_data,
                 profile=options.profile,
                 make_plots=options.make_plots,
-                verbose=options.verbose,
+                verbosity=options.verbosity,
                 config=config)
-    
-    
-
-
-
-
-
-
-
-
-
-
-
-
-            
