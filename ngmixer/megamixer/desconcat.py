@@ -8,10 +8,6 @@ from .util import Namer
 
 from .concat import Concat,ConcatError
 
-# need to fix up the images instead of this
-#from .constants import PIXSCALE2, SHAPENOISE2
-# hacking this out for now - need to fix on refactor
-PIXSCALE2 = 1.0
 SHAPENOISE=0.16
 SHAPENOISE2=SHAPENOISE**2
 
@@ -97,7 +93,6 @@ class DESConcat(Concat):
         """
         pick out some fields, add some fields, rename some fields
         """
-        import esutil as eu
 
         wkeep,=numpy.where(epoch_data0['cutout_index'] >= 0)
         if wkeep.size==0:
@@ -114,10 +109,11 @@ class DESConcat(Concat):
         dt.insert( ind, ('band','S1') )
 
         epoch_data = numpy.zeros(epoch_data0.size, dtype=dt)
-        eu.numpy_util.copy_fields(epoch_data0, epoch_data)
+        for nm in epoch_data0.dtype.names:
+            if nm in epoch_data.dtype.names:
+                epoch_data0[nm] = epoch_data[nm]
 
         for band_num in xrange(self.nbands):
-
             w,=numpy.where(epoch_data['band_num'] == band_num)
             if w.size > 0:
                 epoch_data['band'][w] = self.bands[band_num]
@@ -326,9 +322,9 @@ class DESConcat(Concat):
                     data[n('flux_cov')][w,:,:] = data[n('pars_cov')][w,5:5+nband,5:5+nband]
 
             if nband == 1:
-                flux = ( data[n('flux')][w]/PIXSCALE2 ).clip(min=0.001)
+                flux = (data[n('flux')][w]).clip(min=0.001)
             else:
-                flux = ( data[n('flux')][w,band]/PIXSCALE2 ).clip(min=0.001)
+                flux = (data[n('flux')][w,band]).clip(min=0.001)
             magzero=meta['magzp_ref'][band]
 
             if nband==1:
