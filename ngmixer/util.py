@@ -7,8 +7,10 @@ import time
 import sys
 
 import ngmix
-from ngmix import srandu, GMixRangeError, print_pars
+from ngmix import srandu, GMixRangeError
 from ngmix.priors import LOWVAL
+
+from .defaults import VERBOSITY
 
 class PBar(object):
     """
@@ -149,19 +151,43 @@ class Namer(object):
         else:
             return '%s_%s' % (self.front, name)
 
+def print_with_verbosity(*args,**kwargs):
+    """
+    print with verbosity=XXX keyword
+    """
+    verbosity=kwargs.pop('verbosity',0)
+    if verbosity <= VERBOSITY:
+        print(*args,**kwargs)
+
+def print_pars(pars, fmt='%8.3g', front=None, verbosity=0):
+    """
+    print the parameters with a uniform width
+    """
+    from sys import stdout
+    msg = ""
+    if front is not None:
+        msg += front
+        msg += " "
+
+    allfmt = ' '.join( [fmt+' ']*len(pars) )
+    msg += allfmt % tuple(pars)
+
+    print_with_verbosity(msg,verbosity=verbosity)
+
 def print_pars_and_logl(pars, logl, fmt='%8.3g', front=None):
     """
     print the parameters with a uniform width
     """
     from sys import stdout
+    msg = ""
     if front is not None:
-        stdout.write(front)
-        stdout.write(' ')
+        msg += front
+        msg += " "
 
     allfmt = ' '.join( [fmt+' ']*len(pars) )
-    stdout.write(allfmt % tuple(pars))
-    stdout.write(" logl: %g\n" % logl)
-
+    msg += allfmt % tuple(pars)
+    msg += " logl: %g" % logl
+    print_with_verbosity(msg,verbosity=verbosity)
 
 def plot_autocorr(trials, window=100, show=False, **kw):
     import biggles

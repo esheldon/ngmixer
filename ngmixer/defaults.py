@@ -35,11 +35,12 @@ PDEFVAL = 9999
 BIG_DEFVAL = -9.999e9
 BIG_PDEFVAL = 9.999e9
 
-# logging
-LOGGERNAME = __name__.split('.')[0]
-
 # running code
 _CHECKPOINTS_DEFAULT_MINUTES=[0,30,60,110]
 
 PSF_IND_FIELD='ind_psf'
 PSF_IM_FIELD='psf_im'
+
+#######################################################
+# setup logging/verbosity
+VERBOSITY = 0 # set higher for more output

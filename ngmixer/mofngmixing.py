@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 from __future__ import print_function
-import logging
 import numpy
 import time
 import pprint
@@ -13,13 +12,9 @@ from . import imageio
 from . import fitting
 from . import files
 from .ngmixing import NGMixer
-from .defaults import DEFVAL,LOGGERNAME,_CHECKPOINTS_DEFAULT_MINUTES
+from .defaults import DEFVAL,_CHECKPOINTS_DEFAULT_MINUTES
 from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS
-from .util import UtterFailure,Namer
-from ngmix import print_pars
-
-# logging
-log = logging.getLogger(LOGGERNAME)
+from .util import UtterFailure,Namer,print_pars,print_with_verbosity
 
 class MOFNGMixer(NGMixer):
     def _get_models_to_check(self):
@@ -58,14 +53,14 @@ class MOFNGMixer(NGMixer):
         maxerr[:] = -numpy.inf
 
         for fofind in xrange(foflen):
-            log.debug('    fof obj: %ld' % fofind)
+            print_with_verbosity('    fof obj: %ld' % fofind,verbosity=1)
 
             for model,pars_model,model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
                 if pars_model not in self.curr_data.dtype.names:
                     continue
 
                 if self.curr_data['flags'][fofind] or self.prev_data['flags'][fofind]:
-                    log.info('    skipping fof obj %s in convergence check' % (fofind+1))
+                    print('    skipping fof obj %s in convergence check' % (fofind+1))
                     continue
 
                 old = self.prev_data[pars_model][fofind]
@@ -92,19 +87,18 @@ class MOFNGMixer(NGMixer):
                     if abserr[i] > maxerr[i]:
                         maxerr[i] = copy.copy(abserr[i])
 
-                log.debug('        %s:' % model)
-                if log.getEffectiveLevel() <= logging.DEBUG:
-                    print_pars(old,        front='            old      ')
-                    print_pars(new,        front='            new      ')
-                    print_pars(absdiff,    front='            abs diff ')
-                    print_pars(absfracdiff,front='            frac diff')
-                    print_pars(abserr,front='            err diff ')
+                print_with_verbosity('        %s:' % model,verbosity=1)
+                print_pars(old,        front='            old      ',verbosity=1)
+                print_pars(new,        front='            new      ',verbosity=1)
+                print_pars(absdiff,    front='            abs diff ',verbosity=1)
+                print_pars(absfracdiff,front='            frac diff',verbosity=1)
+                print_pars(abserr,front='            err diff ',verbosity=1)
 
 
         fmt = "%8.3g "*len(maxabs)
-        log.info("    max abs diff : "+fmt % tuple(maxabs))
-        log.info("    max frac diff: "+fmt % tuple(maxfrac))
-        log.info("    max err diff : "+fmt % tuple(maxerr))
+        print("    max abs diff : "+fmt % tuple(maxabs))
+        print("    max frac diff: "+fmt % tuple(maxfrac))
+        print("    max err diff : "+fmt % tuple(maxerr))
 
         self.maxabs = maxabs
         self.maxfrac = maxfrac
@@ -122,19 +116,19 @@ class MOFNGMixer(NGMixer):
 
         self.done = False
 
-        log.info('doing fits')
+        print('doing fits')
 
         t0=time.time()
         num = 0
         numfof = 0
         numtot = self.imageio.get_num_fofs()
 
-        log.info('fof index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
+        print('fof index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
         for coadd_mb_obs_lists,mb_obs_lists in self.imageio:
             numfof += 1
 
             foflen = len(mb_obs_lists)
-            log.info('    num in fof: %d' % foflen)
+            print('    num in fof: %d' % foflen)
 
             # get data to fill
             self.curr_data = self._make_struct(num=foflen)
@@ -174,14 +168,14 @@ class MOFNGMixer(NGMixer):
                 coadd_mb_obs_list = coadd_mb_obs_lists[i]
                 mb_obs_list = mb_obs_lists[i]
                 if foflen > 1:
-                    log.info('  fof obj: %d:%d' % (self.curr_data_index+1,foflen))
-                log.info('    id: %d' % mb_obs_list.meta['id'])
+                    print('  fof obj: %d:%d' % (self.curr_data_index+1,foflen))
+                print('    id: %d' % mb_obs_list.meta['id'])
 
                 num += 1
                 ti = time.time()
                 self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None)
                 ti = time.time()-ti
-                log.info('    time: %f' % ti)
+                print('    time: %f' % ti)
 
 
             #####################################################################
@@ -189,7 +183,7 @@ class MOFNGMixer(NGMixer):
             if foflen > 1:
                 converged = False
                 for itr in xrange(self['mof']['max_itr']):
-                    log.info('itr %d:' % itr)
+                    print('itr %d:' % itr)
 
                     # switch back to non-uberseg weights
                     if itr >= self['mof']['min_useg_itr']:
@@ -212,24 +206,24 @@ class MOFNGMixer(NGMixer):
                         coadd_mb_obs_list = coadd_mb_obs_lists[i]
                         mb_obs_list = mb_obs_lists[i]
                         if foflen > 1:
-                            log.info('  fof obj: %d:%d' % (self.curr_data_index+1,foflen))
-                        log.info('    id: %d' % mb_obs_list.meta['id'])
+                            print('  fof obj: %d:%d' % (self.curr_data_index+1,foflen))
+                        print('    id: %d' % mb_obs_list.meta['id'])
 
                         num += 1
                         ti = time.time()
                         self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=self.curr_data)
                         ti = time.time()-ti
-                        log.info('    time: %f' % ti)
+                        print('    time: %f' % ti)
 
                     if itr >= self['mof']['min_itr']:
-                        log.info('  convergence itr %d:' % (itr+1))
+                        print('  convergence itr %d:' % (itr+1))
                         if self._check_convergence(foflen,itr):
                             converged = True
                             break
 
-                log.info('  convergence fof index: %d' % (self.curr_fofindex+1-self.start_fofindex))
-                log.info('    converged: %s' % str(converged))
-                log.info('    num itr: %d' % (itr+1))
+                print('  convergence fof index: %d' % (self.curr_fofindex+1-self.start_fofindex))
+                print('    converged: %s' % str(converged))
+                print('    num itr: %d' % (itr+1))
             else:
                 # one object in fof, so set mof flags
                 models_to_check,pars_models_to_check,cov_models_to_check,npars = self._get_models_to_check()
@@ -245,12 +239,12 @@ class MOFNGMixer(NGMixer):
             self._try_checkpoint(tm)
 
             if self.curr_fofindex-self.start_fofindex < numtot:
-                log.info('fof index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
+                print('fof index: %d:%d' % (self.curr_fofindex+1-self.start_fofindex,numtot))
 
         tm=time.time()-t0
-        log.info("time: %f" % tm)
-        log.info("time per fit: %f" % (tm/num))
-        log.info("time per fof: %f" % (tm/numfof))
+        print("time: %f" % tm)
+        print("time per fit: %f" % (tm/num))
+        print("time per fof: %f" % (tm/numfof))
 
         self.done = True
 

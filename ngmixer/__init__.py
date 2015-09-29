@@ -10,13 +10,6 @@ from . import mofngmixing
 from . import megamixer
 
 #######################################################
-# setup logger
-import logging
-logging.basicConfig(format='%(message)s')
-log = logging.getLogger(defaults.LOGGERNAME)
-log.setLevel(logging.INFO)
-
-#######################################################
 # setup fitter dict
 # each time you create a new fitter class, add it to this dict
 FITTERS = {}

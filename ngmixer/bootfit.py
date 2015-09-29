@@ -1,21 +1,16 @@
 from __future__ import print_function
 import time
 import numpy
-import logging
 import os
 
 # local imports
-from .defaults import DEFVAL,LOGGERNAME,NO_ATTEMPT,PSF_FIT_FAILURE,GAL_FIT_FAILURE,LOW_PSF_FLUX
+from .defaults import DEFVAL,NO_ATTEMPT,PSF_FIT_FAILURE,GAL_FIT_FAILURE,LOW_PSF_FLUX
 from .fitting import BaseFitter
-from .util import Namer
-
-# logging
-log = logging.getLogger(LOGGERNAME)
+from .util import Namer, print_pars
 
 # ngmix imports
 import ngmix
 from ngmix import Observation, ObsList, MultiBandObsList, GMixRangeError
-from ngmix import print_pars
 from ngmix.fitting import EIG_NOTFINITE
 from ngmix.gexceptions import BootPSFFailure, BootGalFailure
 from ngmix.gmix import GMixModel, GMix, GMixCM
@@ -106,7 +101,7 @@ class NGMixBootFitter(BaseFitter):
 
         fit_flags = 0
         for model in self['fit_models']:
-            log.info('    fitting: %s' % model)
+            print('    fitting: %s' % model)
 
             if self['model_nbrs'] and nbrs_fit_data is not None:
                 self._render_nbrs(model,new_mb_obs_list,coadd,nbrs_fit_data)
@@ -166,7 +161,7 @@ class NGMixBootFitter(BaseFitter):
         render nbrs
         """
 
-        log.info('    rendering nbrs')
+        print('    rendering nbrs')
 
         if len(mb_obs_list.meta['nbrs_inds']) == 0:
             return
@@ -199,7 +194,7 @@ class NGMixBootFitter(BaseFitter):
                     cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1], \
                         obs.get_psf_gmix(),obs.get_jacobian(),coadd)
                 else:
-                    log.info('        bad fit data: %d' % (cen_ind))
+                    print('        bad fit data: %d' % (cen_ind))
                     cenim = obs.image_orig.copy()
 
                 # now do nbrs
@@ -213,7 +208,7 @@ class NGMixBootFitter(BaseFitter):
                             nbrs_psf_gmix = nbrs_psf.get_gmix()
                         else:
                             # FIXME - need to fit psf from off chip nbrs
-                            log.info('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
+                            print('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
                                 % (nbrs_ind+1,cen_ind+1))
                             continue
 
@@ -292,14 +287,14 @@ class NGMixBootFitter(BaseFitter):
                 fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d.png' % (ptype,band,icut_cen))
             else:
                 fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd.png' % (ptype,band))
-            log.info("        making plot %s" % fname)
+            print("        making plot %s" % fname)
             tab.write_img(1920,1200,fname)
         except:
-            log.info("        caught error plotting nbrs")
+            print("        caught error plotting nbrs")
             pass
 
     def _fill_epoch_data(self,mb_obs_list,new_mb_obs_list):
-        log.info('    filling PSF data')
+        print('    filling PSF data')
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
                 used = False
@@ -344,7 +339,7 @@ class NGMixBootFitter(BaseFitter):
                     obs.update_meta_data({'fit_data':ed})
 
     def _do_psf_stats(self,mb_obs_list,coadd):
-        log.info('    doing PSF stats')
+        print('    doing PSF stats')
 
         if coadd:
             n = Namer('coadd')
@@ -446,11 +441,11 @@ class NGMixBootFitter(BaseFitter):
                     self._copy_galaxy_result(model,coadd)
                     self._print_galaxy_result()
                 except (BootGalFailure,GMixRangeError) as err:
-                    log.info("    galaxy fitting failed: %s" % err)
+                    print("    galaxy fitting failed: %s" % err)
                     flags = GAL_FIT_FAILURE
 
         except BootPSFFailure:
-            log.info("    psf fitting failed")
+            print("    psf fitting failed")
             flags = PSF_FIT_FAILURE
 
         return flags, boot
@@ -477,7 +472,7 @@ class NGMixBootFitter(BaseFitter):
             self.data[n('flux')][0,band] = flux
             self.data[n('flux_err')][0,band] = flux_err
 
-            log.info("        psf flux(%s): %g +/- %g" % (band,flux,flux_err))
+            print("        psf flux(%s): %g +/- %g" % (band,flux,flux_err))
 
         return flagsall
 
@@ -486,7 +481,7 @@ class NGMixBootFitter(BaseFitter):
         fit the psf model to every observation's psf image
         """
 
-        log.info('    fitting the PSFs')
+        print('    fitting the PSFs')
 
         boot=self.boot
 
@@ -546,7 +541,7 @@ class NGMixBootFitter(BaseFitter):
         else:
             fname=os.path.join(self.plot_dir,'%d-psf-resid-band%d-%d.png' % (obs_id,band,band_id))
 
-        log.info("        making plot %s" % fname)
+        print("        making plot %s" % fname)
         plt.write_img(1920,1200,fname)
 
     def _fit_galaxy(self, model, coadd, guess=None):
@@ -576,11 +571,11 @@ class NGMixBootFitter(BaseFitter):
                 for band, band_plots in enumerate(res_plots):
                     for icut, plt in enumerate(band_plots):
                         fname=os.path.join(self.plot_dir,'%d-%s-resid-band%d-im%d.png' % (obj_id,ptype,band,icut))
-                        log.info("        making plot %s" % fname)
+                        print("        making plot %s" % fname)
                         plt.write_img(1920,1200,fname)
 
         except GMixRangeError as err:
-            log.info("        caught error plotting resid: %s" % str(err))
+            print("        caught error plotting resid: %s" % str(err))
 
     def _plot_trials(self, obj_id, fitter, model, coadd, fitter_type, wgts):
         """
@@ -604,13 +599,13 @@ class NGMixBootFitter(BaseFitter):
             trials_png=os.path.join(self.plot_dir,'%d-%s-trials.png' % (obj_id,ptype))
             wtrials_png=os.path.join(self.plot_dir,'%d-%s-wtrials.png' % (obj_id,ptype))
 
-            log.info("        making plot %s" % trials_png)
+            print("        making plot %s" % trials_png)
             pdict['trials'].write_img(1200,1200,trials_png)
 
-            log.info("        making plot %s" % wtrials_png)
+            print("        making plot %s" % wtrials_png)
             pdict['wtrials'].write_img(1200,1200,wtrials_png)
         except:
-            log.info("        caught error plotting trials")
+            print("        caught error plotting trials")
 
         try:
             from .util import plot_autocorr
@@ -618,10 +613,10 @@ class NGMixBootFitter(BaseFitter):
             plt=plot_autocorr(trials)
             plt.title=title
             fname=os.path.join(self.plot_dir,'%d-%s-autocorr.png' % (obj_id,ptype))
-            log.info("        making plot %s" % fname)
+            print("        making plot %s" % fname)
             plt.write_img(1000,1000,fname)
         except:
-            log.info("        caught error plotting autocorr")
+            print("        caught error plotting autocorr")
 
     def _plot_images(self, obj_id, model, coadd):
         import images
@@ -636,7 +631,7 @@ class NGMixBootFitter(BaseFitter):
         else:
             coadd_png=os.path.join(self.plot_dir,'%d-mb-images.png' % (obj_id))
         plt=images.view_mosaic(imlist, titles=titles, show=False)
-        log.info("        making plot %s" % coadd_png)
+        print("        making plot %s" % coadd_png)
         plt.write_img(1200,1200,coadd_png)
 
     def _copy_galaxy_result(self, model, coadd):
@@ -710,7 +705,7 @@ class NGMixBootFitter(BaseFitter):
         if 's2n_w' in mres:
             rres=self.boot.get_round_result()
             tup=(mres['s2n_w'],rres['s2n_r'],mres['chi2per'])
-            log.info("    s2n: %.1f s2n_r: %.1f chi2per: %.3f" % tup)
+            print("    s2n: %.1f s2n_r: %.1f chi2per: %.3f" % tup)
 
     def get_num_pars_psf(self):
         npdict = {'em1':6,
@@ -953,7 +948,7 @@ class MaxNGMixBootFitter(NGMixBootFitter):
                      guess=guess)
 
         if self['replace_cov']:
-            log.info("        replacing cov")
+            print("        replacing cov")
             cov_pars=self['cov_pars']
             boot.try_replace_cov(cov_pars)
 
