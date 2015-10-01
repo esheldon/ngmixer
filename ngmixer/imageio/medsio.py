@@ -147,9 +147,7 @@ class MEDSImageIO(ImageIO):
     def _set_and_check_index_lookups(self):
         """
         Deal with common indexing issues in one place
-        """
 
-        """
         Indexing notes:
 
         Each MEDS file consists of a list of objects to be fit, which are indexed by
@@ -189,7 +187,9 @@ class MEDSImageIO(ImageIO):
 
         # first, we error check
         for band,meds in enumerate(self.meds_list):
-            assert numpy.array_equal(meds['number'],self.fof_data['number']),"FoF number is not the same as MEDS number for band %d!" % band
+            msg = "FoF number is not the same as MEDS number for band %d!" % band
+            assert numpy.array_equal(meds['number'],self.fof_data['number']),msg
+
 
         #set some useful stuff here
         self.fofids = numpy.unique(self.fof_data['fofid'])
@@ -240,16 +240,12 @@ class MEDSImageIO(ImageIO):
                     obs.weight_orig = obs.weight.copy()
 
         # do indexes
-        if len(mindexes) == 1:
-            for cen,mindex in enumerate(mindexes):
-                nbrs_inds = []
-                nbrs_ids = []
-                coadd_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids})
-                me_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids})
-        else:
-            for cen,mindex in enumerate(mindexes):
-                nbrs_inds = []
-                nbrs_ids = []
+        for cen,mindex in enumerate(mindexes):
+            nbrs_inds = []
+            nbrs_ids = []
+
+            # if len is 1, then only a single galaxy in the FoF and do nothing
+            if len(mindexes) > 1:
                 q, = numpy.where(self.extra_data['nbrs']['number'] == self.meds_list[0]['number'][mindex])
                 for ind in q:
                     if self.extra_data['nbrs']['nbr_number'][ind] != -1:
@@ -260,9 +256,10 @@ class MEDSImageIO(ImageIO):
                         assert coadd_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
                         assert me_mb_obs_lists[nbrs_inds[-1]].meta['id'] == nbrs_ids[-1]
 
-                coadd_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids,'cen_ind':cen})
-                me_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids,'cen_ind':cen})
                 assert cen not in nbrs_inds,'weird error where cen_ind is in nbrs_ind!'
+
+            coadd_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids,'cen_ind':cen})
+            me_mb_obs_lists[cen].update_meta_data({'nbrs_inds':nbrs_inds,'nbrs_ids':nbrs_ids,'cen_ind':cen})
 
         # now do psfs and jacobians
         self._add_nbrs_psfs_and_jacs(coadd_mb_obs_lists,mindexes)
