@@ -461,7 +461,10 @@ class MEDSImageIO(ImageIO):
             print('    rejected: %d' % nreject)
 
     def _get_image_flags(self, band, mindex):
-        return numpy.zeros(self.conf['nband'])
+        meds=self.meds_list[band]
+        ncutout=meds['ncutout'][mindex]
+        return numpy.zeros(ncutout, dtype='i8')
+        #return numpy.zeros(self.conf['nband'])
 
     def _get_band_observations(self, band, mindex):
         """
