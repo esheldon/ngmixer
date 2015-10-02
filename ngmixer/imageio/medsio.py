@@ -311,7 +311,7 @@ class MEDSImageIO(ImageIO):
                                self.meds_list[band]['dudcol'][nbr_mindex,nbr_icut],
                                self.meds_list[band]['dvdrow'][nbr_mindex,nbr_icut],
                                self.meds_list[band]['dvdcol'][nbr_mindex,nbr_icut])
-            # FIXME - this is wrong...I think - commented out for now
+            # FIXME - the code below is wrong...I think - commented out for now
             #pixscale = jacob.get_scale()
             #row += pars_obj[0]/pixscale
             #col += pars_obj[1]/pixscale
@@ -319,9 +319,11 @@ class MEDSImageIO(ImageIO):
 
             return nbr_psf_obs,nbr_jac
         else:
-            # FIXME
-            print('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
-            return None,None
+            self._get_offchip_nbr_psf_obs_and_jac(band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list)
+
+    def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
+        assert False,'    FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1)
+        return None,None
 
     def get_num_fofs(self):
         return copy.copy(self.num_fofs - self.fof_start)

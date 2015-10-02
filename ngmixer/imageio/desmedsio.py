@@ -17,6 +17,10 @@ IMAGE_FLAGS_SET=2**0
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
 
+    def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
+        print('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
+        return None,None
+
     def get_file_meta_data(self):
         meds_meta_list = self.meds_meta_list
         dt = meds_meta_list[0].dtype.descr
