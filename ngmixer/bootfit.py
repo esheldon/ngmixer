@@ -194,7 +194,7 @@ class NGMixBootFitter(BaseFitter):
                     cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1], \
                         obs.get_psf_gmix(),obs.get_jacobian(),coadd)
                 else:
-                    print('        bad fit data: %d' % (cen_ind))
+                    print('        bad fit data for central: FoF obj = %d' % (cen_ind+1))
                     cenim = obs.image_orig.copy()
 
                 # now do nbrs
@@ -214,6 +214,8 @@ class NGMixBootFitter(BaseFitter):
 
                         totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1], \
                             nbrs_psf_gmix,nbrs_jac,coadd)
+                    else:
+                        print('        bad fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
 
                 if self['model_nbrs_method'] == 'subtract':
                     obs.image = obs.image_orig - totim + cenim

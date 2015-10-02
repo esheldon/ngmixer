@@ -19,6 +19,14 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
     def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
         print('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
+        # how this goes
+        # 1) use coadd WCS to get offset of nbr from central in u,v
+        # 2) use the Jacobian of the central to turn offset in u,v to row,col
+        # 3) return central PSF and new Jacobian
+        #    return cen_obs.get_psf(),new_jac
+
+        
+
         return None,None
 
     def get_file_meta_data(self):

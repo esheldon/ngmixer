@@ -184,7 +184,7 @@ class MOFNGMixer(NGMixer):
             if foflen > 1:
                 converged = False
                 for itr in xrange(self['mof']['max_itr']):
-                    print('itr %d:' % itr)
+                    print('itr %d:' % (itr+1))
 
                     # switch back to non-uberseg weights
                     if itr >= self['mof']['min_useg_itr']:
