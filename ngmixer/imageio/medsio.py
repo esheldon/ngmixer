@@ -15,9 +15,6 @@ from .imageio import ImageIO
 from ..defaults import DEFVAL,IMAGE_FLAGS
 from .. import nbrsfofs
 
-# internal flagging
-IMAGE_FLAGS_SET=2**0
-
 class MEDSImageIO(ImageIO):
     """
     Class for MEDS image I/O.

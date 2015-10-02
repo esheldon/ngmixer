@@ -11,6 +11,9 @@ from ..util import print_with_verbosity
 
 import meds
 
+# flagging
+IMAGE_FLAGS_SET=2**0
+
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
 
