@@ -16,17 +16,8 @@ IMAGE_FLAGS_SET=2**0
 
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
-
     def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
         print('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
-        # how this goes
-        # 1) use coadd WCS to get offset of nbr from central in u,v
-        # 2) use the Jacobian of the central to turn offset in u,v to row,col
-        # 3) return central PSF and new Jacobian
-        #    return cen_obs.get_psf(),new_jac
-
-        
-
         return None,None
 
     def get_file_meta_data(self):
@@ -270,14 +261,12 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         self.nobj_tot = self.meds_list[0].size
 
-
-
 # SV multifit with one-off WCS
 class MOFSVDESMEDSImageIO(SVDESMEDSImageIO):
-    def __init__(self,conf,meds_files):
-        super(MOFSVDESMEDSImageIO,self).__init__(conf,meds_files)
+    def __init__(self,*args,**kwargs):
+        super(MOFSVDESMEDSImageIO,self).__init__(*args,**kwargs)
 
-        read_wcs = self.config.get('read_wcs',False)
+        read_wcs = self.conf.get('read_wcs',False)
         if read_wcs:
             self.wcs_transforms = self._get_wcs_transforms()
 
@@ -306,5 +295,94 @@ class MOFSVDESMEDSImageIO(SVDESMEDSImageIO):
 
         return wcs_transforms
 
-# alias for now
-Y1DESMEDSImageIO = SVDESMEDSImageIO
+class Y1DESMEDSImageIO(SVDESMEDSImageIO):
+    def __init__(self,*args,**kwargs):
+        super(Y1DESMEDSImageIO,self).__init__(*args,**kwargs)
+        read_wcs = self.conf.get('read_wcs',False)
+        if read_wcs:
+            self._load_wcs_data()
+
+    def _load_wcs_data(self):
+        """
+        Load the WCS transforms for each meds file
+        """
+        from esutil.wcsutil import WCS
+
+        print('loading WCS')
+        wcs_transforms = {}
+        for band in self.iband:
+            wcs_transforms[band] = {}
+
+            info = self.meds_list[band].get_image_info()
+            nimage = info.size
+            meta = self.meds_meta_list[band]
+
+            # get coadd file ID
+            coadd_file_id = self.meds_list[band]['file_id'][0,0]
+
+            # in image header for coadd
+            coadd_path = info['image_path'][coadd_file_id].strip()
+            coadd_path = coadd_path.replace(meta['DESDATA'][0],'${DESDATA}')
+
+            if os.path.exists(os.path.expandvars(coadd_path)):
+                h = fitsio.read_header(os.path.expandvars(coadd_path),ext=1)
+                wcs_transforms[band][coadd_file_id] = WCS(h)
+            else:
+                wcs_transforms[band][coadd_file_id] = None
+                print("warning: missing coadd WCS from image: %s" % coadd_path)
+
+            # in scamp head files for SE
+            scamp_dir = os.path.join('/'.join(coadd_path.split('/')[:-2]),'QA/coadd_astrorefine_head')
+            for i in xrange(nimage):
+                if i != coadd_file_id:
+                    scamp_name = os.path.basename(info['image_path'][i].strip()).replace('.fits.fz','.head')
+                    scamp_file = os.path.join(scamp_dir,scamp_name)
+
+                    if os.path.exists(os.path.expandvars(scamp_file)):
+                        h = fitsio.read_scamp_head(os.path.expandvars(scamp_file))
+                        wcs_transforms[band][i] = WCS(h)
+                    else:
+                        wcs_transforms[band][i] = None
+                        print("warning: missing scamp head: %s" % scamp_file)
+
+        self.wcs_transforms = wcs_transforms
+
+    def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
+        """
+        how this goes
+        1) use coadd WCS to get offset of nbr from central in u,v
+        2) use the Jacobian of the central to turn offset in u,v to row,col
+        3) return central PSF and new Jacobian
+            return cen_obs.get_psf(),new_jac
+        """
+
+        # 1) use coadd WCS to get offset in u,v
+        # 1a) first get coadd WCS
+        assert self.meds_list[band]['file_id'][cen_mindex,0] == \
+          self.meds_list[band]['file_id'][nbr_mindex,0], \
+          "central and nbr have different coadd file IDs when getting off-chip WCS! cen file_id = %d, nbr file_id = %d"\
+          % (self.meds_list[band]['file_id'][cen_mindex,0],self.meds_list[band]['file_id'][nbr_mindex,0])
+        coadd_wcs = self.wcs_transforms[band][self.meds_list[band]['file_id'][cen_mindex,0]]
+
+        # 1b) now get positions
+        row_cen = self.meds_list[band]['orig_row'][cen_mindex,0]
+        col_cen = self.meds_list[band]['orig_col'][cen_mindex,0]
+        ra_cen,dec_cen = wcs.image2sky(col_cen,row_cen) # reversed for esutil WCS objects!
+
+        row_nbr = self.meds_list[band]['orig_row'][nbr_mindex,0]
+        col_nbr = self.meds_list[band]['orig_col'][nbr_mindex,0]
+        ra_nbr,dec_nbr = wcs.image2sky(col_nbr,row_nbr) # reversed for esutil WCS objects!
+
+        # 1c) now get u,v offset
+        # FIXME
+
+        # 2) use the Jacobian of the central to turn offset in u,v to row,col
+        J = cen_obs.get_jacobian()
+        # FIXME Jinv =
+
+        # 2a) now get new Jacobian
+        # FIXME
+
+        # 3) return it!
+        print('    did off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
+        return None,None

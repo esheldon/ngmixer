@@ -54,7 +54,7 @@ class MOFNGMixer(NGMixer):
         maxerr[:] = -numpy.inf
 
         for fofind in xrange(foflen):
-            print_with_verbosity('    fof obj: %ld' % fofind,verbosity=1)
+            print_with_verbosity('    fof obj: %ld' % (fofind+1),verbosity=1)
 
             for model,pars_model,model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
                 if pars_model not in self.curr_data.dtype.names:
@@ -93,7 +93,7 @@ class MOFNGMixer(NGMixer):
                 print_pars(new,        front='            new      ',verbosity=1)
                 print_pars(absdiff,    front='            abs diff ',verbosity=1)
                 print_pars(absfracdiff,front='            frac diff',verbosity=1)
-                print_pars(abserr,front='            err diff ',verbosity=1)
+                print_pars(abserr,     front='            err diff ',verbosity=1)
 
 
         fmt = "%8.3g "*len(maxabs)
