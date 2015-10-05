@@ -302,6 +302,10 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         if read_wcs:
             self._load_wcs_data()
 
+    def _set_defaults(self):
+        super(Y1DESMEDSImageIO,self)._set_defaults()
+        self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
+
     def _load_wcs_data(self):
         """
         Load the WCS transforms for each meds file
@@ -332,28 +336,44 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                 print("warning: missing coadd WCS from image: %s" % coadd_path)
 
             # in scamp head files for SE
-            scamp_dir = os.path.join('/'.join(coadd_path.split('/')[:-2]),'QA/coadd_astrorefine_head')
-            for i in xrange(nimage):
-                if i != coadd_file_id:
-                    scamp_name = os.path.basename(info['image_path'][i].strip()).replace('.fits.fz','.head')
-                    scamp_file = os.path.join(scamp_dir,scamp_name)
-
-                    if os.path.exists(os.path.expandvars(scamp_file)):
-                        h = fitsio.read_scamp_head(os.path.expandvars(scamp_file))
-                        wcs_transforms[band][i] = WCS(h)
-                    else:
-                        wcs_transforms[band][i] = None
-                        print("warning: missing scamp head: %s" % scamp_file)
+            if self.conf['read_me_wcs']:
+                scamp_dir = os.path.join('/'.join(coadd_path.split('/')[:-2]),'QA/coadd_astrorefine_head')
+                for i in xrange(nimage):
+                    if i != coadd_file_id:
+                        scamp_name = os.path.basename(info['image_path'][i].strip()).replace('.fits.fz','.head')
+                        scamp_file = os.path.join(scamp_dir,scamp_name)
+                        
+                        if os.path.exists(os.path.expandvars(scamp_file)):
+                            h = fitsio.read_scamp_head(os.path.expandvars(scamp_file))
+                            wcs_transforms[band][i] = WCS(h)
+                        else:
+                            wcs_transforms[band][i] = None
+                            print("warning: missing scamp head: %s" % scamp_file)
 
         self.wcs_transforms = wcs_transforms
 
     def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
         """
-        how this goes
-        1) use coadd WCS to get offset of nbr from central in u,v
-        2) use the Jacobian of the central to turn offset in u,v to row,col
-        3) return central PSF and nbr's Jacobian
-            return cen_obs.get_psf(),J_nbr
+        how this works...
+        
+        Simple Version (below):        
+
+            1) use coadd WCS to get offset of nbr from central in u,v
+            2) use the Jacobian of the central to turn offset in u,v to row,col
+            3) return central PSF and nbr's Jacobian
+                return cen_obs.get_psf(),J_nbr
+                
+        Complicated Version (to do!):
+
+            1) find a fiducial point on the chip where the galaxy's flux falls (either via its pixels in the 
+               coadd seg map or some other means)
+            2) compute Jacobian and PSF model about this point from the SE WCS and PSF models
+            3) use the offset in u,v from the fiducial point to the location of the nbr plus the offset in 
+               pixels of the fiducial point from the central to center the Jacobian properly on the chip
+            4) return the new PSF observation and new Jacobian 
+
+        NOTE: We don't fit the PSF observation here. The job of this class is to just to prep observations 
+        for fitting!
         """
 
         # 1) use coadd WCS to get offset in u,v
