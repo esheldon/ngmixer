@@ -352,8 +352,8 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         how this goes
         1) use coadd WCS to get offset of nbr from central in u,v
         2) use the Jacobian of the central to turn offset in u,v to row,col
-        3) return central PSF and new Jacobian
-            return cen_obs.get_psf(),new_jac
+        3) return central PSF and nbr's Jacobian
+            return cen_obs.get_psf(),J_nbr
         """
 
         # 1) use coadd WCS to get offset in u,v
@@ -374,15 +374,60 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         ra_nbr,dec_nbr = wcs.image2sky(col_nbr,row_nbr) # reversed for esutil WCS objects!
 
         # 1c) now get u,v offset
-        # FIXME
+        # FIXME - discuss projection with Mike and Erin
+        # right now using vector to point where rhat of nbr hits the tangent plane of the central
+        # differs in length from unity by 1/cos(angle between central and nbr)
+        # this is also a *tiny* effect!
+        rhat_cen,uhat_cen,vhat_cen = radec_to_unitvecs_ruv(ra_cen,dec_cen)
+        rhat_nbr,uhat_nbr,vhat_nbr = radec_to_unitvecs_ruv(ra_nbr,dec_nbr)
+        cosang = numpy.dot(rhat_cen,rhat_nbr)
+        u_nbr = numpy.dot(rhat_nbr,uhat_cen)/cosang/np.pi*180.0*60.0*60.0 # arcsec
+        v_nbr = numpy.dot(rhat_nbr,vhat_cen)/cosang/np.pi*180.0*60.0*60.0 # arcsec
+        uv_nbr = numpy.array([u_nbr,v_nbr])
 
         # 2) use the Jacobian of the central to turn offset in u,v to row,col
+        # Jacobian is used like this
+        # (u,v) = J x (row-row0,col-col0)
+        # so (row,col) of nbr is
+        #   (row,col)_nbr = J^(-1) x (u,v) + (row0,col0)
         J = cen_obs.get_jacobian()
-        # FIXME Jinv =
+        # FIXME Jinv = np.linalg.inv([[dudrow,dudcol],[dvdrow,dvdcol]])
+        # FIXME rowcol_nbr = np.dot(Jinv,uv_nbr) + numpy.array([row0,col0])
 
         # 2a) now get new Jacobian
-        # FIXME
+        # FIXME J_nbr = J.copy() # or whatever
+        # FIXME J_nbr.set_cen(rowcol_nbr[0],rowcol_nbr[1])
 
         # 3) return it!
         print('    did off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
+        # FIXME return cen_obs.get_psf(),J_nbr
         return None,None
+
+# coordinates
+# ra = -u
+# ra = -phi
+# v = dec
+# theta = 90 - dec
+
+# unit vector directions
+# u = -ra on sphere = +phi on sphere
+# v = dec on sphere = -theta on sphere
+
+def radec_to_unitvecs_ruv(ra,dec):
+    theta,phi = radec_to_thetaphi(ra,dec)
+    return thetaphi_to_unitvecs_ruv(theta,phi)
+
+def radec_to_thetaphi(ra,dec):
+    return (90.0-dec)/180.0*numpy.pi,-1.0*ra/180.0*numpy.pi
+
+def thetaphi_to_unitvecs_ruv(theta,phi):
+    sint = numpy.sin(theta)
+    cost = numpy.cos(theta)
+    sinp = numpy.sin(phi)
+    cosp = numpy.cos(phi)
+
+    rhat = numpy.array([sint*cosp,sint*sinp,cost])
+    that = numpy.array([cost*cosp,cost*sinp,-1.0*sint])
+    phat = numpy.array([-1.0*sinp,cosp,0.0])
+
+    return rhat,phat,-1.0*that
