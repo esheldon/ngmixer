@@ -342,7 +342,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                     if i != coadd_file_id:
                         scamp_name = os.path.basename(info['image_path'][i].strip()).replace('.fits.fz','.head')
                         scamp_file = os.path.join(scamp_dir,scamp_name)
-                        
+
                         if os.path.exists(os.path.expandvars(scamp_file)):
                             h = fitsio.read_scamp_head(os.path.expandvars(scamp_file))
                             wcs_transforms[band][i] = WCS(h)
@@ -355,24 +355,24 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
     def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
         """
         how this works...
-        
-        Simple Version (below):        
+
+        Simple Version (below):
 
             1) use coadd WCS to get offset of nbr from central in u,v
             2) use the Jacobian of the central to turn offset in u,v to row,col
             3) return central PSF and nbr's Jacobian
                 return cen_obs.get_psf(),J_nbr
-                
+
         Complicated Version (to do!):
 
-            1) find a fiducial point on the chip where the galaxy's flux falls (either via its pixels in the 
+            1) find a fiducial point on the chip where the galaxy's flux falls (either via its pixels in the
                coadd seg map or some other means)
             2) compute Jacobian and PSF model about this point from the SE WCS and PSF models
-            3) use the offset in u,v from the fiducial point to the location of the nbr plus the offset in 
+            3) use the offset in u,v from the fiducial point to the location of the nbr plus the offset in
                pixels of the fiducial point from the central to center the Jacobian properly on the chip
-            4) return the new PSF observation and new Jacobian 
+            4) return the new PSF observation and new Jacobian
 
-        NOTE: We don't fit the PSF observation here. The job of this class is to just to prep observations 
+        NOTE: We don't fit the PSF observation here. The job of this class is to just to prep observations
         for fitting!
         """
 
@@ -387,11 +387,11 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         # 1b) now get positions
         row_cen = self.meds_list[band]['orig_row'][cen_mindex,0]
         col_cen = self.meds_list[band]['orig_col'][cen_mindex,0]
-        ra_cen,dec_cen = wcs.image2sky(col_cen,row_cen) # reversed for esutil WCS objects!
+        ra_cen,dec_cen = coadd_wcs.image2sky(col_cen,row_cen) # reversed for esutil WCS objects!
 
         row_nbr = self.meds_list[band]['orig_row'][nbr_mindex,0]
         col_nbr = self.meds_list[band]['orig_col'][nbr_mindex,0]
-        ra_nbr,dec_nbr = wcs.image2sky(col_nbr,row_nbr) # reversed for esutil WCS objects!
+        ra_nbr,dec_nbr = coadd_wcs.image2sky(col_nbr,row_nbr) # reversed for esutil WCS objects!
 
         # 1c) now get u,v offset
         # FIXME - discuss projection with Mike and Erin
@@ -401,8 +401,8 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         rhat_cen,uhat_cen,vhat_cen = radec_to_unitvecs_ruv(ra_cen,dec_cen)
         rhat_nbr,uhat_nbr,vhat_nbr = radec_to_unitvecs_ruv(ra_nbr,dec_nbr)
         cosang = numpy.dot(rhat_cen,rhat_nbr)
-        u_nbr = numpy.dot(rhat_nbr,uhat_cen)/cosang/np.pi*180.0*60.0*60.0 # arcsec
-        v_nbr = numpy.dot(rhat_nbr,vhat_cen)/cosang/np.pi*180.0*60.0*60.0 # arcsec
+        u_nbr = numpy.dot(rhat_nbr,uhat_cen)/cosang/numpy.pi*180.0*60.0*60.0 # arcsec
+        v_nbr = numpy.dot(rhat_nbr,vhat_cen)/cosang/numpy.pi*180.0*60.0*60.0 # arcsec
         uv_nbr = numpy.array([u_nbr,v_nbr])
 
         # 2) use the Jacobian of the central to turn offset in u,v to row,col

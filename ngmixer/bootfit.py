@@ -106,6 +106,7 @@ class NGMixBootFitter(BaseFitter):
             if self['model_nbrs'] and nbrs_fit_data is not None:
                 self._render_nbrs(model,new_mb_obs_list,coadd,nbrs_fit_data)
 
+            """
             if nbrs_fit_data is not None:
                 if coadd:
                     n = Namer('coadd_%s' % model)
@@ -116,6 +117,8 @@ class NGMixBootFitter(BaseFitter):
                 guess = None
 
             model_flags, boot = self._run_boot(model,new_mb_obs_list,coadd,guess=guess)
+            """
+            model_flags, boot = self._guess_and_run_boot(model,new_mb_obs_list,coadd,nbrs_fit_data=nbrs_fit_data)
             fit_flags |= model_flags
 
             # fill the epoch data
@@ -133,6 +136,18 @@ class NGMixBootFitter(BaseFitter):
         self._fill_nimage_used(mb_obs_list,boot.mb_obs_list,coadd)
 
         return fit_flags
+
+    def _guess_and_run_boot(self,model,new_mb_obs_list,coadd,nbrs_fit_data=None):
+        if nbrs_fit_data is not None:
+            if coadd:
+                n = Namer('coadd_%s' % model)
+            else:
+                n = Namer(model)
+            guess = nbrs_fit_data[n('max_pars')][new_mb_obs_list.meta['cen_ind']]
+        else:
+            guess = None
+
+        return self._run_boot(model,new_mb_obs_list,coadd,guess=guess)
 
     def _render_single(self,model,band,obs,pars_tag,fit_data,psf_gmix,jac,coadd):
         """
@@ -193,6 +208,7 @@ class NGMixBootFitter(BaseFitter):
                     assert obs.has_psf_gmix()
                     cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1], \
                         obs.get_psf_gmix(),obs.get_jacobian(),coadd)
+                    print('        rendered central object')
                 else:
                     print('        bad fit data for central: FoF obj = %d' % (cen_ind+1))
                     cenim = obs.image_orig.copy()
@@ -214,6 +230,7 @@ class NGMixBootFitter(BaseFitter):
 
                         totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1], \
                             nbrs_psf_gmix,nbrs_jac,coadd)
+                        print('        rendered nbr: %d' % (nbrs_ind+1))
                     else:
                         print('        bad fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
 
@@ -412,7 +429,7 @@ class NGMixBootFitter(BaseFitter):
 
         return boot
 
-    def _run_boot(self, model, mb_obs_list, coadd, guess=None):
+    def _run_boot(self, model, mb_obs_list, coadd, guess=None, **kwargs):
         """
         run a boot strapper
         """
@@ -439,7 +456,7 @@ class NGMixBootFitter(BaseFitter):
 
             if flags == 0:
                 try:
-                    self._fit_galaxy(model,coadd,guess=guess)
+                    self._fit_galaxy(model,coadd,guess=guess,**kwargs)
                     self._copy_galaxy_result(model,coadd)
                     self._print_galaxy_result()
                 except (BootGalFailure,GMixRangeError) as err:
@@ -546,7 +563,7 @@ class NGMixBootFitter(BaseFitter):
         print("        making plot %s" % fname)
         plt.write_img(1920,1200,fname)
 
-    def _fit_galaxy(self, model, coadd, guess=None):
+    def _fit_galaxy(self, model, coadd, guess=None, **kwargs):
         """
         over-ride for different fitters
         """
@@ -931,7 +948,23 @@ class NGMixBootFitter(BaseFitter):
         return d
 
 class MaxNGMixBootFitter(NGMixBootFitter):
-    def _fit_max(self, model, guess=None):
+    def _guess_and_run_boot(self,model,new_mb_obs_list,coadd,nbrs_fit_data=None):
+        if nbrs_fit_data is not None:
+            if coadd:
+                n = Namer('coadd_%s' % model)
+            else:
+                n = Namer(model)
+            guess = nbrs_fit_data[n('max_pars')][new_mb_obs_list.meta['cen_ind']]
+        else:
+            guess = None
+
+        if model == 'cm' and nbrs_fit_data is not None:
+            guess_TdbyTe = nbrs_fit_data[n('TdByTe')][new_mb_obs_list.meta['cen_ind']]
+            return self._run_boot(model,new_mb_obs_list,coadd,guess=guess,guess_TdbyTe=guess_TdbyTe)
+        else:
+            return self._run_boot(model,new_mb_obs_list,coadd,guess=guess)
+
+    def _fit_max(self, model, guess=None,**kwargs):
         """
         do a maximum likelihood fit
 
@@ -943,19 +976,28 @@ class MaxNGMixBootFitter(NGMixBootFitter):
         prior=self['model_pars'][model]['prior']
 
         # now with prior
-        boot.fit_max(model,
-                     max_pars,
-                     prior=prior,
-                     ntry=max_pars['ntry'],
-                     guess=guess)
+        if model == 'cm' and 'guess_TdbyTe' in kwargs:
+            boot.fit_max(model,
+                         max_pars,
+                         prior=prior,
+                         ntry=max_pars['ntry'],
+                         guess=guess,
+                         guess_TdbyTe=kwargs['guess_TdbyTe'])
+        else:
+            boot.fit_max(model,
+                         max_pars,
+                         prior=prior,
+                         ntry=max_pars['ntry'],
+                         guess=guess)
+
 
         if self['replace_cov']:
             print("        replacing cov")
             cov_pars=self['cov_pars']
             boot.try_replace_cov(cov_pars)
 
-    def _fit_galaxy(self, model, coadd, guess=None):
-        self._fit_max(model,guess=guess)
+    def _fit_galaxy(self, model, coadd, guess=None, **kwargs):
+        self._fit_max(model,guess=guess,**kwargs)
 
         rpars=self['round_pars']
         self.boot.set_round_s2n(fitter_type=rpars['fitter_type'])
@@ -967,7 +1009,7 @@ class MaxNGMixBootFitter(NGMixBootFitter):
             self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
 
 class ISampNGMixBootFitter(MaxNGMixBootFitter):
-    def _fit_galaxy(self, model, coadd, guess=None):
+    def _fit_galaxy(self, model, coadd, guess=None, **kwargs):
         self._fit_max(model,guess=guess)
         self._do_isample(model)
         self._add_shear_info(model)
@@ -1070,8 +1112,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         if self['nrand'] is None:
             self['nrand']=1
 
-    def _fit_galaxy(self, model, coadd, guess=None):
-        super(MetacalNGMixBootFitter,self)._fit_galaxy(model,coadd,guess=guess)
+    def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
+        super(MetacalNGMixBootFitter,self)._fit_galaxy(model,coadd,guess=guess,**kwargs)
         self._do_metacal(model)
 
         metacal_res = self.boot.get_metacal_max_result()
