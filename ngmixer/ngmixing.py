@@ -42,6 +42,8 @@ class NGMixer(dict):
         self['fit_me_galaxy'] = self.get('fit_me_galaxy',True)
         self['max_box_size']=self.get('max_box_size',2048)
 
+        self._set_defaults()
+
         if verbosity > 0:
             # over-ride anything in the config
             self['verbose'] = True
@@ -88,6 +90,9 @@ class NGMixer(dict):
                 self.go_profile()
             else:
                 self.go()
+
+    def _set_defaults(self):
+        pass
 
     def go(self):
         self.do_fits()

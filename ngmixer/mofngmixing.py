@@ -18,6 +18,10 @@ from .util import UtterFailure,Namer,print_pars
 from .util import print_with_verbosity
 
 class MOFNGMixer(NGMixer):
+    def _set_defaults(self):
+        super(MOFNGMixer,self)._set_defaults()
+        self['mof']['write_convergence_data'] = self['mof'].get('write_convergence_data',False)
+
     def _get_models_to_check(self):
         me_models_to_check,me_pars_models_to_check,me_cov_models_to_check, \
             coadd_models_to_check,coadd_pars_models_to_check,coadd_cov_models_to_check, \
@@ -74,7 +78,9 @@ class MOFNGMixer(NGMixer):
                 self.curr_data[n('mof_abs_diff')][fofind] = absdiff
                 self.curr_data[n('mof_frac_diff')][fofind] = absfracdiff
                 self.curr_data[n('mof_err_diff')][fofind] = abserr
-                if numpy.all((absdiff <= self['mof']['maxabs_conv']) | (absfracdiff <= self['mof']['maxfrac_conv']) | (abserr <= self['mof']['maxerr_conv'])):
+                if numpy.all((absdiff <= self['mof']['maxabs_conv'])      | \
+                             (absfracdiff <= self['mof']['maxfrac_conv']) | \
+                             (abserr <= self['mof']['maxerr_conv'])):
                     self.curr_data[n('mof_flags')][fofind] = 0
                     self.curr_data[n('mof_num_itr')][fofind] = itr+1
                 else:
@@ -105,7 +111,9 @@ class MOFNGMixer(NGMixer):
         self.maxfrac = maxfrac
         self.maxerr = maxerr
 
-        if numpy.all((maxabs <= self['mof']['maxabs_conv']) | (maxfrac <= self['mof']['maxfrac_conv']) | (maxerr <= self['mof']['maxerr_conv'])):
+        if numpy.all((maxabs <= self['mof']['maxabs_conv'])   | \
+                     (maxfrac <= self['mof']['maxfrac_conv']) | \
+                     (maxerr <= self['mof']['maxerr_conv'])):
             return True
         else:
             return False
@@ -181,10 +189,17 @@ class MOFNGMixer(NGMixer):
 
             #####################################################################
             # now fit again with nbrs if needed
-            if foflen > 1:
+            if foflen > 0: #FIXME - set to 1
+
+                if self['mof']['write_convergence_data']:
+                    self._write_convergence_data(mb_obs_lists,self.curr_data, \
+                                                 self['mof']['convergence_model'],init=True)
+
                 converged = False
                 for itr in xrange(self['mof']['max_itr']):
-                    print('itr %d:' % (itr+1))
+                    print('itr %d - fof index %d:%d ' % (itr+1,\
+                                                         self.curr_fofindex+1-self.start_fofindex,\
+                                                         numtot))
 
                     # switch back to non-uberseg weights
                     if itr >= self['mof']['min_useg_itr']:
@@ -216,11 +231,14 @@ class MOFNGMixer(NGMixer):
                         ti = time.time()-ti
                         print('    time: %f' % ti)
 
-                    if itr >= self['mof']['min_itr']:
-                        print('  convergence itr %d:' % (itr+1))
-                        if self._check_convergence(foflen,itr):
-                            converged = True
-                            break
+                    if self['mof']['write_convergence_data']:
+                        self._write_convergence_data(mb_obs_lists,self.curr_data, \
+                                                     self['mof']['convergence_model'],init=False)
+
+                    print('  convergence itr %d:' % (itr+1))
+                    if self._check_convergence(foflen,itr) and itr >= self['mof']['min_itr']:
+                        converged = True
+                        break
 
                 print('  convergence fof index: %d' % (self.curr_fofindex+1-self.start_fofindex))
                 print('    converged: %s' % str(converged))
@@ -248,6 +266,34 @@ class MOFNGMixer(NGMixer):
         print("time per fof: %f" % (tm/numfof))
 
         self.done = True
+
+    def _write_convergence_data(self,mb_obs_lists,curr_data,model,init=False):
+        for i in xrange(len(mb_obs_lists)):
+            iter_fname = 'iter_pars_%d.dat' % (mb_obs_lists[i].meta['id'])
+            if init:
+                os.system('rm -f %s' % iter_fname)
+                os.system('touch %s' % iter_fname)
+            with open(iter_fname,'a+') as fp:
+                if init:
+                    fp.write('#row col g1 g2 T')
+                    for j in xrange(self['nband']):
+                        fp.write(' b%d' % j)
+                    fp.write(' row_err col_err g1_err g2_err T_err')
+                    for j in xrange(self['nband']):
+                        fp.write(' b%d_err' % j)
+                    fp.write('\n')
+
+                if self['fit_coadd_galaxy']:
+                    n = Namer('coadd_%s' % model)
+                else:
+                    n = Namer(model)
+                npars = len(curr_data[n('max_pars')][i])
+
+                for j in xrange(npars):
+                    fp.write('%0.20g ' % curr_data[n('max_pars')][i,j])
+                for j in xrange(npars):
+                    fp.write('%0.20g ' % numpy.sqrt(curr_data[n('max_pars_cov')][i,j,j]))
+                fp.write('\n')
 
     def _get_dtype(self):
         dt = super(MOFNGMixer,self)._get_dtype()
