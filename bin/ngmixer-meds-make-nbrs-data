@@ -89,7 +89,7 @@ def main():
 
     conf = read_yaml(args[0])
     
-    meds_version = args[1].split('-')[-1].replace('.fits.fz','').replace('.fits','')
+    meds_version = args[1].split('-meds-')[-1].replace('.fits.fz','').replace('.fits','')
     nbrs_version = conf['nbrs_version']
 
     obase = os.path.join("${DESDATA}/EXTRA/meds",meds_version,'nbrs-data',nbrs_version)

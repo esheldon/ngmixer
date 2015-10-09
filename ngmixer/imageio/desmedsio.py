@@ -16,6 +16,9 @@ IMAGE_FLAGS_SET=2**0
 
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
+    def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
+        assert False,'        FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1)
+        return None,None
 
     def get_file_meta_data(self):
         meds_meta_list = self.meds_meta_list
@@ -258,14 +261,12 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         self.nobj_tot = self.meds_list[0].size
 
-
-
 # SV multifit with one-off WCS
 class MOFSVDESMEDSImageIO(SVDESMEDSImageIO):
-    def __init__(self,conf,meds_files):
-        super(MOFSVDESMEDSImageIO,self).__init__(conf,meds_files)
+    def __init__(self,*args,**kwargs):
+        super(MOFSVDESMEDSImageIO,self).__init__(*args,**kwargs)
 
-        read_wcs = self.config.get('read_wcs',False)
+        read_wcs = self.conf.get('read_wcs',False)
         if read_wcs:
             self.wcs_transforms = self._get_wcs_transforms()
 
@@ -294,5 +295,163 @@ class MOFSVDESMEDSImageIO(SVDESMEDSImageIO):
 
         return wcs_transforms
 
-# alias for now
-Y1DESMEDSImageIO = SVDESMEDSImageIO
+class Y1DESMEDSImageIO(SVDESMEDSImageIO):
+    def __init__(self,*args,**kwargs):
+        super(Y1DESMEDSImageIO,self).__init__(*args,**kwargs)
+        read_wcs = self.conf.get('read_wcs',False)
+        if read_wcs:
+            self._load_wcs_data()
+
+    def _set_defaults(self):
+        super(Y1DESMEDSImageIO,self)._set_defaults()
+        self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
+
+    def _load_wcs_data(self):
+        """
+        Load the WCS transforms for each meds file
+        """
+        from esutil.wcsutil import WCS
+
+        print('loading WCS')
+        wcs_transforms = {}
+        for band in self.iband:
+            wcs_transforms[band] = {}
+
+            info = self.meds_list[band].get_image_info()
+            nimage = info.size
+            meta = self.meds_meta_list[band]
+
+            # get coadd file ID
+            coadd_file_id = self.meds_list[band]['file_id'][0,0]
+
+            # in image header for coadd
+            coadd_path = info['image_path'][coadd_file_id].strip()
+            coadd_path = coadd_path.replace(meta['DESDATA'][0],'${DESDATA}')
+
+            if os.path.exists(os.path.expandvars(coadd_path)):
+                h = fitsio.read_header(os.path.expandvars(coadd_path),ext=1)
+                wcs_transforms[band][coadd_file_id] = WCS(h)
+            else:
+                wcs_transforms[band][coadd_file_id] = None
+                print("warning: missing coadd WCS from image: %s" % coadd_path)
+
+            # in scamp head files for SE
+            if self.conf['read_me_wcs']:
+                scamp_dir = os.path.join('/'.join(coadd_path.split('/')[:-2]),'QA/coadd_astrorefine_head')
+                for i in xrange(nimage):
+                    if i != coadd_file_id:
+                        scamp_name = os.path.basename(info['image_path'][i].strip()).replace('.fits.fz','.head')
+                        scamp_file = os.path.join(scamp_dir,scamp_name)
+
+                        if os.path.exists(os.path.expandvars(scamp_file)):
+                            h = fitsio.read_scamp_head(os.path.expandvars(scamp_file))
+                            wcs_transforms[band][i] = WCS(h)
+                        else:
+                            wcs_transforms[band][i] = None
+                            print("warning: missing scamp head: %s" % scamp_file)
+
+        self.wcs_transforms = wcs_transforms
+
+    def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
+        """
+        how this works...
+
+        Simple Version (below):
+
+            1) use coadd WCS to get offset of nbr from central in u,v
+            2) use the Jacobian of the central to turn offset in u,v to row,col
+            3) return central PSF and nbr's Jacobian
+                return cen_obs.get_psf(),J_nbr
+
+        Complicated Version (to do!):
+
+            1) find a fiducial point on the chip where the galaxy's flux falls (either via its pixels in the
+               coadd seg map or some other means)
+            2) compute Jacobian and PSF model about this point from the SE WCS and PSF models
+            3) use the offset in u,v from the fiducial point to the location of the nbr plus the offset in
+               pixels of the fiducial point from the central to center the Jacobian properly on the chip
+            4) return the new PSF observation and new Jacobian
+
+        NOTE: We don't fit the PSF observation here. The job of this class is to just to prep observations
+        for fitting!
+        """
+
+        # 1) use coadd WCS to get offset in u,v
+        # 1a) first get coadd WCS
+        assert self.meds_list[band]['file_id'][cen_mindex,0] == \
+          self.meds_list[band]['file_id'][nbr_mindex,0], \
+          "central and nbr have different coadd file IDs when getting off-chip WCS! cen file_id = %d, nbr file_id = %d"\
+          % (self.meds_list[band]['file_id'][cen_mindex,0],self.meds_list[band]['file_id'][nbr_mindex,0])
+        coadd_wcs = self.wcs_transforms[band][self.meds_list[band]['file_id'][cen_mindex,0]]
+
+        # 1b) now get positions
+        row_cen = self.meds_list[band]['orig_row'][cen_mindex,0]
+        col_cen = self.meds_list[band]['orig_col'][cen_mindex,0]
+        ra_cen,dec_cen = coadd_wcs.image2sky(col_cen,row_cen) # reversed for esutil WCS objects!
+
+        row_nbr = self.meds_list[band]['orig_row'][nbr_mindex,0]
+        col_nbr = self.meds_list[band]['orig_col'][nbr_mindex,0]
+        ra_nbr,dec_nbr = coadd_wcs.image2sky(col_nbr,row_nbr) # reversed for esutil WCS objects!
+
+        # 1c) now get u,v offset
+        # FIXME - discuss projection with Mike and Erin
+        # right now using vector to point where rhat of nbr hits the tangent plane of the central
+        # differs in length from unity by 1/cos(angle between central and nbr)
+        # this is also a *tiny* effect!
+        rhat_cen,uhat_cen,vhat_cen = radec_to_unitvecs_ruv(ra_cen,dec_cen)
+        rhat_nbr,uhat_nbr,vhat_nbr = radec_to_unitvecs_ruv(ra_nbr,dec_nbr)
+        cosang = numpy.dot(rhat_cen,rhat_nbr)
+        u_nbr = numpy.dot(rhat_nbr,uhat_cen)/cosang/numpy.pi*180.0*60.0*60.0 # arcsec
+        v_nbr = numpy.dot(rhat_nbr,vhat_cen)/cosang/numpy.pi*180.0*60.0*60.0 # arcsec
+        uv_nbr = numpy.array([u_nbr,v_nbr])
+
+        # 2) use the Jacobian of the central to turn offset in u,v to row,col
+        # Jacobian is used like this
+        # (u,v) = J x (row-row0,col-col0)
+        # so (row,col) of nbr is
+        #   (row,col)_nbr = J^(-1) x (u,v) + (row0,col0)
+        J = cen_obs.get_jacobian()
+        Jinv = numpy.linalg.inv([[J.dudrow,J.dudcol],[J.dvdrow,J.dvdcol]])
+        row0,col0 = J.get_cen()
+        rowcol_nbr = numpy.dot(Jinv,uv_nbr) + numpy.array([row0[0],col0[0]])
+
+        # 2a) now get new Jacobian
+        J_nbr = J.copy() # or whatever
+        J_nbr.set_cen(rowcol_nbr[0],rowcol_nbr[1])
+
+        # 3) return it!
+        print('        did off-chip nbr %d for cen %d:' % (nbr_ind+1,cen_ind+1))
+        print('            band,cen_icut:     ',band,cen_obs.meta['icut'])
+        print('            u,v nbr:           ',uv_nbr)
+        print('            r,c nbr:           ',rowcol_nbr)
+        print('            box_size - r,c nbr:',self.meds_list[band]['box_size'][nbr_mindex]- rowcol_nbr)
+        return cen_obs.get_psf(),J_nbr
+
+# coordinates
+# ra = -u
+# ra = -phi
+# v = dec
+# theta = 90 - dec
+
+# unit vector directions
+# u = -ra on sphere = +phi on sphere
+# v = dec on sphere = -theta on sphere
+
+def radec_to_unitvecs_ruv(ra,dec):
+    theta,phi = radec_to_thetaphi(ra,dec)
+    return thetaphi_to_unitvecs_ruv(theta,phi)
+
+def radec_to_thetaphi(ra,dec):
+    return (90.0-dec)/180.0*numpy.pi,-1.0*ra/180.0*numpy.pi
+
+def thetaphi_to_unitvecs_ruv(theta,phi):
+    sint = numpy.sin(theta)
+    cost = numpy.cos(theta)
+    sinp = numpy.sin(phi)
+    cosp = numpy.cos(phi)
+
+    rhat = numpy.array([sint*cosp,sint*sinp,cost])
+    that = numpy.array([cost*cosp,cost*sinp,-1.0*sint])
+    phat = numpy.array([-1.0*sinp,cosp,0.0])
+
+    return rhat,phat,-1.0*that
