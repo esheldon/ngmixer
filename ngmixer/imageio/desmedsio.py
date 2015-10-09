@@ -17,7 +17,7 @@ IMAGE_FLAGS_SET=2**0
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
     def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
-        print('    FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
+        assert False,'        FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1)
         return None,None
 
     def get_file_meta_data(self):
@@ -411,17 +411,21 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         # so (row,col) of nbr is
         #   (row,col)_nbr = J^(-1) x (u,v) + (row0,col0)
         J = cen_obs.get_jacobian()
-        # FIXME Jinv = np.linalg.inv([[dudrow,dudcol],[dvdrow,dvdcol]])
-        # FIXME rowcol_nbr = np.dot(Jinv,uv_nbr) + numpy.array([row0,col0])
+        Jinv = numpy.linalg.inv([[J.dudrow,J.dudcol],[J.dvdrow,J.dvdcol]])
+        row0,col0 = J.get_cen()
+        rowcol_nbr = numpy.dot(Jinv,uv_nbr) + numpy.array([row0[0],col0[0]])
 
         # 2a) now get new Jacobian
-        # FIXME J_nbr = J.copy() # or whatever
-        # FIXME J_nbr.set_cen(rowcol_nbr[0],rowcol_nbr[1])
+        J_nbr = J.copy() # or whatever
+        J_nbr.set_cen(rowcol_nbr[0],rowcol_nbr[1])
 
         # 3) return it!
-        print('    did off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1))
-        # FIXME return cen_obs.get_psf(),J_nbr
-        return None,None
+        print('        did off-chip nbr %d for cen %d:' % (nbr_ind+1,cen_ind+1))
+        print('            band,cen_icut:     ',band,cen_obs.meta['icut'])
+        print('            u,v nbr:           ',uv_nbr)
+        print('            r,c nbr:           ',rowcol_nbr)
+        print('            box_size - r,c nbr:',self.meds_list[band]['box_size'][nbr_mindex]- rowcol_nbr)
+        return cen_obs.get_psf(),J_nbr
 
 # coordinates
 # ra = -u
