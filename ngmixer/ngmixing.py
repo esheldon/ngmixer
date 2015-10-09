@@ -209,7 +209,7 @@ class NGMixer(dict):
 
         # add in data
         self.curr_data['flags'][self.curr_data_index] = flags
-        self.curr_data['time'][self.curr_data_index] = time.time()-t0
+        self.curr_data['time_last_fit'][self.curr_data_index] = time.time()-t0
         self.curr_data['obj_flags'][self.curr_data_index] = mb_obs_list.meta['obj_flags']
 
         # fill in from mb_obs_meta
@@ -358,7 +358,7 @@ class NGMixer(dict):
     def _get_dtype(self):
         dt = self.imageio.get_meta_data_dtype()
         dt += [('flags','i4'),
-               ('time','f8'),
+               ('time_last_fit','f8'),
                ('box_size','i2'),
                ('obj_flags','i4')]
         dt += self.fitter.get_fit_data_dtype(self['fit_me_galaxy'],self['fit_coadd_galaxy'])
@@ -371,7 +371,7 @@ class NGMixer(dict):
         dt = self._get_dtype()
         data=numpy.zeros(num, dtype=dt)
         data['flags'] = NO_ATTEMPT
-        data['time'] = DEFVAL
+        data['time_last_fit'] = DEFVAL
         data['box_size'] = DEFVAL
         data['obj_flags'] = NO_ATTEMPT
         return data

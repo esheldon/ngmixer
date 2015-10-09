@@ -955,16 +955,50 @@ class MaxNGMixBootFitter(NGMixBootFitter):
             else:
                 n = Namer(model)
             guess = nbrs_fit_data[n('max_pars')][new_mb_obs_list.meta['cen_ind']]
+
+            # lots of pain to get good guesses...
+            # the ngmix ParsGuesser does this
+            #    for pars 0 through 3 inclusive - uniform between -width to +width
+            #    for pars 4 through the end - guess = pars*(1+width*uniform(low=-1,high=1))
+            # thus for pars 4 through the end, I divide the error by the pars so that guess is
+            #  between 1-frac_err to 1+frac_err where frac_err = err/pars
+            # I also scale the errors by scale
+            scale = 0.5
+
+            # get the errors (cov in this case)
+            guess_errs = numpy.diag(nbrs_fit_data[n('max_pars_cov')][new_mb_obs_list.meta['cen_ind']]).copy()
+
+            #if less than zero, set to zero
+            w, = numpy.where(guess_errs < 0.0)
+            if w.size > 0:
+                guess_errs[w[:]] = 0.0
+
+            # get pars to scale by
+            # don't divide by zero! - if zero set to 0.1 (default val in ngmix)
+            w, = numpy.where(guess == 0.0)
+            guess_scale = guess.copy()
+            if w.size > 0:
+                guess_scale[w] = 0.1
+            w = numpy.arange(4,guess.size,1)
+
+            # final equation - need sqrt then apply scale and then divide by pars
+            guess_errs[w[:]] = numpy.sqrt(guess_errs[w])*scale/numpy.abs(guess_scale[w])
+
+            print_pars(guess,front='    guess pars:  ')
         else:
             guess = None
 
         if model == 'cm' and nbrs_fit_data is not None:
             guess_TdbyTe = nbrs_fit_data[n('TdByTe')][new_mb_obs_list.meta['cen_ind']]
-            return self._run_boot(model,new_mb_obs_list,coadd,guess=guess,guess_TdbyTe=guess_TdbyTe)
+            return self._run_boot(model,new_mb_obs_list,coadd,guess=guess,guess_TdbyTe=guess_TdbyTe, \
+                                  guess_widths=guess_errs)
+        elif nbrs_fit_data is not None:
+            return self._run_boot(model,new_mb_obs_list,coadd,guess=guess, \
+                                  guess_widths=guess_errs)
         else:
             return self._run_boot(model,new_mb_obs_list,coadd,guess=guess)
 
-    def _fit_max(self, model, guess=None,**kwargs):
+    def _fit_max(self, model, guess=None, **kwargs):
         """
         do a maximum likelihood fit
 
@@ -975,6 +1009,8 @@ class MaxNGMixBootFitter(NGMixBootFitter):
         max_pars=self['max_pars']
         prior=self['model_pars'][model]['prior']
 
+        guess_widths = kwargs.get('guess_widths',None)
+
         # now with prior
         if model == 'cm' and 'guess_TdbyTe' in kwargs:
             boot.fit_max(model,
@@ -982,13 +1018,15 @@ class MaxNGMixBootFitter(NGMixBootFitter):
                          prior=prior,
                          ntry=max_pars['ntry'],
                          guess=guess,
-                         guess_TdbyTe=kwargs['guess_TdbyTe'])
+                         guess_TdbyTe=kwargs['guess_TdbyTe'],
+                         guess_widths=guess_widths)
         else:
             boot.fit_max(model,
                          max_pars,
                          prior=prior,
                          ntry=max_pars['ntry'],
-                         guess=guess)
+                         guess=guess,
+                         guess_widths=guess_widths)
 
 
         if self['replace_cov']:
