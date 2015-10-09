@@ -189,7 +189,7 @@ class MOFNGMixer(NGMixer):
 
             #####################################################################
             # now fit again with nbrs if needed
-            if foflen > 0: #FIXME - set to 1
+            if foflen > 1:
 
                 if self['mof']['write_convergence_data']:
                     self._write_convergence_data(mb_obs_lists,self.curr_data, \
