@@ -12,7 +12,7 @@ from .megamixer import NGMegaMixer
 class SLACNGMegaMixer(NGMegaMixer):
     def __init__(self,conf,extra_cmds=''):
         super(SLACNGMegaMixer,self).__init__(conf,extra_cmds=extra_cmds)
-        self['queue'] = self.get('queue','long')
+        self['queue'] = self.get('queue','medium')
 
     def write_job_script(self,files,i,rng):
         fname = os.path.join(self.get_chunk_output_dir(files['coadd_tile'],i,rng),'job.sh')

@@ -21,7 +21,7 @@ parser = OptionParser(__doc__)
 parser.add_option("--system",default='shell',
                   help=("name of system for jobs"))
 
-parser.add_option("--queue",default='long',
+parser.add_option("--queue",default=None,
                   help=("queue to submit to"))
 
 parser.add_option("--extra-cmds",default='',
@@ -65,7 +65,10 @@ if __name__ == '__main__':
     conf = read_yaml(args[1])
     tile = args[2]
     conf['run_config'] = args[1]
-
+    
+    if options.queue is not None:
+        conf['queue'] = options.queue
+    
     ngmm = MMixer(conf,extra_cmds=options.extra_cmds)
 
     if cmd == 'setup':
