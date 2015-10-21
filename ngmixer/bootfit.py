@@ -163,11 +163,17 @@ class NGMixBootFitter(BaseFitter):
         band_pars_obj[5] = pars_obj[5+band]
         assert len(band_pars_obj) == 6
 
-        if model != 'cm':
-            gmix_sky = GMixModel(band_pars_obj, model)
-        else:
-            gmix_sky = GMixCM(fit_data[n('fracdev')][0],fit_data[n('TdByTe')][0],band_pars_obj)
-        gmix_image = gmix_sky.convolve(psf_gmix)
+        for i in [1,2]:
+            try:
+                if model != 'cm':
+                    gmix_sky = GMixModel(band_pars_obj, model)
+                else:
+                    gmix_sky = GMixCM(fit_data[n('fracdev')][0],fit_data[n('TdByTe')][0],band_pars_obj)
+                gmix_image = gmix_sky.convolve(psf_gmix)
+            except GMixRangeError:
+                print('        setting T=0 for nbr!')
+                band_pars_obj[4] = 0.0 # set T to zero and try again
+        
         image = gmix_image.make_image(obs.image.shape, jacobian=jac)
         return image
 
@@ -227,10 +233,10 @@ class NGMixBootFitter(BaseFitter):
                             print('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
                                 % (nbrs_ind+1,cen_ind+1))
                             continue
-
+                        
+                        print('        rendered nbr: %d' % (nbrs_ind+1))
                         totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1], \
                             nbrs_psf_gmix,nbrs_jac,coadd)
-                        print('        rendered nbr: %d' % (nbrs_ind+1))
                     else:
                         print('        bad fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
 
