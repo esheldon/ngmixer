@@ -378,6 +378,11 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         NOTE: We don't fit the PSF observation here. The job of this class is to just to prep observations
         for fitting!
         """
+        
+        # hack for nbrs with no data!
+        # FIXME - need to flag these when being read in maybe?
+        if self.meds_list[band]['ncutout'][nbr_mindex] == 0:
+            return None,None
 
         # 1) use coadd WCS to get offset in u,v
         # 1a) first get coadd WCS
