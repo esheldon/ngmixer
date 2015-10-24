@@ -262,7 +262,7 @@ class NGMixer(dict):
         t0 = time.time()
         
         #check flags
-        flags,box_size = self._check_basic_things(coadd_mb_obs_list,mb_obs_list)
+        flags = self._check_basic_things(coadd_mb_obs_list,mb_obs_list)
 
         if flags == 0:
             fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data)
