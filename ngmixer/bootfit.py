@@ -259,7 +259,7 @@ class NGMixBootFitter(BaseFitter):
                     continue
 
                 # do central image first
-                if nbrs_fit_data[fit_flags_tag][cen_ind] == 0:
+                if nbrs_fit_data[fit_flags_tag][cen_ind] == 0 and nbrs_fit_data['flags'][cen_ind] == 0:
                     assert obs.has_psf_gmix()
                     cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1], \
                         obs.get_psf_gmix(),obs.get_jacobian(),coadd)
@@ -274,7 +274,7 @@ class NGMixBootFitter(BaseFitter):
                                                                  obs.meta['nbrs_flags'],
                                                                  obs.meta['nbrs_psfs'],
                                                                  obs.meta['nbrs_jacs']):
-                    if nbrs_flags == 0 and nbrs_fit_data[fit_flags_tag][nbrs_ind] == 0:
+                    if nbrs_flags == 0 and nbrs_fit_data[fit_flags_tag][nbrs_ind] == 0 and nbrs_fit_data['flags'][nbrs_ind] == 0
                         if nbrs_psf.has_gmix():
                             nbrs_psf_gmix = nbrs_psf.get_gmix()
                         else:
