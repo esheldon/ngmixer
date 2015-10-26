@@ -259,13 +259,17 @@ class NGMixBootFitter(BaseFitter):
                     continue
 
                 # do central image first
-                if nbrs_fit_data[fit_flags_tag][cen_ind] == 0 and nbrs_fit_data['flags'][cen_ind] == 0:
-                    assert obs.has_psf_gmix()
+                if nbrs_fit_data[fit_flags_tag][cen_ind] == 0 and obs.has_psf_gmix():
+                    # FIXME - better flagging for objects
+                    #assert obs.has_psf_gmix()
                     cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1], \
                         obs.get_psf_gmix(),obs.get_jacobian(),coadd)
                     print('        rendered central object')
                 else:
-                    print('        bad fit data for central: FoF obj = %d' % (cen_ind+1))
+                    if nbrs_fit_data[fit_flags_tag][cen_ind] != 0:
+                        print('        bad fit data for central: FoF obj = %d' % (cen_ind+1))
+                    else:
+                        print('        bad PSF fit for central: FoF obj = %d' % (cen_ind+1))
                     cenim = obs.image_orig.copy()
 
                 # now do nbrs
@@ -274,13 +278,17 @@ class NGMixBootFitter(BaseFitter):
                                                                  obs.meta['nbrs_flags'],
                                                                  obs.meta['nbrs_psfs'],
                                                                  obs.meta['nbrs_jacs']):
-                    if nbrs_flags == 0 and nbrs_fit_data[fit_flags_tag][nbrs_ind] == 0 and nbrs_fit_data['flags'][nbrs_ind] == 0
+                    if nbrs_flags == 0 and nbrs_fit_data[fit_flags_tag][nbrs_ind] == 0:
                         if nbrs_psf.has_gmix():
                             nbrs_psf_gmix = nbrs_psf.get_gmix()
                         else:
-                            # FIXME - need to fit psf from off chip nbrs
-                            print('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
-                                % (nbrs_ind+1,cen_ind+1))
+                            # FIXME - better flagging of nbrs
+                            if 'fit_flags' in obs.meta and obs.meta['fit_flags'] != 0:
+                                print('        bad PSF fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
+                            else:
+                                # FIXME - need to fit psf from off chip nbrs
+                                print('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
+                                          % (nbrs_ind+1,cen_ind+1))
                             continue
                         
                         print('        rendered nbr: %d' % (nbrs_ind+1))
