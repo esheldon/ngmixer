@@ -109,7 +109,7 @@ class Concat(object):
                 print("error found: %s" % str(err))
 
         data = numpy.array(data,dtype=data.dtype.descr)
-        if not numpy.array_equal(numpy.unique(data['number']).sort(),data['number'].sort()):
+        if not numpy.array_equal(numpy.sort(numpy.unique(data['number'])),numpy.sort(data['number'])):
             print("object 'number' field is not unique!")
 
     def concat(self):
@@ -142,7 +142,7 @@ class Concat(object):
         data = numpy.array(dlist,dtype=data.dtype.descr)
         epoch_data = numpy.array(elist,dtype=epoch_data.dtype.descr)
 
-        if not numpy.array_equal(numpy.unique(data['number']).sort(),data['number'].sort()):
+        if not numpy.array_equal(numpy.sort(numpy.unique(data['number'])),numpy.sort(data['number'])):
             print("object 'number' field is not unique!")
 
         # note using meta from last file
