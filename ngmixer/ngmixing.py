@@ -12,7 +12,7 @@ from . import fitting
 from . import files
 from .defaults import DEFVAL,_CHECKPOINTS_DEFAULT_MINUTES
 from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS,BAD_OBJ
-from .util import UtterFailure
+from .util import UtterFailure, seed_numpy
 
 class NGMixer(dict):
     def __init__(self,
@@ -41,58 +41,33 @@ class NGMixer(dict):
         self['fit_coadd_galaxy'] = self.get('fit_coadd_galaxy',False)
         self['fit_me_galaxy'] = self.get('fit_me_galaxy',True)
         self['max_box_size']=self.get('max_box_size',2048)
-
-        self._set_defaults()
-
-        if verbosity > 0:
-            # over-ride anything in the config
-            self['verbose'] = True
-
+        self['verbosity'] = verbosity
         self.profile = profile
-        pprint.pprint(self)
-
-        # read the data
-        imageio_class = imageio.get_imageio_class(self['imageio_type'])
-        self.imageio = imageio_class(self,data_files,fof_range=fof_range,fof_file=fof_file,extra_data=extra_data)
-        self.curr_fofindex = 0
-        self['nband'] = self.imageio.get_num_bands()
-        self.iband = range(self['nband'])
-
-        # priors
-        from .priors import set_priors
-        set_priors(self)
-
-        # get the fitter
-        fitter_class = fitting.get_fitter_class(self['fitter_type'])
-        self.fitter = fitter_class(self)
-        self.default_data = self.fitter.get_default_fit_data(self['fit_me_galaxy'],self['fit_coadd_galaxy'])
-        self.default_epoch_data = self.fitter.get_default_epoch_fit_data()
 
         # random numbers
-        if random_seed is not None:
-            numpy.random.seed(random_seed)
+        seed_numpy(random_seed)
+
+        self._set_defaults()
+        self._set_imageio(data_files, fof_range, fof_file, extra_data)
+        self._set_priors()
+        self._set_fitter_and_data()
+
+        pprint.pprint(self)
 
         # checkpointing and outputs
         self.output_file = output_file
+
+        # this may be over-ridden if we restarted from a checkpoint
         self.start_fofindex = 0
         self._setup_checkpoints()
-
-        # build data
-        if self.checkpoint_data is None:
-            self.data = []
-            self.data_dtype = self._get_dtype()
-            self.epoch_data = []
-            self.epoch_data_dtype = self._get_epoch_dtype()
+        self._setup_output_data()
 
         # run the code
         if not init_only:
-            if profile:
+            if self.profile:
                 self.go_profile()
             else:
                 self.go()
-
-    def _set_defaults(self):
-        pass
 
     def go(self):
         self.do_fits()
@@ -111,6 +86,50 @@ class NGMixer(dict):
                         'profile_stats')
         p = pstats.Stats('profile_stats')
         p.sort_stats('time').print_stats()
+
+
+    def _set_defaults(self):
+        if self['verbosity'] > 0:
+            # over-ride anything in the config
+            self['verbose'] = True
+        else:
+            self['verbose'] = self.get('verbose',False)
+
+    def _set_imageio(self, data_files, fof_range, fof_file, extra_data):
+        """
+        determine and instantiate the imageio class.  Set some file
+        related attributes
+        """
+        # read the data
+        imageio_class = imageio.get_imageio_class(self['imageio_type'])
+        self.imageio = imageio_class(self,
+                                     data_files,
+                                     fof_range=fof_range,
+                                     fof_file=fof_file,
+                                     extra_data=extra_data)
+        self.curr_fofindex = 0
+        self['nband'] = self.imageio.get_num_bands()
+        self.iband = range(self['nband'])
+
+    def _set_fitter_and_data(self):
+        # get the fitter
+        fitter_class = fitting.get_fitter_class(self['fitter_type'])
+        self.fitter = fitter_class(self)
+
+        def_data = self.fitter.get_default_fit_data(self['fit_me_galaxy'],
+                                                    self['fit_coadd_galaxy'])
+
+        def_edata = self.fitter.get_default_epoch_fit_data()
+
+        self.default_data=def_data
+        self.default_epoch_data=def_edata
+
+    def _set_priors(self):
+        """
+        Set priors on the parameters we will fit
+        """
+        from .priors import set_priors
+        set_priors(self)
 
     def get_data(self):
         return numpy.array(self.data,dtype=self.data_dtype)
@@ -339,6 +358,17 @@ class NGMixer(dict):
 
         return flags
 
+    def _setup_output_data(self):
+        """
+        set the output data structures, if not already set based
+        on the input checkpoint data
+        """
+        if self.checkpoint_data is None:
+            self.data = []
+            self.data_dtype = self._get_dtype()
+            self.epoch_data = []
+            self.epoch_data_dtype = self._get_epoch_dtype()
+
     def _get_epoch_dtype(self):
         """
         makes epoch dtype
@@ -532,3 +562,5 @@ class NGMixer(dict):
 
                     if self.meta is not None:
                         fobj.write(self.meta,extname="meta_data")
+
+

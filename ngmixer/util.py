@@ -290,3 +290,12 @@ class AstromFlags(object):
             flags[minput] = self.data['astrom_flag'][mastro]
 
         return flags
+
+def seed_numpy(random_seed):
+    """
+    set up random number generation with the input seed
+    """
+    if random_seed is not None:
+        numpy.random.seed(random_seed)
+
+
