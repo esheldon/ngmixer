@@ -27,16 +27,16 @@ parser.add_option("--queue",default=None,
 parser.add_option("--extra-cmds",default='',
                   help=("extra commands to run in job script"))
 
-parser.add_option('--noblind',action='store_true',
+parser.add_option('--noblind',action='store_true',default=False,
                   help="don't blind the catalog")
 
-parser.add_option('--clobber',action='store_true',
+parser.add_option('--clobber',action='store_true',default=False,
                   help="clobber existing catalog, else skip over")
 
-parser.add_option('--verify',action='store_true',
+parser.add_option('--verify',action='store_true',default=False,
                   help="just verify every file")
 
-parser.add_option('--skip-errors',action='store_true',
+parser.add_option('--skip-errors',action='store_true',default=False,
                   help="skip over errors")
 
 parser.add_option("--verbosity", default=0,
