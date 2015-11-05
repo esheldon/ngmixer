@@ -395,11 +395,11 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         # 1b) now get positions
         row_cen = self.meds_list[band]['orig_row'][cen_mindex,0]
         col_cen = self.meds_list[band]['orig_col'][cen_mindex,0]
-        ra_cen,dec_cen = coadd_wcs.image2sky(col_cen,row_cen) # reversed for esutil WCS objects!
+        ra_cen,dec_cen = coadd_wcs.image2sky(col_cen+1.0,row_cen+1.0) # reversed for esutil WCS objects!
 
         row_nbr = self.meds_list[band]['orig_row'][nbr_mindex,0]
         col_nbr = self.meds_list[band]['orig_col'][nbr_mindex,0]
-        ra_nbr,dec_nbr = coadd_wcs.image2sky(col_nbr,row_nbr) # reversed for esutil WCS objects!
+        ra_nbr,dec_nbr = coadd_wcs.image2sky(col_nbr+1.0,row_nbr+1.0) # reversed for esutil WCS objects!
 
         # 1c) now get u,v offset
         # FIXME - discuss projection with Mike and Erin
