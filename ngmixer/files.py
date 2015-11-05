@@ -44,7 +44,7 @@ class StagedOutFile(object):
         if tmpdir is not None:
             self.tmpdir=os.path.expandvars(tmpdir)
         else:
-            self.tempdir = tmpdir
+            self.tmpdir = tmpdir
         self.must_exist=must_exist
 
         self.was_staged_out=False
@@ -65,7 +65,7 @@ class StagedOutFile(object):
             bname=os.path.basename(fname)
             self.path=os.path.join(self.tmpdir, bname)
 
-            if self.path == self.final_path:
+            if os.path.samefile(os.path.split(self.path)[0],os.path.split(self.final_path)[0]):
                 # the user sent tmpdir as the final output dir, no
                 # staging is performed
                 self.is_temp=False
