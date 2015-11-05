@@ -42,6 +42,9 @@ parser.add_option('--skip-errors',action='store_true',default=False,
 parser.add_option("--verbosity", default=0,
                   help=("set verbosity level"))
 
+parser.add_option("--seed", default=None,
+                  help=("random seed to make seeds for jobs"))
+
 from ngmixer.megamixer import NGMegaMixer
 from ngmixer.megamixer import SLACNGMegaMixer
 import ngmixer
@@ -71,7 +74,7 @@ if __name__ == '__main__':
     if options.queue is not None:
         conf['queue'] = options.queue
     
-    ngmm = MMixer(conf,extra_cmds=options.extra_cmds)
+    ngmm = MMixer(conf,extra_cmds=options.extra_cmds,seed=options.seed)
 
     if cmd == 'setup':
         ngmm.setup_coadd_tile(run)

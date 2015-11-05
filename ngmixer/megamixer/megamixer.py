@@ -9,11 +9,12 @@ from ..files import read_yaml
 from .concat_io import get_concat_class
 
 class BaseNGMegaMixer(dict):
-    def __init__(self,conf,extra_cmds=''):
+    def __init__(self,conf,extra_cmds='',seed=None):
         self.update(conf)
         self.ngmix_conf = read_yaml(conf['ngmix_config'])
         self['model_nbrs'] = self.ngmix_conf.get('model_nbrs',False)
-        self['extra_cmds'] = extra_cmds
+        self['extra_cmds'] = extra_cmds        
+        self.rng = np.random.RandomState(seed=seed)
 
     def get_files(self,full_coadd_tile):
         """
@@ -187,7 +188,7 @@ python -u $cmd &> $lfile
             args['flags_opt'] = ''
 
         if 'seed' not in self:
-            seed = np.random.randint(low=1,high=100000000)
+            seed = self.rng.randint(low=1,high=1000000000)
             args['seed_opt'] = '--seed=%d' % seed
         else:
             args['seed_opt'] = ''
