@@ -15,25 +15,18 @@ class BaseNGMegaMixer(dict):
         self['model_nbrs'] = self.ngmix_conf.get('model_nbrs',False)
         self['extra_cmds'] = extra_cmds
 
-    def get_files(self,coadd_tile):
+    def get_files(self,full_coadd_tile):
         """
         get all paths to files
         """
         files = {}
+        files['full_coadd_tile'] = full_coadd_tile
+        coadd_tile = full_coadd_tile.split('_')[-1]
         files['coadd_tile'] = coadd_tile
-
+        
         # desdata
         DESDATA = os.environ.get('DESDATA')
         files['DESDATA'] = DESDATA
-
-        # full path to coadd meds files
-        full_coadd_tile = glob.glob(os.path.join(DESDATA,
-                                                 'meds',
-                                                 self['meds_version'],
-                                                 '*_%s' % coadd_tile))
-        assert len(full_coadd_tile) == 1,'Could not get unique path for coadd tile %s!' % coadd_tile
-        full_coadd_tile = full_coadd_tile[0]
-        files['full_coadd_tile'] = full_coadd_tile
 
         # meds files
         files['meds_files'] = []
@@ -116,12 +109,12 @@ class BaseNGMegaMixer(dict):
     def get_chunk_output_basename(self,coadd_tile,chunk,rng):
         return '%s-%s-%d-%d' % (coadd_tile,self['run'],rng[0],rng[1])
 
-    def make_output_dirs(self,coadd_tile,fof_ranges):
+    def make_output_dirs(self,files,fof_ranges):
         """
         make output dirs
         """
-        odir = self.get_main_output_dir(coadd_tile)
-        wdir = self.get_work_output_dir(coadd_tile)
+        odir = self.get_main_output_dir(files['coadd_tile'])
+        wdir = self.get_work_output_dir(files['coadd_tile'])
         os.system('rm -rf %s/*' % odir)
         for dr in [odir,wdir]:
             if not os.path.exists(dr):
@@ -130,15 +123,15 @@ class BaseNGMegaMixer(dict):
         os.system('cp %s %s' % (self['run_config'],os.path.join(odir,'.')))
 
         for chunk,rng in enumerate(fof_ranges):
-            dr = self.get_chunk_output_dir(coadd_tile,chunk,rng)
+            dr = self.get_chunk_output_dir(files['coadd_tile'],chunk,rng)
             if not os.path.exists(dr):
                 os.mkdir(dr)
 
         if len(self['extra_cmds']) > 0:
             os.system('cp %s %s' % (self['extra_cmds'],os.path.join(odir,'.')))
 
-    def make_scripts(self,coadd_tile,files,fof_ranges):
-        os.system('cp %s %s' % (self['ngmix_config'],os.path.join(self.get_main_output_dir(coadd_tile),'.')))
+    def make_scripts(self,files,fof_ranges):
+        os.system('cp %s %s' % (self['ngmix_config'],os.path.join(self.get_main_output_dir(files['coadd_tile']),'.')))
 
         for i,rng in enumerate(fof_ranges):
             self.write_script(files,i,rng)
@@ -222,8 +215,8 @@ python -u $cmd &> $lfile
     def setup_coadd_tile(self,coadd_tile):
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
-        self.make_output_dirs(coadd_tile,fof_ranges)
-        self.make_scripts(coadd_tile,files,fof_ranges)
+        self.make_output_dirs(files,fof_ranges)
+        self.make_scripts(files,fof_ranges)
 
     def run_coadd_tile(self,coadd_tile):
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
@@ -266,8 +259,8 @@ python -u $cmd &> $lfile
         tc = tc(self['run'],
                 self['ngmix_config'],
                 clist,
-                self.get_main_output_dir(coadd_tile),
-                coadd_tile,
+                self.get_main_output_dir(files['coadd_tile']),
+                files['coadd_tile'],
                 bands=self['bands'],
                 blind=blind,
                 clobber=clobber,

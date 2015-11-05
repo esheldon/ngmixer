@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-    %prog [options] command run_config_file coadd_tile
+    %prog [options] command run_config_file coadd_run
     Process the input coadd_tile.
 
     Possible commands are:
@@ -29,11 +29,13 @@ parser.add_option("--extra-cmds",default='',
 
 parser.add_option('--noblind',action='store_true',
                   help="don't blind the catalog")
+
 parser.add_option('--clobber',action='store_true',
                   help="clobber existing catalog, else skip over")
 
 parser.add_option('--verify',action='store_true',
                   help="just verify every file")
+
 parser.add_option('--skip-errors',action='store_true',
                   help="skip over errors")
 
@@ -63,7 +65,7 @@ if __name__ == '__main__':
 
     cmd = args[0]
     conf = read_yaml(args[1])
-    tile = args[2]
+    run = args[2]
     conf['run_config'] = args[1]
     
     if options.queue is not None:
@@ -72,13 +74,13 @@ if __name__ == '__main__':
     ngmm = MMixer(conf,extra_cmds=options.extra_cmds)
 
     if cmd == 'setup':
-        ngmm.setup_coadd_tile(tile)
+        ngmm.setup_coadd_tile(run)
     elif cmd == 'run':
-        ngmm.run_coadd_tile(tile)
+        ngmm.run_coadd_tile(run)
     elif cmd == 'rerun':
-        ngmm.rerun_coadd_tile(tile)
+        ngmm.rerun_coadd_tile(run)
     elif cmd == 'collate':
-        ngmm.collate_coadd_tile(tile,
+        ngmm.collate_coadd_tile(run,
                                 verify=options.verify,
                                 blind=not options.noblind,
                                 clobber=options.clobber,
