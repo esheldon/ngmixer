@@ -82,9 +82,9 @@ class MOFNGMixer(NGMixer):
                              (absfracdiff <= self['mof']['maxfrac_conv']) | \
                              (abserr <= self['mof']['maxerr_conv'])):
                     self.curr_data[n('mof_flags')][fofind] = 0
-                    self.curr_data[n('mof_num_itr')][fofind] = itr+1
                 else:
                     self.curr_data[n('mof_flags')][fofind] = 1
+                self.curr_data[n('mof_num_itr')][fofind] = itr+1
 
                 for i in xrange(npars):
                     if absdiff[i] > maxabs[i]:
