@@ -10,8 +10,8 @@ from ..files import read_yaml
 from .megamixer import NGMegaMixer
 
 class SLACNGMegaMixer(NGMegaMixer):
-    def __init__(self,conf,extra_cmds=''):
-        super(SLACNGMegaMixer,self).__init__(conf,extra_cmds=extra_cmds)
+    def __init__(self,*args,**kwargs):
+        super(SLACNGMegaMixer,self).__init__(*args,**kwargs)
         self['queue'] = self.get('queue','medium')
 
     def write_job_script(self,files,i,rng):

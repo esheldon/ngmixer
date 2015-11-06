@@ -30,7 +30,7 @@ parser.add_option("--profile", action='store_true',default=False,
 parser.add_option("--make-plots", action='store_true',default=False,
                   help=("make some plots"))
 
-parser.add_option("--seed", default=None,
+parser.add_option("--seed", default=None,type=int,
                   help=("random seed"))
 
 parser.add_option("--nbrs-file", default=None,
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     data_files=args[2:]
     fof_range = get_range(options.fof_range)
     if options.seed is not None:
-        seed = int(options.seed)
+        seed = options.seed
     else:
         seed = None
 

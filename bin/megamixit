@@ -39,10 +39,10 @@ parser.add_option('--verify',action='store_true',default=False,
 parser.add_option('--skip-errors',action='store_true',default=False,
                   help="skip over errors")
 
-parser.add_option("--verbosity", default=0,
+parser.add_option("--verbosity", default=0,type=int,
                   help=("set verbosity level"))
 
-parser.add_option("--seed", default=None,
+parser.add_option("--seed", default=None,type=int,
                   help=("random seed to make seeds for jobs"))
 
 from ngmixer.megamixer import NGMegaMixer
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     else:
         raise ValueError("system %s not supported!" % options.system)
 
-    ngmixer.defaults.VERBOSITY.level = int(options.verbosity)
+    ngmixer.defaults.VERBOSITY.level = options.verbosity
 
     cmd = args[0]
     conf = read_yaml(args[1])
