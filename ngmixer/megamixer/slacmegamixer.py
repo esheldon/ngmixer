@@ -33,6 +33,7 @@ class SLACNGMegaMixer(NGMegaMixer):
 #BSUB -R "linux64 && rhel60 && scratch > 2"
 #BSUB -n 1
 #BSUB -We 24:00
+#BSUB -W 48:00
 
 {extracmds}
 ./runchunk.sh
