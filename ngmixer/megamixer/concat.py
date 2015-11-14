@@ -67,7 +67,7 @@ class Concat(object):
         else:
             extra=''
 
-        self.collated_file = os.path.join(self.output_dir, "%s-%s%s.fits" % (self.run,self.output_file,extra))
+        self.collated_file = os.path.join(self.output_dir, "%s-%s%s.fits" % (self.output_file,self.run,extra))
         self.tmpdir = files.get_temp_dir()
 
     def read_chunk(self, fname):
@@ -108,9 +108,12 @@ class Concat(object):
             except ConcatError as err:
                 print("error found: %s" % str(err))
 
-        data = numpy.array(data,dtype=data.dtype.descr)
-        if not numpy.array_equal(numpy.sort(numpy.unique(data['number'])),numpy.sort(data['number'])):
-            print("object 'number' field is not unique!")
+        if len(dlist) == 0:
+            print("found no data! could not make or verify collated file %s!" % self.collated_file)
+        else:
+            data = numpy.array(dlist,dtype=data.dtype.descr)
+            if not numpy.array_equal(numpy.sort(numpy.unique(data['number'])),numpy.sort(data['number'])):
+                print("object 'number' field is not unique!")
 
     def concat(self):
         """

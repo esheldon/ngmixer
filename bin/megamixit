@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-    %prog [options] command run_config_file coadd_tile
+    %prog [options] command run_config_file coadd_run
     Process the input coadd_tile.
 
     Possible commands are:
@@ -27,18 +27,23 @@ parser.add_option("--queue",default=None,
 parser.add_option("--extra-cmds",default='',
                   help=("extra commands to run in job script"))
 
-parser.add_option('--noblind',action='store_true',
+parser.add_option('--noblind',action='store_true',default=False,
                   help="don't blind the catalog")
-parser.add_option('--clobber',action='store_true',
+
+parser.add_option('--clobber',action='store_true',default=False,
                   help="clobber existing catalog, else skip over")
 
-parser.add_option('--verify',action='store_true',
+parser.add_option('--verify',action='store_true',default=False,
                   help="just verify every file")
-parser.add_option('--skip-errors',action='store_true',
+
+parser.add_option('--skip-errors',action='store_true',default=False,
                   help="skip over errors")
 
-parser.add_option("--verbosity", default=0,
+parser.add_option("--verbosity", default=0,type=int,
                   help=("set verbosity level"))
+
+parser.add_option("--seed", default=None,type=int,
+                  help=("random seed to make seeds for jobs"))
 
 from ngmixer.megamixer import NGMegaMixer
 from ngmixer.megamixer import SLACNGMegaMixer
@@ -59,26 +64,26 @@ if __name__ == '__main__':
     else:
         raise ValueError("system %s not supported!" % options.system)
 
-    ngmixer.defaults.VERBOSITY.level = int(options.verbosity)
+    ngmixer.defaults.VERBOSITY.level = options.verbosity
 
     cmd = args[0]
     conf = read_yaml(args[1])
-    tile = args[2]
+    run = args[2]
     conf['run_config'] = args[1]
     
     if options.queue is not None:
         conf['queue'] = options.queue
     
-    ngmm = MMixer(conf,extra_cmds=options.extra_cmds)
+    ngmm = MMixer(conf,extra_cmds=options.extra_cmds,seed=options.seed)
 
     if cmd == 'setup':
-        ngmm.setup_coadd_tile(tile)
+        ngmm.setup_coadd_tile(run)
     elif cmd == 'run':
-        ngmm.run_coadd_tile(tile)
+        ngmm.run_coadd_tile(run)
     elif cmd == 'rerun':
-        ngmm.rerun_coadd_tile(tile)
+        ngmm.rerun_coadd_tile(run)
     elif cmd == 'collate':
-        ngmm.collate_coadd_tile(tile,
+        ngmm.collate_coadd_tile(run,
                                 verify=options.verify,
                                 blind=not options.noblind,
                                 clobber=options.clobber,

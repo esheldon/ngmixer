@@ -89,9 +89,10 @@ class NGMixBootFitter(BaseFitter):
         new_mb_obs_list = self._get_good_mb_obs_list(mb_obs_list)
         self.new_mb_obs_list = new_mb_obs_list
         self.mb_obs_list = mb_obs_list
-
-        if 'fit_data' not in mb_obs_list.meta:
-            mb_obs_list.update_meta_data({'fit_data':self._make_struct(coadd)})
+        
+        # FIXME - removed if, this might have sid effects?
+        #if 'fit_data' not in mb_obs_list.meta:
+        mb_obs_list.update_meta_data({'fit_data':self._make_struct(coadd)})
         self.data = mb_obs_list.meta['fit_data']
 
         if self['make_plots']:
@@ -128,9 +129,6 @@ class NGMixBootFitter(BaseFitter):
             if (model_flags & PSF_FIT_FAILURE) == 0:
                 self._do_psf_stats(mb_obs_list,coadd)
             else:
-                break
-
-            if (model_flags & PSF_FIT_FAILURE) != 0:
                 break
 
         self._fill_nimage_used(mb_obs_list,boot.mb_obs_list,coadd)
@@ -259,26 +257,39 @@ class NGMixBootFitter(BaseFitter):
                     continue
 
                 # do central image first
-                if nbrs_fit_data[fit_flags_tag][cen_ind] == 0 and obs.has_psf_gmix():
-                    # FIXME - better flagging for objects
-                    #assert obs.has_psf_gmix()
+                # FIXME - need to clean up all flags
+                if nbrs_fit_data[fit_flags_tag][cen_ind] == 0 \
+                        and obs.has_psf_gmix() \
+                        and nbrs_fit_data['flags'][cen_ind] == 0:
                     cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1], \
                         obs.get_psf_gmix(),obs.get_jacobian(),coadd)
+                    sub_nbrs_from_cenim = False
                     print('        rendered central object')
                 else:
-                    if nbrs_fit_data[fit_flags_tag][cen_ind] != 0:
+                    if nbrs_fit_data[fit_flags_tag][cen_ind] != 0 or (nbrs_fit_data['flags'][cen_ind] & GAL_FIT_FAILURE) != 0:
                         print('        bad fit data for central: FoF obj = %d' % (cen_ind+1))
-                    else:
+                    elif (nbrs_fit_data['flags'][cen_ind] & LOW_PSF_FLUX) != 0:
+                        print('        PSF flux too low for central: FoF obj = %d' % (cen_ind+1))
+                    elif (nbrs_fit_data['flags'][cen_ind] & PSF_FLUX_FIT_FAILURE) != 0:
+                        print('        bad PSF flux fit for central: FoF obj = %d' % (cen_ind+1))
+                    elif (nbrs_fit_data['flags'][cen_ind] & PSF_FIT_FAILURE) != 0:
                         print('        bad PSF fit for central: FoF obj = %d' % (cen_ind+1))
+                    else:
+                        print('        central not rendered for unknown reason: FoF obj = %d' % (cen_ind+1))
+                    
                     cenim = obs.image_orig.copy()
-
+                    sub_nbrs_from_cenim = True
+                    
                 # now do nbrs
-                totim = cenim.copy()
+                nbrsim = numpy.zeros_like(cenim)
                 for nbrs_ind,nbrs_flags,nbrs_psf,nbrs_jac in zip(mb_obs_list.meta['nbrs_inds'],
                                                                  obs.meta['nbrs_flags'],
                                                                  obs.meta['nbrs_psfs'],
                                                                  obs.meta['nbrs_jacs']):
-                    if nbrs_flags == 0 and nbrs_fit_data[fit_flags_tag][nbrs_ind] == 0:
+                    if nbrs_flags == 0 \
+                            and nbrs_fit_data[fit_flags_tag][nbrs_ind] == 0 \
+                            and nbrs_fit_data['flags'][nbrs_ind] == 0:
+                        
                         if nbrs_psf.has_gmix():
                             nbrs_psf_gmix = nbrs_psf.get_gmix()
                         else:
@@ -287,18 +298,34 @@ class NGMixBootFitter(BaseFitter):
                                 print('        bad PSF fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
                             else:
                                 # FIXME - need to fit psf from off chip nbrs
-                                print('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
+                                print('        FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
                                           % (nbrs_ind+1,cen_ind+1))
                             continue
                         
                         print('        rendered nbr: %d' % (nbrs_ind+1))
-                        totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1], \
+                        nbrsim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1], \
                             nbrs_psf_gmix,nbrs_jac,coadd)
                     else:
-                        print('        bad fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
-
+                        if nbrs_fit_data[fit_flags_tag][nbrs_ind] != 0 or (nbrs_fit_data['flags'][nbrs_ind] & GAL_FIT_FAILURE) != 0:
+                            print('        bad fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
+                        elif (nbrs_fit_data['flags'][nbrs_ind] & LOW_PSF_FLUX) != 0:
+                            print('        PSF flux too low for nbr: FoF obj = %d' % (nbrs_ind+1))
+                        elif (nbrs_fit_data['flags'][nbrs_ind] & PSF_FLUX_FIT_FAILURE) != 0:
+                            print('        bad PSF flux fit for nbr: FoF obj = %d' % (nbrs_ind+1))
+                        elif (nbrs_fit_data['flags'][nbrs_ind] & PSF_FIT_FAILURE) != 0:
+                            print('        bad PSF fit for nbr: FoF obj = %d' % (nbrs_ind+1))
+                        elif nbrs_flags != 0:
+                            print('        nbrs_flags set to %d: FoF obj = %d' % (nbrs_flags,nbrs_ind+1))
+                        else:
+                            print('        nbr not rendered for unknown reason: FoF obj = %d' % (nbrs_ind+1))
+                            
+                # get total image and adjust central if needed
+                if sub_nbrs_from_cenim:
+                    cenim -= nbrsim                    
+                totim = cenim + nbrsim
+                
                 if self['model_nbrs_method'] == 'subtract':
-                    obs.image = obs.image_orig - totim + cenim
+                    obs.image = obs.image_orig - nbrsim
                 elif self['model_nbrs_method'] == 'frac':
                     frac = numpy.zeros_like(totim)
                     frac[:,:] = 1.0
