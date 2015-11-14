@@ -215,7 +215,7 @@ class MOFNGMixer(NGMixer):
 
                     # data
                     self.prev_data = self.curr_data.copy()
-
+                    
                     # fitting
                     for i in numpy.random.choice(foflen,size=foflen,replace=False):
                         self.curr_data_index = i
