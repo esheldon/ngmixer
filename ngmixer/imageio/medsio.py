@@ -337,7 +337,8 @@ class MEDSImageIO(ImageIO):
     def get_meta_data_dtype(self):
         dt=[('id','i8'),
             ('number','i4'),
-            ('nimage_tot','i4',(self.conf['nband'],))]
+            ('nimage_tot','i4',(self.conf['nband'],)),
+            ('fofid','i8')]
         return dt
 
     def _get_meta_row(self,num=1):
@@ -407,6 +408,12 @@ class MEDSImageIO(ImageIO):
             me_mb_obs_lists = []
             for mindex in mindexes:
                 c,me = self._get_multi_band_observations(mindex)
+                
+                # add fof ids here
+                if self.fof_file is not None:
+                    c.meta['meta_data']['fofid'][:] = fofid
+                    me.meta['meta_data']['fofid'][:] = fofid
+                
                 coadd_mb_obs_lists.append(c)
                 me_mb_obs_lists.append(me)
 

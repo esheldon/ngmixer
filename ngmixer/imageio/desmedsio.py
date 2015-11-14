@@ -74,9 +74,26 @@ class SVDESMEDSImageIO(MEDSImageIO):
         ii=meds.get_image_info()
         return ii['image_path'][file_id]
 
+    def get_meta_data_dtype(self):
+        dt = super(SVDESMEDSImageIO, self).get_meta_data_dtype()
+        rlen = len(self.meds_files_full[0]\
+                       .replace(os.environ['DESDATA'],'${DESDATA}')\
+                       .split('/')[3])
+        dt += [('coadd_run','S%d' % rlen)]
+        return dt
+
+    def _get_multi_band_observations(self, mindex):
+        coadd_mb_obs_list, mb_obs_list = super(SVDESMEDSImageIO, self)._get_multi_band_observations(mindex)
+        run = self.meds_files_full[0]\
+            .replace(os.environ['DESDATA'],'${DESDATA}')\
+            .split('/')[3]
+        coadd_mb_obs_list.meta['meta_data']['coadd_run'] = run
+        mb_obs_list.meta['meta_data']['coadd_run'] = run
+        return coadd_mb_obs_list, mb_obs_list
+
     def _get_band_observations(self, band, mindex):
         coadd_obs_list, obs_list = super(SVDESMEDSImageIO, self)._get_band_observations(band,mindex)
-
+        
         # divide by jacobian scale^2 in order to apply zero-points correctly
         for olist in [coadd_obs_list,obs_list]:
             for obs in olist:
