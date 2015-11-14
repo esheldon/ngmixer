@@ -12,7 +12,7 @@ from .megamixer import NGMegaMixer
 class SLACNGMegaMixer(NGMegaMixer):
     def __init__(self,conf,extra_cmds=''):
         super(SLACNGMegaMixer,self).__init__(conf,extra_cmds=extra_cmds)
-        self['queue'] = self.get('queue','long')
+        self['queue'] = self.get('queue','medium')
 
     def write_job_script(self,files,i,rng):
         fname = os.path.join(self.get_chunk_output_dir(files['coadd_tile'],i,rng),'job.sh')
@@ -32,7 +32,7 @@ class SLACNGMegaMixer(NGMegaMixer):
 #BSUB -oo ./{jobname}.oe
 #BSUB -R "linux64 && rhel60 && scratch > 2"
 #BSUB -n 1
-#BSUB -W 24:00
+#BSUB -We 24:00
 
 {extracmds}
 ./runchunk.sh

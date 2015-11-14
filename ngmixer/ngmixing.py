@@ -11,7 +11,7 @@ from . import imageio
 from . import fitting
 from . import files
 from .defaults import DEFVAL,_CHECKPOINTS_DEFAULT_MINUTES
-from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS,BAD_OBJ
+from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS,BAD_OBJ,UTTER_FAILURE
 from .util import UtterFailure, seed_numpy
 
 class NGMixer(dict):
@@ -193,34 +193,95 @@ class NGMixer(dict):
 
         self.done = True
 
+    def _check_basic_things(self, coadd_mb_obs_list, mb_obs_list):
+        
+        # get the box size
+        for obsl in [coadd_mb_obs_list, mb_obs_list]:
+            box_size = self._get_box_size(obsl)
+            if box_size > 0:
+                break
+        self.curr_data['box_size'][self.curr_data_index] = box_size
+        print('    box_size: %d' % self.curr_data['box_size'][self.curr_data_index])
+
+        # check flags
+        flags = 0
+
+        if self['fit_coadd_galaxy']:
+            if coadd_obs_list.meta['obj_flags'] != 0:
+                flags |= BAD_OBJ
+                print('    skipping bad object')
+            flags |= self._obj_check(coadd_mb_obs_list)
+
+        if self['fit_me_galaxy']:
+            if mb_obs_list.meta['obj_flags'] != 0:
+                flags |= BAD_OBJ
+                print('    skipping bad object')
+            flags |= self._obj_check(mb_obs_list)
+
+        return flags
+
+    def _get_box_size(self, mb_obs_list):
+        box_size = DEFVAL
+        for band,obs_list in enumerate(mb_obs_list):
+            for obs in obs_list:
+                if obs.meta['flags'] == 0:
+                    box_size = obs.image.shape[0]
+                    break
+        return box_size
+
+    def _obj_check(self, mb_obs_list):
+        """
+        Check box sizes, number of cutouts
+        Require good in all bands
+        """
+        for band,obs_list in enumerate(mb_obs_list):
+            flags=self._obj_check_one(band,obs_list)
+            if flags != 0:
+                break
+        return flags
+
+    def _obj_check_one(self, band, obs_list):
+        """
+        Check box sizes, number of cutouts, flags on images
+        """
+        flags=0
+
+        ncutout = len(obs_list)
+        
+        if ncutout == 0:
+            print('    no cutouts')
+            flags |= NO_CUTOUTS
+            return flags
+
+        num_use = 0
+        for obs in obs_list:
+            if obs.meta['flags'] == 0:
+                num_use += 1
+
+        if num_use < ncutout:
+            print("    for band %d removed %d/%d images due to flags"
+                     % (band, ncutout-num_use, ncutout))
+
+        if num_use == 0:
+            flags |= IMAGE_FLAGS
+            return flags
+
+        box_size = self.curr_data['box_size'][self.curr_data_index]
+        if box_size > self['max_box_size']:
+            print('    box size too big: %d' % box_size)
+            flags |= BOX_SIZE_TOO_BIG
+
+        return flags
+
     def fit_obj(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None):
         """
         fit a single object
         """
 
         t0 = time.time()
-
-        # get the box size
-        box_size = self._get_box_size(mb_obs_list)
-        if box_size < 0:
-            box_size = self._get_box_size(coadd_mb_obs_list)
-        self.curr_data['box_size'][self.curr_data_index] = box_size
-        print('    box_size: %d' % self.curr_data['box_size'][self.curr_data_index])
-
-        # check flags
-        flags = 0
-        if box_size < 0:
-            flags = UTTER_FAILURE
-
-        if mb_obs_list.meta['obj_flags'] != 0:
-            flags |= BAD_OBJ
-            print('    skipping bad object')
-
-        if flags == 0 and self['fit_coadd_galaxy']:
-            flags |= self._obj_check(coadd_mb_obs_list)
-
-        if flags == 0 and self['fit_me_galaxy']:
-            flags |= self._obj_check(mb_obs_list)
+        
+        #check flags
+        flags = self._check_basic_things(coadd_mb_obs_list,mb_obs_list)
 
         if flags == 0:
             fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data)

@@ -41,7 +41,7 @@ class BaseNGMegaMixer(dict):
             medsf = os.path.join(DESDATA,
                                  'meds',
                                  self['meds_version'],
-                                 files['full_coadd_tile'],
+                                 files['full_coadd_tile'].split('/')[-1],
                                  '%s-%s-meds-%s.fits.fz' % (coadd_tile,band,self['meds_version']))
             assert os.path.exists(medsf),"MEDS file %s for band %s does not exist!" % (medsf,band)
             files['meds_files'].append(medsf)
@@ -51,23 +51,23 @@ class BaseNGMegaMixer(dict):
                              'EXTRA',
                              'meds',
                              self['meds_version'],
-                             'mof-data',
+                             'nbrs-data',
                              self['nbrs_version'],
-                             files['full_coadd_tile'],
+                             files['full_coadd_tile'].split('/')[-1],
                              '%s-meds-%s-nbrslist-%s.fits' % (coadd_tile,self['meds_version'],self['nbrs_version']))
         files['nbrs_file'] = nbrsf
 
         # do the fofs
         foff = os.path.join(DESDATA,
-                             'EXTRA',
-                             'meds',
-                             self['meds_version'],
-                             'nbrs-data',
-                             self['nbrs_version'],
-                             files['full_coadd_tile'],
+                            'EXTRA',
+                            'meds',
+                            self['meds_version'],
+                            'nbrs-data',
+                            self['nbrs_version'],
+                            files['full_coadd_tile'].split('/')[-1],
                             '%s-meds-%s-nbrsfofs-%s.fits' % (coadd_tile,self['meds_version'],self['nbrs_version']))
         files['fof_file'] = foff
-
+        
         # finally look for flags
         flagsf = os.path.join(DESDATA,
                               'EXTRA',
@@ -75,15 +75,15 @@ class BaseNGMegaMixer(dict):
                               self['meds_version'],
                               'obj-flags-data',
                               self['obj_flags_version'],
-                              files['full_coadd_tile'],
+                              files['full_coadd_tile'].split('/')[-1],
                               '%s-meds-%s-flags-%s.fits' % (coadd_tile,self['meds_version'],self['obj_flags_version']))
         files['obj_flags'] = flagsf
-
+        
         return files
 
     def get_fof_ranges(self,files):
         if self['model_nbrs']:
-            fofs = fitsio.read(self['fof_file'])
+            fofs = fitsio.read(files['fof_file'])
             num_fofs = len(np.unique(fofs['fofid']))
         else:
             m = meds.MEDS(files['meds_files'][0])

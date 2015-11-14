@@ -138,16 +138,65 @@ class NGMixBootFitter(BaseFitter):
         return fit_flags
 
     def _guess_and_run_boot(self,model,new_mb_obs_list,coadd,nbrs_fit_data=None):
-        if nbrs_fit_data is not None:
-            if coadd:
-                n = Namer('coadd_%s' % model)
-            else:
-                n = Namer(model)
+        if coadd:
+            n = Namer('coadd_%s' % model)
+        else:
+            n = Namer(model)
+            
+        if nbrs_fit_data is not None and nbrs_fit_data[n('max_flags')][new_mb_obs_list.meta['cen_ind']] == 0:
             guess = nbrs_fit_data[n('max_pars')][new_mb_obs_list.meta['cen_ind']]
+            
+            # lots of pain to get good guesses...
+            # the ngmix ParsGuesser does this
+            #    for pars 0 through 3 inclusive - uniform between -width to +width
+            #    for pars 4 through the end - guess = pars*(1+width*uniform(low=-1,high=1))
+            # thus for pars 4 through the end, I divide the error by the pars so that guess is
+            #  between 1-frac_err to 1+frac_err where frac_err = err/pars
+            # I also scale the errors by scale
+            scale = 0.5
+
+            # get the errors (cov in this case)
+            guess_errs = numpy.diag(nbrs_fit_data[n('max_pars_cov')][new_mb_obs_list.meta['cen_ind']]).copy()
+
+            #if less than zero, set to zero
+            w, = numpy.where(guess_errs < 0.0)
+            if w.size > 0:
+                guess_errs[w[:]] = 0.0
+
+            # get pars to scale by
+            # don't divide by zero! - if zero set to 0.1 (default val in ngmix)
+            w, = numpy.where(guess == 0.0)
+            guess_scale = guess.copy()
+            if w.size > 0:
+                guess_scale[w] = 0.1
+            w = numpy.arange(4,guess.size,1)
+
+            # final equation - need sqrt then apply scale and then divide by pars
+            guess_errs[w[:]] = numpy.sqrt(guess_errs[w])*scale/numpy.abs(guess_scale[w])
+            
+            # don't guess to wide for the shear
+            if guess_errs[2] > 0.1:
+                guess_errs[2] = 0.1
+            
+            if guess_errs[3] > 0.1:
+                guess_errs[3] = 0.1            
+                
+            print_pars(guess,front='    guess pars:  ')
+            print_pars(guess_errs,front='    guess errs:  ')
         else:
             guess = None
+            guess_errs = None
 
-        return self._run_boot(model,new_mb_obs_list,coadd,guess=guess)
+        if model == 'cm' and nbrs_fit_data is not None and nbrs_fit_data[n('flags')][new_mb_obs_list.meta['cen_ind']] == 0:
+            guess_TdbyTe = nbrs_fit_data[n('TdByTe')][new_mb_obs_list.meta['cen_ind']]
+            return self._run_boot(model,new_mb_obs_list,coadd,
+                                  guess_TdbyTe=guess_TdbyTe,
+                                  guess=guess,                                  
+                                  guess_widths=guess_errs)
+        else:
+            return self._run_boot(model,new_mb_obs_list,coadd,
+                                  guess=guess,
+                                  guess_widths=guess_errs)
 
     def _render_single(self,model,band,obs,pars_tag,fit_data,psf_gmix,jac,coadd):
         """
@@ -163,11 +212,17 @@ class NGMixBootFitter(BaseFitter):
         band_pars_obj[5] = pars_obj[5+band]
         assert len(band_pars_obj) == 6
 
-        if model != 'cm':
-            gmix_sky = GMixModel(band_pars_obj, model)
-        else:
-            gmix_sky = GMixCM(fit_data[n('fracdev')][0],fit_data[n('TdByTe')][0],band_pars_obj)
-        gmix_image = gmix_sky.convolve(psf_gmix)
+        for i in [1,2]:
+            try:
+                if model != 'cm':
+                    gmix_sky = GMixModel(band_pars_obj, model)
+                else:
+                    gmix_sky = GMixCM(fit_data[n('fracdev')][0],fit_data[n('TdByTe')][0],band_pars_obj)
+                gmix_image = gmix_sky.convolve(psf_gmix)
+            except GMixRangeError:
+                print('        setting T=0 for nbr!')
+                band_pars_obj[4] = 0.0 # set T to zero and try again
+        
         image = gmix_image.make_image(obs.image.shape, jacobian=jac)
         return image
 
@@ -204,13 +259,17 @@ class NGMixBootFitter(BaseFitter):
                     continue
 
                 # do central image first
-                if nbrs_fit_data[fit_flags_tag][cen_ind] == 0:
-                    assert obs.has_psf_gmix()
+                if nbrs_fit_data[fit_flags_tag][cen_ind] == 0 and obs.has_psf_gmix():
+                    # FIXME - better flagging for objects
+                    #assert obs.has_psf_gmix()
                     cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1], \
                         obs.get_psf_gmix(),obs.get_jacobian(),coadd)
                     print('        rendered central object')
                 else:
-                    print('        bad fit data for central: FoF obj = %d' % (cen_ind+1))
+                    if nbrs_fit_data[fit_flags_tag][cen_ind] != 0:
+                        print('        bad fit data for central: FoF obj = %d' % (cen_ind+1))
+                    else:
+                        print('        bad PSF fit for central: FoF obj = %d' % (cen_ind+1))
                     cenim = obs.image_orig.copy()
 
                 # now do nbrs
@@ -223,14 +282,18 @@ class NGMixBootFitter(BaseFitter):
                         if nbrs_psf.has_gmix():
                             nbrs_psf_gmix = nbrs_psf.get_gmix()
                         else:
-                            # FIXME - need to fit psf from off chip nbrs
-                            print('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
-                                % (nbrs_ind+1,cen_ind+1))
+                            # FIXME - better flagging of nbrs
+                            if 'fit_flags' in obs.meta and obs.meta['fit_flags'] != 0:
+                                print('        bad PSF fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
+                            else:
+                                # FIXME - need to fit psf from off chip nbrs
+                                print('    FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
+                                          % (nbrs_ind+1,cen_ind+1))
                             continue
-
+                        
+                        print('        rendered nbr: %d' % (nbrs_ind+1))
                         totim += self._render_single(model,band,obs,pars_tag,nbrs_fit_data[nbrs_ind:nbrs_ind+1], \
                             nbrs_psf_gmix,nbrs_jac,coadd)
-                        print('        rendered nbr: %d' % (nbrs_ind+1))
                     else:
                         print('        bad fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
 
@@ -948,56 +1011,6 @@ class NGMixBootFitter(BaseFitter):
         return d
 
 class MaxNGMixBootFitter(NGMixBootFitter):
-    def _guess_and_run_boot(self,model,new_mb_obs_list,coadd,nbrs_fit_data=None):
-        if nbrs_fit_data is not None:
-            if coadd:
-                n = Namer('coadd_%s' % model)
-            else:
-                n = Namer(model)
-            guess = nbrs_fit_data[n('max_pars')][new_mb_obs_list.meta['cen_ind']]
-
-            # lots of pain to get good guesses...
-            # the ngmix ParsGuesser does this
-            #    for pars 0 through 3 inclusive - uniform between -width to +width
-            #    for pars 4 through the end - guess = pars*(1+width*uniform(low=-1,high=1))
-            # thus for pars 4 through the end, I divide the error by the pars so that guess is
-            #  between 1-frac_err to 1+frac_err where frac_err = err/pars
-            # I also scale the errors by scale
-            scale = 0.5
-
-            # get the errors (cov in this case)
-            guess_errs = numpy.diag(nbrs_fit_data[n('max_pars_cov')][new_mb_obs_list.meta['cen_ind']]).copy()
-
-            #if less than zero, set to zero
-            w, = numpy.where(guess_errs < 0.0)
-            if w.size > 0:
-                guess_errs[w[:]] = 0.0
-
-            # get pars to scale by
-            # don't divide by zero! - if zero set to 0.1 (default val in ngmix)
-            w, = numpy.where(guess == 0.0)
-            guess_scale = guess.copy()
-            if w.size > 0:
-                guess_scale[w] = 0.1
-            w = numpy.arange(4,guess.size,1)
-
-            # final equation - need sqrt then apply scale and then divide by pars
-            guess_errs[w[:]] = numpy.sqrt(guess_errs[w])*scale/numpy.abs(guess_scale[w])
-
-            print_pars(guess,front='    guess pars:  ')
-        else:
-            guess = None
-
-        if model == 'cm' and nbrs_fit_data is not None:
-            guess_TdbyTe = nbrs_fit_data[n('TdByTe')][new_mb_obs_list.meta['cen_ind']]
-            return self._run_boot(model,new_mb_obs_list,coadd,guess=guess,guess_TdbyTe=guess_TdbyTe, \
-                                  guess_widths=guess_errs)
-        elif nbrs_fit_data is not None:
-            return self._run_boot(model,new_mb_obs_list,coadd,guess=guess, \
-                                  guess_widths=guess_errs)
-        else:
-            return self._run_boot(model,new_mb_obs_list,coadd,guess=guess)
-
     def _fit_max(self, model, guess=None, **kwargs):
         """
         do a maximum likelihood fit

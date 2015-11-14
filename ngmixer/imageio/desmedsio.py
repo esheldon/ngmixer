@@ -321,9 +321,12 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
             nimage = info.size
             meta = self.meds_meta_list[band]
 
-            # get coadd file ID
-            coadd_file_id = self.meds_list[band]['file_id'][0,0]
-
+            # get coadd file ID            
+            # a total hack, but should work!
+            # assumes all objects from the same coadd!
+            coadd_file_id = numpy.max(numpy.unique(self.meds_list[band]['file_id'][:,0]))
+            assert coadd_file_id >= 0,"Could not get coadd_file_id from MEDS file!"
+            
             # in image header for coadd
             coadd_path = info['image_path'][coadd_file_id].strip()
             coadd_path = coadd_path.replace(meta['DESDATA'][0],'${DESDATA}')
@@ -375,6 +378,11 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         NOTE: We don't fit the PSF observation here. The job of this class is to just to prep observations
         for fitting!
         """
+        
+        # hack for nbrs with no data!
+        # FIXME - need to flag these when being read in maybe?
+        if self.meds_list[band]['ncutout'][nbr_mindex] == 0:
+            return None,None
 
         # 1) use coadd WCS to get offset in u,v
         # 1a) first get coadd WCS
