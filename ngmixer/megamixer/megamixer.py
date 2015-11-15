@@ -119,7 +119,7 @@ class BaseNGMegaMixer(dict):
         os.system('rm -rf %s/*' % odir)
         for dr in [odir,wdir]:
             if not os.path.exists(dr):
-                os.mkdir(dr)
+                os.makedirs(dr)
 
         os.system('cp %s %s' % (self['run_config'],os.path.join(odir,'.')))
 
