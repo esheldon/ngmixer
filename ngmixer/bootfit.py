@@ -1109,7 +1109,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         self.boot.isample(ipars, prior=prior)
 
         rpars=self['round_pars']
-        self.boot.set_round_s2n(self['max_pars'],fitter_type=rpars['fitter_type'])
+        self.boot.set_round_s2n(fitter_type=rpars['fitter_type'])
 
     def _add_shear_info(self, model):
         """
