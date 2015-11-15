@@ -1,6 +1,6 @@
 import os
 import glob
-from setuptools import setup
+from distutils.core import setup
 import subprocess
 
 scripts=glob.glob('./bin/*')
