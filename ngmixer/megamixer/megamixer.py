@@ -172,19 +172,18 @@ python -u $cmd &> $lfile
         args['tmpcmd'] = self.get_tmp_dir()
         args['cmd'] = 'ngmixit'
 
-        if os.path.exists(files['fof_file']):
-            args['fof_opt'] = '--fof-file=%s'% files['fof_file'].replace(files['DESDATA'],'${DESDATA}')
+        if self['model_nbrs']:
+            if os.path.exists(files['fof_file']):
+                args['fof_opt'] = '--fof-file=%s'% files['fof_file'].replace(files['DESDATA'],'${DESDATA}')
+
+            if os.path.exists(files['nbrs_file']):
+                args['nbrs_opt'] = '--nbrs-file=%s'% files['nbrs_file'].replace(files['DESDATA'],'${DESDATA}')
+
+            if os.path.exists(files['obj_flags']):
+                args['flags_opt'] = '--obj-flags=%s'% files['obj_flags'].replace(files['DESDATA'],'${DESDATA}')
         else:
             args['fof_opt'] = ''
-
-        if os.path.exists(files['nbrs_file']):
-            args['nbrs_opt'] = '--nbrs-file=%s'% files['nbrs_file'].replace(files['DESDATA'],'${DESDATA}')
-        else:
             args['nbrs_opt'] = ''
-
-        if os.path.exists(files['obj_flags']):
-            args['flags_opt'] = '--obj-flags=%s'% files['obj_flags'].replace(files['DESDATA'],'${DESDATA}')
-        else:
             args['flags_opt'] = ''
 
         if 'seed' not in self:
