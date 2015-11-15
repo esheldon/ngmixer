@@ -99,7 +99,7 @@ class BaseNGMegaMixer(dict):
         return fof_ranges
 
     def get_main_output_dir(self,coadd_tile):
-        return os.path.join(self['output_dir'],coadd_tile)
+        return os.path.join(self['output_dir'],self['run'],coadd_tile)
 
     def get_work_output_dir(self,coadd_tile):
         return os.path.join(self.get_main_output_dir(coadd_tile),'work')
