@@ -97,8 +97,12 @@ if __name__ == '__main__':
         for line in open(coadd_run,'r'):
             if len(line.strip()) > 0:
                 coadd_runs.append(line.strip())
+
     else:
-        coadd_runs = [coadd_run]
+        import desdb
+        coadd_runs = desdb.files.get_release_runs(coadd_run)
+        if len(coadd_runs) == 0:
+            coadd_runs = [coadd_run]
     
     if options.queue is not None:
         conf['queue'] = options.queue
