@@ -92,26 +92,34 @@ if __name__ == '__main__':
     
     # get data to process
     coadd_run = args[2]
+    if os.path.exists(coadd_run):
+        coadd_runs = []
+        for line in open(coadd_run,'r'):
+            if len(line.strip()) > 0:
+                coadd_runs.append(line.strip())
+    else:
+        coadd_runs = [coadd_run]
     
     if options.queue is not None:
         conf['queue'] = options.queue
     
     ngmm = MMixer(conf,extra_cmds=options.extra_cmds,seed=options.seed)
-
-    if cmd == 'setup':
-        ngmm.setup_coadd_tile(coadd_run)
-    elif cmd == 'run':
-        ngmm.run_coadd_tile(coadd_run)
-    elif cmd == 'rerun':
-        ngmm.rerun_coadd_tile(coadd_run)
-    elif cmd == 'collate':
-        ngmm.collate_coadd_tile(coadd_run,
-                                verify=options.verify,
-                                blind=not options.noblind,
-                                clobber=options.clobber,
-                                skip_errors=options.skip_errors)
-    elif cmd == 'archive':
-        ngmm.archive_coadd_tile(coadd_run,
-                                compress=not options.nocompress)
-    else:
-        raise ValueError("cmd %s not valid!" % cmd)
+    
+    for coadd_run in coadd_runs:
+        if cmd == 'setup':
+            ngmm.setup_coadd_tile(coadd_run)
+        elif cmd == 'run':
+            ngmm.run_coadd_tile(coadd_run)
+        elif cmd == 'rerun':
+            ngmm.rerun_coadd_tile(coadd_run)
+        elif cmd == 'collate':
+            ngmm.collate_coadd_tile(coadd_run,
+                                    verify=options.verify,
+                                    blind=not options.noblind,
+                                    clobber=options.clobber,
+                                    skip_errors=options.skip_errors)
+        elif cmd == 'archive':
+            ngmm.archive_coadd_tile(coadd_run,
+                                    compress=not options.nocompress)
+        else:
+            raise ValueError("cmd %s not valid!" % cmd)
