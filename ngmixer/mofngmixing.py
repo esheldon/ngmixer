@@ -156,6 +156,7 @@ class MOFNGMixer(NGMixer):
                                 obs.weight = getattr(obs,'weight_us',obs.weight)
                             else:
                                 obs.weight = getattr(obs,'weight_raw',obs.weight)
+                            obs.weight_orig = obs.weight.copy()
                 for obs_list in coadd_mb_obs_list:
                     for obs in obs_list:
                         if obs.meta['flags'] == 0:
@@ -163,6 +164,7 @@ class MOFNGMixer(NGMixer):
                                 obs.weight = getattr(obs,'weight_us',obs.weight)
                             else:
                                 obs.weight = getattr(obs,'weight_raw',obs.weight)
+                            obs.weight_orig = obs.weight.copy()
 
             bs = []
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
@@ -172,6 +174,7 @@ class MOFNGMixer(NGMixer):
                 bs.append(box_size)
             bs = numpy.array(bs)
             q = numpy.argsort(bs)
+            q = q[::-1] # sort to fit biggest to smallest
             for i in q:
                 self.curr_data_index = i
                 coadd_mb_obs_list = coadd_mb_obs_lists[i]
@@ -208,10 +211,12 @@ class MOFNGMixer(NGMixer):
                                 for obs in obs_list:
                                     if obs.meta['flags'] == 0:
                                         obs.weight = getattr(obs,'weight_raw',obs.weight)
+                                        obs.weight_orig = obs.weight.copy()
                             for obs_list in coadd_mb_obs_list:
                                 for obs in obs_list:
                                     if obs.meta['flags'] == 0:
                                         obs.weight = getattr(obs,'weight_raw',obs.weight)
+                                        obs.weight_orig = obs.weight.copy()
 
                     # data
                     self.prev_data = self.curr_data.copy()
@@ -222,7 +227,7 @@ class MOFNGMixer(NGMixer):
                         coadd_mb_obs_list = coadd_mb_obs_lists[i]
                         mb_obs_list = mb_obs_lists[i]
                         if foflen > 1:
-                            print('  fof obj: %d:%d' % (self.curr_data_index+1,foflen))
+                            print('  fof obj: %d:%d - itr %d' % (self.curr_data_index+1,foflen,itr))
                         print('    id: %d' % mb_obs_list.meta['id'])
 
                         num += 1
