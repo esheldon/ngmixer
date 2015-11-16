@@ -265,8 +265,8 @@ python -u $cmd &> $lfile
             if not os.path.exists(fname):
                 self.run_chunk(files,chunk,rng)
 
-    def rerun_coadd_tile(self,coadd_tile):
-        print("re-running tile '%s'" % coadd_tile)
+    def clean_coadd_tile(self,coadd_tile):
+        print("cleaning tile '%s'" % coadd_tile)
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
         for chunk,rng in enumerate(fof_ranges):
@@ -281,8 +281,15 @@ python -u $cmd &> $lfile
             if os.path.exists(fname):
                 os.remove(fname)
 
-            self.run_chunk(files,chunk,rng)
-
+    def rerun_coadd_tile(self,coadd_tile):
+        print("re-running tile '%s'" % coadd_tile)
+        
+        # first clean
+        self.clean_coadd_tile(coadd_tile)
+        
+        # then run
+        self.run_coadd_tile(coadd_tile)
+    
     def collate_coadd_tile(self,coadd_tile,verify=False,blind=True,clobber=True,skip_errors=False):
         print("collating tile '%s'" % coadd_tile)
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
@@ -312,21 +319,10 @@ python -u $cmd &> $lfile
 
     def archive_coadd_tile(self,coadd_tile,compress=True):
         print("archiving tile '%s'" % coadd_tile)
-        files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
-        
-        # remove outputs
-        for chunk,rng in enumerate(fof_ranges):
-            dr = self.get_chunk_output_dir(files,chunk,rng)
-            base = self.get_chunk_output_basename(files,self['run'],rng)
-            
-            fname = os.path.join(dr,base+'-checkpoint.fits')
-            if os.path.exists(fname):
-                os.remove(fname)
-
-            fname = os.path.join(dr,base+'.fits')
-            if os.path.exists(fname):
-                os.remove(fname)
                 
+        # remove outputs
+        self.clean_coadd_tile(coadd_tile)
+        
         # tar (and maybe compress) the rest
         if compress:
             tar_cmd = 'tar -czvf'
