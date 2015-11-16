@@ -67,9 +67,17 @@ if __name__ == '__main__':
     ngmixer.defaults.VERBOSITY.level = options.verbosity
 
     cmd = args[0]
-    conf = read_yaml(args[1])
+
+    if 'NGMIXER_CONFIG_DIR' in os.environ:
+        conf_file = os.path.join(os.environ['NGMIXER_CONFIG_DIR'],
+                                 'run_config',
+                                 'run-'+argv[1]+'.yaml')
+        conf_file = os.path.expandvars(conf_file)
+    else:
+        conf_file = args[1]        
+    conf = read_yaml(conf_file)
     run = args[2]
-    conf['run_config'] = args[1]
+    conf['run_config'] = conf_file
     
     if options.queue is not None:
         conf['queue'] = options.queue

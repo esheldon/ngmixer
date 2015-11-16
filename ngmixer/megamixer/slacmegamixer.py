@@ -15,8 +15,8 @@ class SLACNGMegaMixer(NGMegaMixer):
         self['queue'] = self.get('queue','medium')
 
     def write_job_script(self,files,i,rng):
-        fname = os.path.join(self.get_chunk_output_dir(files['full_coadd_tile'],i,rng),'job.sh')
-        jobname = self.get_chunk_output_basename(files['coadd_tile'],self['run'],rng)
+        fname = os.path.join(self.get_chunk_output_dir(files,i,rng),'job.sh')
+        jobname = self.get_chunk_output_basename(files,self['run'],rng)
 
         if len(self['extra_cmds']) > 0:
             with open(self['extra_cmds'],'r') as f:
@@ -43,5 +43,5 @@ class SLACNGMegaMixer(NGMegaMixer):
         os.system('chmod 755 %s' % fname)
 
     def run_chunk(self,files,chunk,rng):
-        dr = self.get_chunk_output_dir(files['full_coadd_tile'],chunk,rng)
+        dr = self.get_chunk_output_dir(files,chunk,rng)
         os.system('cd %s && bsub < job.sh && cd -' % dr)

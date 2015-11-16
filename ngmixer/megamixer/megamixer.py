@@ -10,8 +10,8 @@ from .concat_io import get_concat_class
 
 class BaseNGMegaMixer(dict):
     def __init__(self,conf,extra_cmds='',seed=None):
-        self.update(conf)
-        self.ngmix_conf = read_yaml(conf['ngmix_config'])
+        self.update(conf)        
+        self.ngmix_conf = read_yaml(self._get_ngmix_config() )
         self['model_nbrs'] = self.ngmix_conf.get('model_nbrs',False)
         self['extra_cmds'] = extra_cmds        
         self.rng = np.random.RandomState(seed=seed)
@@ -73,8 +73,50 @@ class BaseNGMegaMixer(dict):
                               '%s-meds-%s-flags-%s.fits' % (coadd_tile,self['meds_version'],self['obj_flags_version']))
         files['obj_flags'] = flagsf
         
+        # get output files
+        self._set_output_files(files)
+        
+        # ngmix config
+        files['ngmix_config'] = self._get_ngmix_config() 
+        
         return files
 
+    def _set_output_files(self,files):
+        # main output dir
+        if 'NGMIXER_OUTPUT_DIR' in os.environ:
+            odir = os.path.expandvars(os.environ['NGMIXER_OUTPUT_DIR'])
+        elif 'output_dir' in self:
+            odir = self['output_dir']
+        else:
+            odir = '.'   
+        
+        files['main_output_dir'] = os.path.join(odir,
+                                                self['run'],
+                                                full_coadd_tile)
+            
+        files['work_output_dir'] = os.path.join(files['main_output_dir'],
+                                                'work')
+            
+    def _get_ngmix_config(self):
+        if 'NGMIXER_CONFIG_DIR' in os.environ:
+            ngmix_conf = os.path.join(os.environ['NGMIXER_CONFIG_DIR'],
+                                      'ngmix_config',
+                                      'ngmix-'+self['run']+'.yaml')
+            ngmix_conf = os.path.expandvars(ngmix_conf)
+        elif 'ngmix_config' in self:
+            ngmix_conf = self['ngmix_config']
+        else:
+            ngmix_conf = 'ngmix-'+self['run']+'.yaml'
+            
+        return ngmix_conf
+        
+    def get_chunk_output_dir(self,files,chunk,rng):
+        return os.path.join(files['work_output_dir'], \
+                            'chunk%05d_%d_%d' % (chunk,rng[0],rng[1]))
+
+    def get_chunk_output_basename(self,files,chunk,rng):
+        return '%s-%s-%d-%d' % (files['coadd_tile'],self['run'],rng[0],rng[1])
+    
     def get_fof_ranges(self,files):
         if self['model_nbrs']:
             fofs = fitsio.read(files['fof_file'])
@@ -98,27 +140,12 @@ class BaseNGMegaMixer(dict):
 
         return fof_ranges
 
-    def get_main_output_dir(self,full_coadd_tile):
-        if 'NGMIXER_DATA_DIR' in os.environ:
-            return os.path.join(self['output_dir'],self['run'],full_coadd_tile)
-        else:
-            return os.path.join(self['output_dir'],self['run'],full_coadd_tile)
-
-    def get_work_output_dir(self,full_coadd_tile):
-        return os.path.join(self.get_main_output_dir(full_coadd_tile),'work')
-
-    def get_chunk_output_dir(self,full_coadd_tile,chunk,rng):
-        return os.path.join(self.get_work_output_dir(full_coadd_tile),'chunk%05d_%d_%d' % (chunk,rng[0],rng[1]))
-
-    def get_chunk_output_basename(self,coadd_tile,chunk,rng):
-        return '%s-%s-%d-%d' % (coadd_tile,self['run'],rng[0],rng[1])
-
     def make_output_dirs(self,files,fof_ranges):
         """
         make output dirs
         """
-        odir = self.get_main_output_dir(files['full_coadd_tile'])
-        wdir = self.get_work_output_dir(files['full_coadd_tile'])
+        odir = files['main_output_dir']
+        wdir = files['chunk_output_dir']
         os.system('rm -rf %s/*' % odir)
         for dr in [odir,wdir]:
             if not os.path.exists(dr):
@@ -127,7 +154,7 @@ class BaseNGMegaMixer(dict):
         os.system('cp %s %s' % (self['run_config'],os.path.join(odir,'.')))
 
         for chunk,rng in enumerate(fof_ranges):
-            dr = self.get_chunk_output_dir(files['full_coadd_tile'],chunk,rng)
+            dr = self.get_chunk_output_dir(files,chunk,rng)
             if not os.path.exists(dr):
                 os.mkdir(dr)
 
@@ -135,7 +162,7 @@ class BaseNGMegaMixer(dict):
             os.system('cp %s %s' % (self['extra_cmds'],os.path.join(odir,'.')))
 
     def make_scripts(self,files,fof_ranges):
-        os.system('cp %s %s' % (self['ngmix_config'],os.path.join(self.get_main_output_dir(files['full_coadd_tile']),'.')))
+        os.system('cp %s %s' % (files['ngmix_config'],os.path.join(files['main_output_dir'],'.')))
 
         for i,rng in enumerate(fof_ranges):
             self.write_script(files,i,rng)
@@ -169,9 +196,9 @@ python -u $cmd &> $lfile
         args['chunk'] = i
         args['start'] = rng[0]
         args['stop'] = rng[1]
-        args['ngmix_config'] = os.path.join('..','..',self['ngmix_config'])
+        args['ngmix_config'] = os.path.join('..','..',files['ngmix_config'])
         args['meds_files'] = ' '.join([medsf.replace(files['DESDATA'],'${DESDATA}') for medsf in files['meds_files']])
-        args['base_name'] = self.get_chunk_output_basename(files['coadd_tile'],self['run'],rng)
+        args['base_name'] = self.get_chunk_output_basename(files,self['run'],rng)
         args['tmpcmd'] = self.get_tmp_dir()
         args['cmd'] = 'ngmixit'
 
@@ -197,7 +224,7 @@ python -u $cmd &> $lfile
 
         scr = fmt.format(**args)
 
-        scr_name = os.path.join(self.get_chunk_output_dir(files['full_coadd_tile'],i,rng),'runchunk.sh')
+        scr_name = os.path.join(self.get_chunk_output_dir(files,i,rng),'runchunk.sh')
         with open(scr_name,'w') as fp:
             fp.write(scr)
 
@@ -225,8 +252,8 @@ python -u $cmd &> $lfile
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
         for chunk,rng in enumerate(fof_ranges):
-            dr = self.get_chunk_output_dir(files['full_coadd_tile'],chunk,rng)
-            base = self.get_chunk_output_basename(files['coadd_tile'],self['run'],rng)
+            dr = self.get_chunk_output_dir(files,chunk,rng)
+            base = self.get_chunk_output_basename(files,self['run'],rng)
             fname = os.path.join(dr,base+'.fits')
             if not os.path.exists(fname):
                 self.run_chunk(files,chunk,rng)
@@ -235,8 +262,8 @@ python -u $cmd &> $lfile
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
         for chunk,rng in enumerate(fof_ranges):
-            dr = self.get_chunk_output_dir(files['full_coadd_tile'],chunk,rng)
-            base = self.get_chunk_output_basename(files['coadd_tile'],self['run'],rng)
+            dr = self.get_chunk_output_dir(files,chunk,rng)
+            base = self.get_chunk_output_basename(files,self['run'],rng)
 
             fname = os.path.join(dr,base+'-checkpoint.fits')
             if os.path.exists(fname):
@@ -253,16 +280,16 @@ python -u $cmd &> $lfile
 
         clist = []
         for chunk,rng in enumerate(fof_ranges):
-            dr = self.get_chunk_output_dir(files['full_coadd_tile'],chunk,rng)
-            base = self.get_chunk_output_basename(files['coadd_tile'],self['run'],rng)
+            dr = self.get_chunk_output_dir(files,chunk,rng)
+            base = self.get_chunk_output_basename(files,self['run'],rng)
             fname = os.path.join(dr,base+'.fits')
             clist.append(fname)
 
         tc = get_concat_class(self['concat_type'])
         tc = tc(self['run'],
-                self['ngmix_config'],
+                files['ngmix_config'],
                 clist,
-                self.get_main_output_dir(files['full_coadd_tile']),
+                files['main_output_dir'],
                 files['coadd_tile'],
                 bands=self['bands'],
                 blind=blind,
@@ -302,7 +329,7 @@ python -u $cmd &> $lfile
 
 class NGMegaMixer(BaseNGMegaMixer):
     def write_job_script(self,files,i,rng):
-        fname = os.path.join(self.get_chunk_output_dir(files['full_coadd_tile'],i,rng),'job.sh')
+        fname = os.path.join(self.get_chunk_output_dir(files,i,rng),'job.sh')
 
         if len(self['extra_cmds']) > 0:
             with open(self['extra_cmds'],'r') as f:
@@ -321,5 +348,5 @@ class NGMegaMixer(BaseNGMegaMixer):
         os.system('chmod 755 %s' % fname)
 
     def run_chunk(self,files,chunk,rng):
-        dr = self.get_chunk_output_dir(files['full_coadd_tile'],chunk,rng)
+        dr = self.get_chunk_output_dir(files,chunk,rng)
         os.system('cd %s && ./job.sh && cd -' % dr)
