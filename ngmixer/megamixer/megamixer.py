@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import os
 import sys
 import meds
@@ -246,12 +247,14 @@ python -u $cmd &> $lfile
         return files,fof_ranges
 
     def setup_coadd_tile(self,coadd_tile):
+        print("setting up tile '%s'" % coadd_tile)
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
-
+        
         self.make_output_dirs(files,fof_ranges)
         self.make_scripts(files,fof_ranges)
 
     def run_coadd_tile(self,coadd_tile):
+        print("running tile '%s'" % coadd_tile)
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
         for chunk,rng in enumerate(fof_ranges):
@@ -262,6 +265,7 @@ python -u $cmd &> $lfile
                 self.run_chunk(files,chunk,rng)
 
     def rerun_coadd_tile(self,coadd_tile):
+        print("re-running tile '%s'" % coadd_tile)
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
         for chunk,rng in enumerate(fof_ranges):
@@ -279,6 +283,7 @@ python -u $cmd &> $lfile
             self.run_chunk(files,chunk,rng)
 
     def collate_coadd_tile(self,coadd_tile,verify=False,blind=True,clobber=True,skip_errors=False):
+        print("collating tile '%s'" % coadd_tile)
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
         clist = []
@@ -304,6 +309,40 @@ python -u $cmd &> $lfile
         else:
             tc.concat()
 
+    def archive_coadd_tile(self,coadd_tile,compress=True):
+        print("archiving tile '%s'" % coadd_tile)
+        files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
+        
+        # remove outputs
+        for chunk,rng in enumerate(fof_ranges):
+            dr = self.get_chunk_output_dir(files,chunk,rng)
+            base = self.get_chunk_output_basename(files,self['run'],rng)
+            
+            fname = os.path.join(dr,base+'-checkpoint.fits')
+            if os.path.exists(fname):
+                os.remove(fname)
+
+            fname = os.path.join(dr,base+'.fits')
+            if os.path.exists(fname):
+                os.remove(fname)
+                
+        # tar (and maybe compress) the rest
+        if compress:
+            tar_cmd = 'tar -czvf'
+            tail = '.tar.gz'
+        else:
+            tar_cmd = 'tar -cvf'
+            tail = '.tar'
+        work_dir = files['work_output_dir']
+        ofile = '%s%s' % (work_dir,tail)
+        if os.path.exists(ofile):
+            os.remove(ofile)
+        cmd = '%s %s %s' % (tar_cmd,ofile,work_dir)
+        os.system(cmd)
+        
+        # remove untarred work dir
+        os.system('rm -rf %s' % work_dir)
+        
     def get_tmp_dir(self):
         return '`mktemp -d /tmp/XXXXXXXXXX`'
 
