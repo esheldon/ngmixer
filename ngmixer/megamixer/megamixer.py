@@ -339,7 +339,41 @@ python -u $cmd &> $lfile
         
         # remove untarred work dir
         os.system('rm -rf %s' % work_dir)
+
+    def link_coadd_tile(self,coadd_tile):
+        print("linking tile '%s'" % coadd_tile)
         
+        # startup concat to get output name
+        files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
+        
+        clist = []
+        for chunk,rng in enumerate(fof_ranges):
+            dr = self.get_chunk_output_dir(files,chunk,rng)
+            base = self.get_chunk_output_basename(files,self['run'],rng)
+            fname = os.path.join(dr,base+'.fits')
+            clist.append(fname)
+
+        tc = get_concat_class(self['concat_type'])
+        tc = tc(self['run'],
+                files['ngmix_config'],
+                clist,
+                files['main_output_dir'],
+                files['coadd_tile'],
+                bands=self['bands'],
+                blind=blind,
+                clobber=clobber,
+                skip_errors=skip_errors)        
+        
+        # make symlink
+        collated_file = tc.collated_file
+        bname = os.path.basename(collated_file)
+        
+        odir = '/'.join(files['main_output_dir'].split('/')[:-1])
+        odir = os.path.join(odir,'output')
+        if not os.path.exists(odir):
+            os.path.makedirs(odir)
+        os.system('ln -s %s %s/%s' % (collated_file,odir,bname))
+    
     def get_tmp_dir(self):
         return '`mktemp -d /tmp/XXXXXXXXXX`'
 

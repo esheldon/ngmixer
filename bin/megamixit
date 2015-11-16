@@ -8,7 +8,9 @@
         run - run jobs
         rerun - rerun jobs
         collate - combine job outputs into a single file
-        archive - run after collate to delete intermediate files and tar logs"""
+        clean - clean all outputs from a run
+        archive - run after collate to delete intermediate files and tar logs
+        link - make symlinks to all final outputs under {run}/output"""
 import os
 import sys
 import meds
@@ -122,8 +124,12 @@ if __name__ == '__main__':
                                     blind=not options.noblind,
                                     clobber=options.clobber,
                                     skip_errors=options.skip_errors)
+        elif cmd == 'clean':
+            ngmm.clean_coadd_tile(coadd_run)
         elif cmd == 'archive':
             ngmm.archive_coadd_tile(coadd_run,
                                     compress=not options.nocompress)
+        elif cmd == 'link':
+            ngmm.link_coadd_tile(coadd_run)
         else:
             raise ValueError("cmd %s not valid!" % cmd)
