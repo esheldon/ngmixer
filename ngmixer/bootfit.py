@@ -505,7 +505,7 @@ class NGMixBootFitter(BaseFitter):
         """
         get the bootstrapper for fitting psf through galaxy
         """
-
+        
         find_cen=self.get('pre_find_center',False)
         if model == 'cm':
             fracdev_prior=self['model_pars']['cm']['fracdev_prior']
@@ -699,18 +699,20 @@ class NGMixBootFitter(BaseFitter):
         title='%d %s' % (obj_id,ptype)
 
         try:
-            pdict=fitter.make_plots(title=title,
-                                    weights=wgts)
-
+            if fitter_type == 'isample':
+                pdict=fitter.make_plots(title=title)
+            else:
+                pdict=fitter.make_plots(title=title,weights=wgts)
+        
             pdict['trials'].aspect_ratio=1.5
             pdict['wtrials'].aspect_ratio=1.5
-
+            
             trials_png=os.path.join(self.plot_dir,'%d-%s-trials.png' % (obj_id,ptype))
             wtrials_png=os.path.join(self.plot_dir,'%d-%s-wtrials.png' % (obj_id,ptype))
-
+            
             print("        making plot %s" % trials_png)
             pdict['trials'].write_img(1200,1200,trials_png)
-
+            
             print("        making plot %s" % wtrials_png)
             pdict['wtrials'].write_img(1200,1200,wtrials_png)
         except:
@@ -1087,6 +1089,12 @@ class MaxNGMixBootFitter(NGMixBootFitter):
             self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
 
 class ISampNGMixBootFitter(MaxNGMixBootFitter):
+    def _setup(self):
+        super(ISampNGMixBootFitter,self)._setup()
+        
+        # verbose True so we can see isamp output
+        self['verbose'] = True
+
     def _fit_galaxy(self, model, coadd, guess=None, **kwargs):
         self._fit_max(model,guess=guess)
         self._do_isample(model)
