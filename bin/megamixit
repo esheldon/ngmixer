@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 """
-    %prog [options] command run_config_file coadd_run
-    Process the input coadd_tile.
+    %prog [options] command [run|run_config_file] [coadd_run|release|tile list]
+    Process the input coadd tile(s) with a given ngmix run
 
     Possible commands are:
         setup - setup jobs
         run - run jobs
         rerun - rerun jobs
-        collate - combine job outputs into a single file"""
+        collate - combine job outputs into a single file
+        archive - run after collate to delete intermediate files and tar logs"""
 import os
 import sys
 import meds
@@ -66,18 +67,28 @@ if __name__ == '__main__':
 
     ngmixer.defaults.VERBOSITY.level = options.verbosity
 
+    # get command
     cmd = args[0]
-
+    
+    # find the proper configs
     if 'NGMIXER_CONFIG_DIR' in os.environ:
         conf_file = os.path.join(os.environ['NGMIXER_CONFIG_DIR'],
                                  'run_config',
-                                 'run-'+argv[1]+'.yaml')
+                                 'run-'+args[1]+'.yaml')
         conf_file = os.path.expandvars(conf_file)
     else:
-        conf_file = args[1]        
-    conf = read_yaml(conf_file)
-    run = args[2]
+        conf_file = args[1]
+    conf = read_yaml(os.path.expandvars(conf_file))    
     conf['run_config'] = conf_file
+    
+    if 'NGMIXER_CONFIG_DIR' in os.environ:
+        run = os.path.basename(conf_file)[4:-5]
+        assert run == conf['run'], \
+            "Specified run '%s' does not match name in file '%s'!" \
+            % (run,conf['run'])
+    
+    # get data to process
+    coadd_run = args[2]
     
     if options.queue is not None:
         conf['queue'] = options.queue
@@ -85,13 +96,13 @@ if __name__ == '__main__':
     ngmm = MMixer(conf,extra_cmds=options.extra_cmds,seed=options.seed)
 
     if cmd == 'setup':
-        ngmm.setup_coadd_tile(run)
+        ngmm.setup_coadd_tile(coadd_run)
     elif cmd == 'run':
-        ngmm.run_coadd_tile(run)
+        ngmm.run_coadd_tile(coadd_run)
     elif cmd == 'rerun':
-        ngmm.rerun_coadd_tile(run)
+        ngmm.rerun_coadd_tile(coadd_run)
     elif cmd == 'collate':
-        ngmm.collate_coadd_tile(run,
+        ngmm.collate_coadd_tile(coadd_run,
                                 verify=options.verify,
                                 blind=not options.noblind,
                                 clobber=options.clobber,
