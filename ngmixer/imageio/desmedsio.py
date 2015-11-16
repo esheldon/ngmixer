@@ -105,7 +105,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
                     if obs.weight_raw is not None:
                         obs.weight_raw *= pixel_scale4
                     if obs.weight_us is not None:
-                        obs.weight_raw *= pixel_scale4
+                        obs.weight_us *= pixel_scale4
 
         return coadd_obs_list, obs_list
 

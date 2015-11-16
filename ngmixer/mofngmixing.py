@@ -227,7 +227,7 @@ class MOFNGMixer(NGMixer):
                         coadd_mb_obs_list = coadd_mb_obs_lists[i]
                         mb_obs_list = mb_obs_lists[i]
                         if foflen > 1:
-                            print('  fof obj: %d:%d - itr %d' % (self.curr_data_index+1,foflen,itr))
+                            print('  fof obj: %d:%d - itr %d' % (self.curr_data_index+1,foflen,itr+1))
                         print('    id: %d' % mb_obs_list.meta['id'])
 
                         num += 1
