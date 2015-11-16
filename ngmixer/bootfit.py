@@ -229,19 +229,15 @@ class NGMixBootFitter(BaseFitter):
         mask a nbr in weight map of central using seg map
         """
         
-        cen_ind = mb_obs_list.meta['cen_ind']
+        nbrs_number = nbrs_fit_data['number'][nbr_ind]
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
                  if obs.meta['flags'] != 0:
                     continue
-                 
                  seg = obs.seg
-                 for nbrs_ind in mb_obs_list.meta['nbrs_inds']:
-                     nbrs_number = nbrs_fit_data['number'][nbrs_ind]
-                     
-                     q = numpy.where(seg == nbrs_number)
-                     if q[0].size > 0:
-                         masked_pix[q] = 1        
+                 q = numpy.where(seg == nbrs_number)
+                 if q[0].size > 0:
+                     masked_pix[q] = 1        
 
     def _render_nbrs(self,model,mb_obs_list,coadd,nbrs_fit_data):
         """
