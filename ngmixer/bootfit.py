@@ -110,19 +110,10 @@ class NGMixBootFitter(BaseFitter):
             if self['model_nbrs'] and nbrs_fit_data is not None:
                 self._render_nbrs(model,new_mb_obs_list,coadd,nbrs_fit_data)
 
-            """
-            if nbrs_fit_data is not None:
-                if coadd:
-                    n = Namer('coadd_%s' % model)
-                else:
-                    n = Namer(model)
-                guess = nbrs_fit_data[n('max_pars')][mb_obs_list.meta['cen_ind']]
-            else:
-                guess = None
+            model_flags, boot = self._guess_and_run_boot(
+                model,new_mb_obs_list,coadd,nbrs_fit_data=nbrs_fit_data
+            )
 
-            model_flags, boot = self._run_boot(model,new_mb_obs_list,coadd,guess=guess)
-            """
-            model_flags, boot = self._guess_and_run_boot(model,new_mb_obs_list,coadd,nbrs_fit_data=nbrs_fit_data)
             fit_flags |= model_flags
 
             # fill the epoch data
@@ -144,8 +135,11 @@ class NGMixBootFitter(BaseFitter):
         else:
             n = Namer(model)
             
-        if nbrs_fit_data is not None and nbrs_fit_data[n('max_flags')][new_mb_obs_list.meta['cen_ind']] == 0:
-            guess = nbrs_fit_data[n('max_pars')][new_mb_obs_list.meta['cen_ind']]
+        ind = new_mb_obs_list.meta['cen_ind']
+        flags = nbrs_fit_data[n('max_flags')][ind]
+
+        if nbrs_fit_data is not None and flags == 0:
+            guess = nbrs_fit_data[n('max_pars')][ind]
             
             # lots of pain to get good guesses...
             # the ngmix ParsGuesser does this
@@ -157,7 +151,7 @@ class NGMixBootFitter(BaseFitter):
             scale = 0.5
 
             # get the errors (cov in this case)
-            guess_errs = numpy.diag(nbrs_fit_data[n('max_pars_cov')][new_mb_obs_list.meta['cen_ind']]).copy()
+            guess_errs = numpy.diag(nbrs_fit_data[n('max_pars_cov')][ind]).copy()
 
             #if less than zero, set to zero
             w, = numpy.where(guess_errs < 0.0)
@@ -188,8 +182,11 @@ class NGMixBootFitter(BaseFitter):
             guess = None
             guess_errs = None
 
-        if model == 'cm' and nbrs_fit_data is not None and nbrs_fit_data[n('flags')][new_mb_obs_list.meta['cen_ind']] == 0:
-            guess_TdbyTe = nbrs_fit_data[n('TdByTe')][new_mb_obs_list.meta['cen_ind']]
+        if (model == 'cm' and
+                nbrs_fit_data is not None
+                and nbrs_fit_data[n('flags')][ind] == 0):
+
+            guess_TdbyTe = nbrs_fit_data[n('TdByTe')][ind]
             return self._run_boot(model,new_mb_obs_list,coadd,
                                   guess_TdbyTe=guess_TdbyTe,
                                   guess=guess,                                  
@@ -218,7 +215,9 @@ class NGMixBootFitter(BaseFitter):
                 if model != 'cm':
                     gmix_sky = GMixModel(band_pars_obj, model)
                 else:
-                    gmix_sky = GMixCM(fit_data[n('fracdev')][0],fit_data[n('TdByTe')][0],band_pars_obj)
+                    gmix_sky = GMixCM(fit_data[n('fracdev')][0],
+                                      fit_data[n('TdByTe')][0],
+                                      band_pars_obj)
                 gmix_image = gmix_sky.convolve(psf_gmix)
             except GMixRangeError:
                 print('        setting T=0 for nbr!')
@@ -231,7 +230,8 @@ class NGMixBootFitter(BaseFitter):
         """
         mask a nbr in weight map of central using a seg map
         """
-        if self['unmodeled_nbrs_masking_type'] == 'nbrs-seg':
+        mtype=self['unmodeled_nbrs_masking_type']
+        if mtype == 'nbrs-seg':
             nbrs_number = nbrs_fit_data['number'][nbr_ind]
             for band,obs_list in enumerate(mb_obs_list):
                 for obs in obs_list:
@@ -241,7 +241,8 @@ class NGMixBootFitter(BaseFitter):
                     if q[0].size > 0:
                         masked_pix[q] = 1
         else:
-            raise ValueError("no support for unmodeled nbrs masking type %s" % self['unmodeled_nbrs_masking_type'])
+            raise ValueError("no support for unmodeled nbrs "
+                             "masking type %s" % mtype)
 
     def _render_nbrs(self,model,mb_obs_list,coadd,nbrs_fit_data):
         """
@@ -277,15 +278,20 @@ class NGMixBootFitter(BaseFitter):
 
                 # do central image first
                 # FIXME - need to clean up all flags
-                if nbrs_fit_data[fit_flags_tag][cen_ind] == 0 \
-                        and obs.has_psf_gmix() \
-                        and nbrs_fit_data['flags'][cen_ind] == 0:
-                    cenim = self._render_single(model,band,obs,pars_tag,nbrs_fit_data[cen_ind:cen_ind+1], \
-                        obs.get_psf_gmix(),obs.get_jacobian(),coadd)
+                if (nbrs_fit_data[fit_flags_tag][cen_ind] == 0
+                        and obs.has_psf_gmix()
+                        and nbrs_fit_data['flags'][cen_ind] == 0):
+
+                    cenim = self._render_single(model,band,obs,pars_tag,
+                                                nbrs_fit_data[cen_ind:cen_ind+1],
+                                                obs.get_psf_gmix(),obs.get_jacobian(),
+                                                coadd)
                     sub_nbrs_from_cenim = False
                     print('        rendered central object')
                 else:
-                    if nbrs_fit_data[fit_flags_tag][cen_ind] != 0 or (nbrs_fit_data['flags'][cen_ind] & GAL_FIT_FAILURE) != 0:
+                    if (nbrs_fit_data[fit_flags_tag][cen_ind] != 0
+                            or (nbrs_fit_data['flags'][cen_ind] & GAL_FIT_FAILURE) != 0):
+
                         print('        bad fit data for central: FoF obj = %d' % (cen_ind+1))
                     elif (nbrs_fit_data['flags'][cen_ind] & LOW_PSF_FLUX) != 0:
                         print('        PSF flux too low for central: FoF obj = %d' % (cen_ind+1))
@@ -294,7 +300,8 @@ class NGMixBootFitter(BaseFitter):
                     elif (nbrs_fit_data['flags'][cen_ind] & PSF_FIT_FAILURE) != 0:
                         print('        bad PSF fit for central: FoF obj = %d' % (cen_ind+1))
                     else:
-                        print('        central not rendered for unknown reason: FoF obj = %d' % (cen_ind+1))
+                        print('        central not rendered for unknown '
+                              'reason: FoF obj = %d' % (cen_ind+1))
                     
                     cenim = obs.image_orig.copy()
                     sub_nbrs_from_cenim = True
@@ -306,10 +313,10 @@ class NGMixBootFitter(BaseFitter):
                                                                  obs.meta['nbrs_flags'],
                                                                  obs.meta['nbrs_psfs'],
                                                                  obs.meta['nbrs_jacs']):
-                    if nbrs_flags == 0 \
-                            and nbrs_fit_data[fit_flags_tag][nbrs_ind] == 0 \
-                            and nbrs_fit_data['flags'][nbrs_ind] == 0 \
-                            and nbrs_psf.has_gmix():
+                    if (nbrs_flags == 0
+                            and nbrs_fit_data[fit_flags_tag][nbrs_ind] == 0
+                            and nbrs_fit_data['flags'][nbrs_ind] == 0
+                            and nbrs_psf.has_gmix() ):
 
                         print('        rendered nbr: %d' % (nbrs_ind+1))                        
                         nbrs_psf_gmix = nbrs_psf.get_gmix()
@@ -330,8 +337,9 @@ class NGMixBootFitter(BaseFitter):
                                 print('        bad PSF fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
                             else:
                                 # FIXME - need to fit psf from off chip nbrs
-                                print('        FIXME: need to fit PSF for off-chip nbr %d for cen %d' \
-                                          % (nbrs_ind+1,cen_ind+1))                                
+                                print('        FIXME: need to fit PSF for '
+                                      'off-chip nbr %d for cen %d' % (nbrs_ind+1,cen_ind+1))
+
                         elif nbrs_fit_data[fit_flags_tag][nbrs_ind] != 0 or (nbrs_fit_data['flags'][nbrs_ind] & GAL_FIT_FAILURE) != 0:
                             print('        bad fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
                         elif (nbrs_fit_data['flags'][nbrs_ind] & LOW_PSF_FLUX) != 0:
@@ -500,19 +508,25 @@ class NGMixBootFitter(BaseFitter):
         did_one_max = False
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
-                if obs.meta['flags'] == 0 and 'fit_data' in obs.meta and obs.meta['fit_data']['psf_fit_flags'][0] == 0:
+
+                fdata=obs.meta['fit_data']
+                if (obs.meta['flags'] == 0
+                        and 'fit_data' in obs.meta
+                        and fdata['psf_fit_flags'][0] == 0):
+
                     assert obs.meta['fit_flags'] == 0
                     assert obs.get_psf().has_gmix()
-                    if obs.meta['fit_data']['wmax'][0] > 0.0:
+                    if fdata['wmax'][0] > 0.0:
                         did_one_max = True
-                        npix += obs.meta['fit_data']['npix'][0]
-                        wrelsum += obs.meta['fit_data']['wsum'][0]/obs.meta['fit_data']['wmax'][0]
+                        npix += fdata['npix'][0]
+                        wrelsum += fdata['wsum'][0]/fdata['wmax'][0]
 
                     did_one = True
-                    wsum += obs.meta['fit_data']['wsum'][0]
-                    Tsum += obs.meta['fit_data']['wsum'][0]*obs.meta['fit_data']['psf_fit_T'][0]
-                    g1sum += obs.meta['fit_data']['wsum'][0]*obs.meta['fit_data']['psf_fit_g'][0,0]
-                    g2sum += obs.meta['fit_data']['wsum'][0]*obs.meta['fit_data']['psf_fit_g'][0,1]
+
+                    wsum += ['wsum'][0]
+                    Tsum += fdata['wsum'][0]*fdata['psf_fit_T'][0]
+                    g1sum += fdata['wsum'][0]*fdata['psf_fit_g'][0,0]
+                    g2sum += fdata['wsum'][0]*fdata['psf_fit_g'][0,1]
 
         if did_one_max:
             self.data[n('mask_frac')][0] = 1.0 - wrelsum/npix
@@ -641,9 +655,11 @@ class NGMixBootFitter(BaseFitter):
                       fit_pars=psf_pars,
                       norm_key='psf_norm')
 
-        if self['make_plots'] and (('made_psf_plots' not in self.mb_obs_list.meta) or \
-                                   ('made_psf_plots' in self.mb_obs_list.meta and \
-                                    self.mb_obs_list.meta['made_psf_plots'] == False)):
+        if (self['make_plots']
+            and (('made_psf_plots' not in self.mb_obs_list.meta) or
+                 ('made_psf_plots' in self.mb_obs_list.meta and
+                  self.mb_obs_list.meta['made_psf_plots'] == False)) ):
+
             self.mb_obs_list.update_meta_data({'made_psf_plots':True})
             for band,obs_list in enumerate(boot.mb_obs_list):
                 for obs in obs_list:
@@ -1120,7 +1136,9 @@ class MaxNGMixBootFitter(NGMixBootFitter):
         self.gal_fitter=self.boot.get_max_fitter()
 
         if self['make_plots']:
-            self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
+            self._plot_resids(self.new_mb_obs_list.meta['id'],
+                              self.boot.get_max_fitter(),
+                              model, coadd, 'max')
             self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
 
 class ISampNGMixBootFitter(MaxNGMixBootFitter):
@@ -1138,10 +1156,20 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         self.gal_fitter=self.boot.get_isampler()
 
         if self['make_plots']:
-            self._plot_resids(self.new_mb_obs_list.meta['id'], self.boot.get_max_fitter(), model, coadd, 'max')
+            self._plot_resids(self.new_mb_obs_list.meta['id'],
+                              self.boot.get_max_fitter(),
+                              model,
+                              coadd,
+                              'max')
+
             self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
-            self._plot_trials(self.new_mb_obs_list.meta['id'], self.boot.get_isampler(), model, coadd, 'isample', \
-                self.boot.get_isampler().get_iweights())
+
+            self._plot_trials(self.new_mb_obs_list.meta['id'],
+                              self.boot.get_isampler(),
+                              model,
+                              coadd,
+                              'isample',
+                              self.boot.get_isampler().get_iweights())
 
     def _do_isample(self, model):
         """
@@ -1232,6 +1260,130 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         self['nrand'] = self.get('nrand',1)
         if self['nrand'] is None:
             self['nrand']=1
+
+    def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
+        super(MetacalNGMixBootFitter,self)._fit_galaxy(model,
+                                                       coadd,
+                                                       guess=guess,
+                                                       **kwargs)
+        self._do_metacal(model)
+
+        metacal_res = self.boot.get_metacal_max_result()
+
+        res=self.gal_fitter.get_result()
+        res.update(metacal_res)
+
+    def _do_metacal(self, model):
+        """
+        the basic fitter for this class
+        """
+
+        boot=self.boot
+        prior=self['model_pars'][model]['prior']
+
+        Tguess=4.0
+        ppars=self['psf_pars']
+        psf_fit_pars = ppars.get('fit_pars',None)
+        max_pars=self['max_pars']
+
+        # need to make this more general, rather than a single extra noise value
+        target_noise=self.get('target_noise',None)
+        print("    nrand:",self['nrand'])
+
+        try:
+            boot.fit_metacal_max(ppars['model'],
+                                 model,
+                                 max_pars,
+                                 Tguess,
+                                 psf_fit_pars=psf_fit_pars,
+                                 prior=prior,
+                                 ntry=max_pars['ntry'],
+                                 target_noise=target_noise,
+                                 metacal_pars=self['metacal_pars'],
+                                 nrand=self['nrand'])
+
+
+        except BootPSFFailure as err:
+            # the _run_boot code catches this one
+            raise BootGalFailure(str(err))
+
+
+    def _get_fit_data_dtype(self,coadd):
+        dt=super(MetacalNGMixBootFitter,self)._get_fit_data_dtype(coadd)
+
+        dt_mcal = self._get_metacal_dtype(coadd)
+        dt += dt_mcal
+        return dt
+
+    def _copy_galaxy_result(self, model, coadd):
+        super(MetacalNGMixBootFitter,self)._copy_galaxy_result(model,coadd)
+
+        dindex=0
+        res=self.gal_fitter.get_result()
+
+        if coadd:
+            n=Namer('coadd_%s_mcal' % model)
+        else:
+            n=Namer('%s_mcal' % model)
+
+        if res['flags'] == 0:
+            for f in ['pars','pars_cov','g','g_cov',
+                      'c','s2n_r','s2n_simple','R',
+                      'Rpsf','gpsf']:
+                mf = 'mcal_%s' % f
+                self.data[n(f)][dindex] = res[mf]
+
+
+    def _get_metacal_dtype(self, coadd):
+
+        nband=self['nband']
+        simple_npars=5+nband
+        np=simple_npars
+
+        dt=[]
+        for model in self._get_all_models(coadd):
+            n=Namer('%s_mcal' % (model))
+            dt += [
+                (n('pars'),'f8',np),
+                (n('pars_cov'),'f8',(np,np)),
+                (n('g'),'f8',2),
+                (n('g_cov'),'f8', (2,2) ),
+                (n('c'),'f8',2),
+                (n('s2n_r'),'f8'),
+                (n('s2n_simple'),'f8'),
+                (n('R'),'f8',(2,2)),
+                (n('Rpsf'),'f8',2),
+                (n('gpsf'),'f8',2),
+            ]
+
+        return dt
+
+
+    def _make_struct(self,coadd):
+        data=super(MetacalNGMixBootFitter,self)._make_struct(coadd)
+
+        models=self._get_all_models(coadd)
+        for model in models:
+            n=Namer('%s_mcal' % (model))
+
+            data[n('pars')] = DEFVAL
+            data[n('pars_cov')] = DEFVAL
+
+            data[n('g')] = DEFVAL
+            data[n('g_cov')] = DEFVAL
+            data[n('c')] = DEFVAL
+            data[n('s2n_r')] = DEFVAL
+            data[n('s2n_simple')] = DEFVAL
+            data[n('R')] = DEFVAL
+            data[n('Rpsf')] = DEFVAL
+            data[n('gpsf')] = DEFVAL
+
+        return data
+
+
+class MetacalRegaussBootFitter(MaxNGMixBootFitter):
+    def _setup(self):
+        super(MetacalNGMixBootFitter,self)._setup()
 
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
         super(MetacalNGMixBootFitter,self)._fit_galaxy(model,coadd,guess=guess,**kwargs)
