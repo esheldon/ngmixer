@@ -136,9 +136,10 @@ class NGMixBootFitter(BaseFitter):
             n = Namer(model)
             
         ind = new_mb_obs_list.meta['cen_ind']
-        flags = nbrs_fit_data[n('max_flags')][ind]
 
-        if nbrs_fit_data is not None and flags == 0:
+        if (nbrs_fit_data is not None
+                and nbrs_fit_data[n('max_flags')][ind] == 0):
+
             guess = nbrs_fit_data[n('max_pars')][ind]
             
             # lots of pain to get good guesses...
@@ -1382,121 +1383,98 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
 
 class MetacalRegaussBootFitter(MaxNGMixBootFitter):
-    def _setup(self):
-        super(MetacalNGMixBootFitter,self)._setup()
 
-    def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
-        super(MetacalNGMixBootFitter,self)._fit_galaxy(model,coadd,guess=guess,**kwargs)
-        self._do_metacal(model)
+    def _guess_and_run_boot(self,model,mb_obs_list,coadd,**kw):
 
-        metacal_res = self.boot.get_metacal_max_result()
+        flags=0
 
-        res=self.gal_fitter.get_result()
-        res.update(metacal_res)
+        boot=get_bootstrapper(mb_obs_list, find_cen=False, **self)
+        self.boot=boot
 
-    def _do_metacal(self, model):
-        """
-        the basic fitter for this class
-        """
-
-        boot=self.boot
-        prior=self['model_pars'][model]['prior']
-
-        Tguess=4.0
-        ppars=self['psf_pars']
-        psf_fit_pars = ppars.get('fit_pars',None)
-        max_pars=self['max_pars']
-
-        # need to make this more general, rather than a single extra noise value
         target_noise=self.get('target_noise',None)
-        print("    nrand:",self['nrand'])
+
+        res={}
+        ppars=self['psf_pars']
+        rpars=self['regauss_pars']
 
         try:
-            boot.fit_metacal_max(ppars['model'],
-                                 model,
-                                 max_pars,
-                                 Tguess,
-                                 psf_fit_pars=psf_fit_pars,
-                                 prior=prior,
-                                 ntry=max_pars['ntry'],
-                                 target_noise=target_noise,
-                                 metacal_pars=self['metacal_pars'],
-                                 nrand=self['nrand'])
+            boot.fit_metacal_regauss(
+                ppars['Tguess'],
+                rpars['Tguess'],
+                psf_ntry=ppars['ntry'],
+                ntry=rpars['ntry'],
+                metacal_pars=self['metacal_pars'],
+                target_noise=target_noise,
+            )
+            mres=boot.get_metacal_regauss_result()
+            res.update(mres)
 
+            # yikes, monkey patching
+            # TODO figure out how to fix this
+            boot._result = res
 
-        except BootPSFFailure as err:
-            # the _run_boot code catches this one
-            raise BootGalFailure(str(err))
+            self._copy_galaxy_result()
+            self._print_galaxy_result()
 
+        except BootPSFFailure:
+            print("    psf fitting failed")
+            flags = PSF_FIT_FAILURE
+        except (BootGalFailure,GMixRangeError) as err:
+            print("    galaxy fitting failed: %s" % err)
+            flags = GAL_FIT_FAILURE
 
-    def _get_fit_data_dtype(self,coadd):
-        dt=super(MetacalNGMixBootFitter,self)._get_fit_data_dtype(coadd)
+        except BootPSFFailure:
+            print("    psf fitting failed")
+            flags = PSF_FIT_FAILURE
 
-        dt_mcal = self._get_metacal_dtype(coadd)
-        dt += dt_mcal
-        return dt
+        res['flags'] = flags
+        return flags, boot
 
-    def _copy_galaxy_result(self, model, coadd):
-        super(MetacalNGMixBootFitter,self)._copy_galaxy_result(model,coadd)
+    def _print_galaxy_result(self):
+        print("implement print")
 
+    def _copy_galaxy_result(self):
         dindex=0
         res=self.gal_fitter.get_result()
 
-        if coadd:
-            n=Namer('coadd_%s_mcal' % model)
-        else:
-            n=Namer('%s_mcal' % model)
+        data=self.data
+
+        data['flags'][dindex] = res['flags']
 
         if res['flags'] == 0:
-            for f in ['pars','pars_cov','g','g_cov',
-                      'c','s2n_r','s2n_simple','R',
-                      'Rpsf','gpsf']:
+            for f in ['pars','pars_cov','e','e_cov',
+                      'c','R', 'Rpsf','epsf']:
+
                 mf = 'mcal_%s' % f
-                self.data[n(f)][dindex] = res[mf]
+                data[f][dindex] = res[mf]
 
+    def _get_fit_data_dtype(self,coadd):
 
-    def _get_metacal_dtype(self, coadd):
+        np=6
 
-        nband=self['nband']
-        simple_npars=5+nband
-        np=simple_npars
-
-        dt=[]
-        for model in self._get_all_models(coadd):
-            n=Namer('%s_mcal' % (model))
-            dt += [
-                (n('pars'),'f8',np),
-                (n('pars_cov'),'f8',(np,np)),
-                (n('g'),'f8',2),
-                (n('g_cov'),'f8', (2,2) ),
-                (n('c'),'f8',2),
-                (n('s2n_r'),'f8'),
-                (n('s2n_simple'),'f8'),
-                (n('R'),'f8',(2,2)),
-                (n('Rpsf'),'f8',2),
-                (n('gpsf'),'f8',2),
-            ]
+        dt = [
+            ('flags','i4'),
+            ('pars','f8',np),
+            ('pars_cov','f8',(np,np)),
+            ('e','f8',2),
+            ('e_cov','f8', (2,2) ),
+            ('c','f8',2),
+            ('R','f8',(2,2)),
+            ('Rpsf','f8',2),
+            ('epsf','f8',2),
+        ]
 
         return dt
 
-
     def _make_struct(self,coadd):
-        data=super(MetacalNGMixBootFitter,self)._make_struct(coadd)
 
-        models=self._get_all_models(coadd)
-        for model in models:
-            n=Namer('%s_mcal' % (model))
+        dt=self._get_fit_data_type(self,coadd)
+        num=1
+        data=zeros(num, dtype=dt)
 
-            data[n('pars')] = DEFVAL
-            data[n('pars_cov')] = DEFVAL
+        for n in data.dtype.names:
+            if n != 'flags':
 
-            data[n('g')] = DEFVAL
-            data[n('g_cov')] = DEFVAL
-            data[n('c')] = DEFVAL
-            data[n('s2n_r')] = DEFVAL
-            data[n('s2n_simple')] = DEFVAL
-            data[n('R')] = DEFVAL
-            data[n('Rpsf')] = DEFVAL
-            data[n('gpsf')] = DEFVAL
+                data[n] = DEFVAL
 
         return data
