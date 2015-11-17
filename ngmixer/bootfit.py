@@ -110,9 +110,10 @@ class NGMixBootFitter(BaseFitter):
             if self['model_nbrs'] and nbrs_fit_data is not None:
                 self._render_nbrs(model,new_mb_obs_list,coadd,nbrs_fit_data)
 
-            model_flags, boot = self._guess_and_run_boot(
-                model,new_mb_obs_list,coadd,nbrs_fit_data=nbrs_fit_data
-            )
+            model_flags, boot = self._guess_and_run_boot(model,
+                                                         new_mb_obs_list,
+                                                         coadd,
+                                                         nbrs_fit_data=nbrs_fit_data)
 
             fit_flags |= model_flags
 
