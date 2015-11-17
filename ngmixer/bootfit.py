@@ -56,6 +56,9 @@ class NGMixBootFitter(BaseFitter):
 
         # do we normalize the psf to unity when doing the PSF mags?
         self['normalize_psf'] = self.get('normalize_psf',True)
+        
+        # how to mask unmodeled nbrs
+        self['unmodeled_nbrs_masking_type'] = self.get('model_nrbs_unmodmask','nbrs-seg')
 
     def get_models_for_checking(self):
         models = [modl for modl in self['fit_models']]
@@ -226,18 +229,19 @@ class NGMixBootFitter(BaseFitter):
 
     def _mask_nbr(self,mb_obs_list,nbr_ind,masked_pix,nbrs_fit_data):
         """
-        mask a nbr in weight map of central using seg map
+        mask a nbr in weight map of central using a seg map
         """
-        
-        nbrs_number = nbrs_fit_data['number'][nbr_ind]
-        for band,obs_list in enumerate(mb_obs_list):
-            for obs in obs_list:
-                 if obs.meta['flags'] != 0:
-                    continue
-                 seg = obs.seg
-                 q = numpy.where(seg == nbrs_number)
-                 if q[0].size > 0:
-                     masked_pix[q] = 1        
+        if self['unmodeled_nbrs_masking_type'] == 'nbrs-seg':
+            nbrs_number = nbrs_fit_data['number'][nbr_ind]
+            for band,obs_list in enumerate(mb_obs_list):
+                for obs in obs_list:
+                    if obs.meta['flags'] != 0:
+                        continue
+                    q = numpy.where(obs.seg == nbrs_number)
+                    if q[0].size > 0:
+                        masked_pix[q] = 1
+        else:
+            raise ValueError("no support for unmodeled nbrs masking type %s" % self['unmodeled_nbrs_masking_type'])
 
     def _render_nbrs(self,model,mb_obs_list,coadd,nbrs_fit_data):
         """
