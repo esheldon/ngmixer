@@ -101,7 +101,7 @@ class NGMixBootFitter(BaseFitter):
         if self['make_plots']:
             self.plot_dir = './%d-plots' % new_mb_obs_list.meta['id']
             if not os.path.exists(self.plot_dir):
-                os.mkdir(self.plot_dir)
+                os.makedirs(self.plot_dir)
 
         fit_flags = 0
         for model in self['fit_models']:
