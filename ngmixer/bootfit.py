@@ -137,10 +137,15 @@ class NGMixBootFitter(BaseFitter):
             
         ind = new_mb_obs_list.meta['cen_ind']
 
+        guess = None
+        guess_errs = None
+        guess_TdbyTe = 1.0
+ 
         if (nbrs_fit_data is not None
-                and nbrs_fit_data[n('max_flags')][ind] == 0):
+                and nbrs_fit_data[n('flags')][ind] == 0
+                and nbrs_fit_data['flags'][ind] == 0):
 
-            guess = nbrs_fit_data[n('max_pars')][ind]
+            guess = nbrs_fit_data[n('pars')][ind]
             
             # lots of pain to get good guesses...
             # the ngmix ParsGuesser does this
@@ -179,15 +184,11 @@ class NGMixBootFitter(BaseFitter):
                 
             print_pars(guess,front='    guess pars:  ')
             print_pars(guess_errs,front='    guess errs:  ')
-        else:
-            guess = None
-            guess_errs = None
-
-        if (model == 'cm' and
-                nbrs_fit_data is not None
-                and nbrs_fit_data[n('flags')][ind] == 0):
-
-            guess_TdbyTe = nbrs_fit_data[n('TdByTe')][ind]
+            
+            if model == 'cm':
+                guess_TdbyTe = nbrs_fit_data[n('TdByTe')][ind]
+            
+        if model == 'cm':
             return self._run_boot(model,new_mb_obs_list,coadd,
                                   guess_TdbyTe=guess_TdbyTe,
                                   guess=guess,                                  
