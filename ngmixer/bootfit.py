@@ -526,7 +526,7 @@ class NGMixBootFitter(BaseFitter):
 
                     did_one = True
 
-                    wsum += ['wsum'][0]
+                    wsum += fdata['wsum'][0]
                     Tsum += fdata['wsum'][0]*fdata['psf_fit_T'][0]
                     g1sum += fdata['wsum'][0]*fdata['psf_fit_g'][0,0]
                     g2sum += fdata['wsum'][0]*fdata['psf_fit_g'][0,1]
