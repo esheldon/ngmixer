@@ -143,7 +143,11 @@ class MOFNGMixer(NGMixer):
             self.curr_data = self._make_struct(num=foflen)
             for tag in self.default_data.dtype.names:
                 self.curr_data[tag][:] = self.default_data[tag]
-
+                
+            # fill in fofind
+            for i in xrange(foflen):
+                self.curr_data['fofind'][i] = i
+                
             #####################################################################
             # fit the fof once with no nbrs
             # sort by stamp size
@@ -303,7 +307,7 @@ class MOFNGMixer(NGMixer):
     def _get_dtype(self):
         dt = super(MOFNGMixer,self)._get_dtype()
         models_to_check,pars_models_to_check,cov_models_to_check,npars = self._get_models_to_check()
-
+        
         for model in models_to_check:
             n = Namer(model)
             dt += [(n('mof_flags'),'i4'),
@@ -311,7 +315,9 @@ class MOFNGMixer(NGMixer):
                    (n('mof_abs_diff'),'f8',npars),
                    (n('mof_frac_diff'),'f8',npars),
                    (n('mof_err_diff'),'f8',npars)]
-
+            
+        dt += [('fofind','i8')]
+            
         return dt
 
     def _make_struct(self,num=1):
@@ -327,5 +333,7 @@ class MOFNGMixer(NGMixer):
             data[n('mof_abs_diff')] = DEFVAL
             data[n('mof_frac_diff')] = DEFVAL
             data[n('mof_err_diff')] = DEFVAL
+
+        data['fofind'] = DEFVAL
 
         return data
