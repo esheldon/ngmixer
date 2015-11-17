@@ -1417,11 +1417,11 @@ class MetacalRegaussBootFitter(MaxNGMixBootFitter):
             self._copy_galaxy_result()
             self._print_galaxy_result()
 
-        except BootPSFFailure:
+        except BootPSFFailure as err:
             print("    psf fitting failed")
             flags = PSF_FIT_FAILURE
         except (BootGalFailure,GMixRangeError) as err:
-            print("    galaxy fitting failed: %s" % err)
+            print("    galaxy fitting failed")
             flags = GAL_FIT_FAILURE
 
         except BootPSFFailure:
@@ -1436,11 +1436,9 @@ class MetacalRegaussBootFitter(MaxNGMixBootFitter):
 
     def _copy_galaxy_result(self):
         dindex=0
-        res=self.gal_fitter.get_result()
+        res=self.boot.get_metacal_regauss_result()
 
         data=self.data
-
-        data['flags'][dindex] = res['flags']
 
         if res['flags'] == 0:
             for f in ['pars','pars_cov','e','e_cov',
@@ -1449,12 +1447,15 @@ class MetacalRegaussBootFitter(MaxNGMixBootFitter):
                 mf = 'mcal_%s' % f
                 data[f][dindex] = res[mf]
 
-    def _get_fit_data_dtype(self,coadd):
+    def _get_fit_data_dtype(self, coadd):
 
         np=6
 
+        nband=self['nband']
+        bshape=(nband,)
+
         dt = [
-            ('flags','i4'),
+            ('nimage_use','i4',bshape),
             ('pars','f8',np),
             ('pars_cov','f8',(np,np)),
             ('e','f8',2),
@@ -1469,9 +1470,9 @@ class MetacalRegaussBootFitter(MaxNGMixBootFitter):
 
     def _make_struct(self,coadd):
 
-        dt=self._get_fit_data_type(self,coadd)
+        dt=self._get_fit_data_dtype(coadd)
         num=1
-        data=zeros(num, dtype=dt)
+        data=numpy.zeros(num, dtype=dt)
 
         for n in data.dtype.names:
             if n != 'flags':

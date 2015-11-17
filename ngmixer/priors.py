@@ -21,6 +21,11 @@ def set_priors(conf):
 
     # set comps
     for model,params in model_pars.iteritems():
+
+        if params is None:
+            print("    no priors for model '%s'" % model)
+            continue 
+
         print("loading prior for: %s" % model)
 
         params['cen_prior'] = get_cen_prior(params['cen'])
