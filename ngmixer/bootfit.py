@@ -139,7 +139,7 @@ class NGMixBootFitter(BaseFitter):
     
         guess = None
         guess_errs = None
-        guess_TdbyTe = None
+        guess_TdbyTe = 1.0
         
         if nbrs_fit_data is not None and \
             nbrs_fit_data[n('flags')][ind] == 0 and \
