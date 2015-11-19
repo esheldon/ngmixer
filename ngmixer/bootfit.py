@@ -110,9 +110,10 @@ class NGMixBootFitter(BaseFitter):
             if self['model_nbrs'] and nbrs_fit_data is not None:
                 self._render_nbrs(model,new_mb_obs_list,coadd,nbrs_fit_data)
 
-            model_flags, boot = self._guess_and_run_boot(
-                model,new_mb_obs_list,coadd,nbrs_fit_data=nbrs_fit_data
-            )
+            model_flags, boot = self._guess_and_run_boot(model,
+                                                         new_mb_obs_list,
+                                                         coadd,
+                                                         nbrs_fit_data=nbrs_fit_data)
 
             fit_flags |= model_flags
 
@@ -525,7 +526,7 @@ class NGMixBootFitter(BaseFitter):
 
                     did_one = True
 
-                    wsum += ['wsum'][0]
+                    wsum += fdata['wsum'][0]
                     Tsum += fdata['wsum'][0]*fdata['psf_fit_T'][0]
                     g1sum += fdata['wsum'][0]*fdata['psf_fit_g'][0,0]
                     g2sum += fdata['wsum'][0]*fdata['psf_fit_g'][0,1]
