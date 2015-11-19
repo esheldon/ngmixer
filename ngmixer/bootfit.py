@@ -1332,9 +1332,13 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             n=Namer('%s_mcal' % model)
 
         if res['flags'] == 0:
-            for f in ['pars','pars_cov','g','g_cov',
-                      'c','s2n_r','s2n_simple','R',
-                      'Rpsf','gpsf']:
+
+            flist=[
+                'pars','pars_cov','g','g_cov',
+                'c', 'R','Rpsf','gpsf',
+                's2n_r','s2n_simple'
+            ]
+            for f in flist:
                 mf = 'mcal_%s' % f
                 self.data[n(f)][dindex] = res[mf]
 

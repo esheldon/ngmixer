@@ -86,28 +86,36 @@ def get_T_prior(params):
 
 def get_counts_prior(params, nband):
     typ=params['type']
-    pars=params['pars']
 
-    if typ == 'flat':
-        pclass = ngmix.priors.FlatPrior
-    elif typ=='TwoSidedErf':
-        pclass = ngmix.priors.TwoSidedErf
+    if typ=="gmixnd":
+        if nband > 1:
+            raise NotImplementedError("make gmixnd for counts "
+                                      "work for N bands")
+        prior_list = [load_gmixnd(params)]
     else:
-        raise ValueError("bad counts prior type: %s" % typ)
 
-    if params['repeat']:
-        # we assume this is one that will be repeated
-        prior_list = [pclass(*pars)]*nband
-    else:
-        # assume this is a list of lists
-        prior_list=[]
-        for tpars in pars:
-            cp = pclass(*tpars)
-            prior_list.append(cp)
+        if typ == 'flat':
+            pclass = ngmix.priors.FlatPrior
+        elif typ=='TwoSidedErf':
+            pclass = ngmix.priors.TwoSidedErf
+        else:
+            raise ValueError("bad counts prior type: %s" % typ)
 
-        mess=("counts prior must be length "
-              "%d, got %d" % (nband,len(prior_list)) )
-        assert len(prior_list) == nband,mess
+        if params['repeat']:
+            pars=params['pars']
+            # we assume this is one that will be repeated
+            prior_list = [pclass(*pars)]*nband
+        else:
+            pars=params['pars']
+            # assume this is a list of lists
+            prior_list=[]
+            for tpars in pars:
+                cp = pclass(*tpars)
+                prior_list.append(cp)
+
+            mess=("counts prior must be length "
+                  "%d, got %d" % (nband,len(prior_list)) )
+            assert len(prior_list) == nband,mess
 
 
     return prior_list
