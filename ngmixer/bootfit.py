@@ -1293,6 +1293,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         # need to make this more general, rather than a single extra noise value
         target_noise=self.get('target_noise',None)
+        extra_noise=self.get('extra_noise',None)
         print("    nrand:",self['nrand'])
 
         try:
@@ -1303,6 +1304,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                                  psf_fit_pars=psf_fit_pars,
                                  prior=prior,
                                  ntry=max_pars['ntry'],
+                                 extra_noise=extra_noise,
                                  target_noise=target_noise,
                                  metacal_pars=self['metacal_pars'],
                                  nrand=self['nrand'])
