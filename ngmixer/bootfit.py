@@ -1440,8 +1440,9 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
         )
 
         # now add noise after creating the metacal observations
-        #print("    adding noise after")
-        noise = ngmix.simobs.get_noise_image(self.mb_obs_list[0][0].weight)
+        # using the same noise image!
+
+        noise = mobs_before[0][0].noise_image
         for key in mcal_obs_after:
             obs=mcal_obs_after[key]
             obs.image = obs.image + noise
