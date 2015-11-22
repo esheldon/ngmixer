@@ -1405,6 +1405,8 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
         if len(self.mb_obs_list) > 1 or len(self.mb_obs_list[0]) > 1:
             raise NotImplementedError("only a single obs for now")
 
+        print("    Calculating Rnoise")
+
         fitter = self.boot.get_max_fitter()
         gmix_list = []
         for band in xrange(self['nband']):
@@ -1453,10 +1455,10 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
 
         Rnoise = res_before['mcal_R'] - res_after['mcal_R']
         Rpsf_noise = res_before['mcal_Rpsf'] - res_after['mcal_Rpsf']
-        print("    Rnoise:")
-        pprint(Rnoise,indent=8)
-        print("    Rpsf_noise:")
-        pprint(Rpsf_noise,indent=8)
+        #print("    Rnoise:")
+        #pprint(Rnoise,indent=8)
+        #print("    Rpsf_noise:")
+        #pprint(Rpsf_noise,indent=8)
 
         res = self.boot.get_max_fitter().get_result()
         res['mcal_Rnoise'] = Rnoise
