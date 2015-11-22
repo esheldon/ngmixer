@@ -3,6 +3,8 @@ import time
 import numpy
 import os
 
+from copy import deepcopy
+
 # local imports
 from .defaults import DEFVAL,NO_ATTEMPT,PSF_FIT_FAILURE,GAL_FIT_FAILURE,LOW_PSF_FLUX
 from .fitting import BaseFitter
@@ -1271,19 +1273,30 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                                                        coadd,
                                                        guess=guess,
                                                        **kwargs)
-        self._do_metacal(model)
+        target_noise=self.get('target_noise',None)
+        extra_noise=self.get('extra_noise',None)
+        self._do_metacal(model,
+                         target_noise=target_noise,
+                         extra_noise=extra_noise)
 
         metacal_res = self.boot.get_metacal_max_result()
 
         res=self.gal_fitter.get_result()
         res.update(metacal_res)
 
-    def _do_metacal(self, model):
+    def _do_metacal(self,
+                    model,
+                    boot=None,
+                    target_noise=None,
+                    extra_noise=None,
+                    metacal_obs=None):
         """
         the basic fitter for this class
         """
 
-        boot=self.boot
+        if boot is None:
+            boot=self.boot
+
         prior=self['model_pars'][model]['prior']
 
         Tguess=4.0
@@ -1292,8 +1305,6 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         max_pars=self['max_pars']
 
         # need to make this more general, rather than a single extra noise value
-        target_noise=self.get('target_noise',None)
-        extra_noise=self.get('extra_noise',None)
         print("    nrand:",self['nrand'])
 
         try:
@@ -1307,7 +1318,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                                  extra_noise=extra_noise,
                                  target_noise=target_noise,
                                  metacal_pars=self['metacal_pars'],
-                                 nrand=self['nrand'])
+                                 nrand=self['nrand'],
+                                 metacal_obs=metacal_obs)
 
 
         except BootPSFFailure as err:
@@ -1335,12 +1347,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         if res['flags'] == 0:
 
-            flist=[
-                'pars','pars_cov','g','g_cov',
-                'c', 'R','Rpsf','gpsf',
-                's2n_r','s2n_simple'
-            ]
-            for f in flist:
+            for f in self.mcal_flist:
                 mf = 'mcal_%s' % f
                 self.data[n(f)][dindex] = res[mf]
 
@@ -1367,6 +1374,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 (n('gpsf'),'f8',2),
             ]
 
+        self.mcal_flist = [d[0] for d in dt]
+
         return dt
 
 
@@ -1377,19 +1386,87 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         for model in models:
             n=Namer('%s_mcal' % (model))
 
-            data[n('pars')] = DEFVAL
-            data[n('pars_cov')] = DEFVAL
-
-            data[n('g')] = DEFVAL
-            data[n('g_cov')] = DEFVAL
-            data[n('c')] = DEFVAL
-            data[n('s2n_r')] = DEFVAL
-            data[n('s2n_simple')] = DEFVAL
-            data[n('R')] = DEFVAL
-            data[n('Rpsf')] = DEFVAL
-            data[n('gpsf')] = DEFVAL
+            for f in self.mcal_flist:
+                name = n(f)
+                data[name] = DEFVAL
 
         return data
+
+
+class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
+    def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
+        super(MetacalSimnNGMixBootFitter,self)._fit_galaxy(model,
+                                                           coadd,
+                                                           guess=guess,
+                                                           **kwargs)
+
+        if len(self.mb_obs_list) > 1 or len(self.mb_obs_list[0]) > 1:
+            raise NotImplementedError("only a single obs for now")
+
+        fitter = self.boot.get_max_fitter()
+        gmix_list = []
+        for band in xrange(self['nband']):
+            gm = fitter.get_gmix(band=band)
+            gmix_list.append(gm)
+
+        # for noise added *before* metacal steps
+        mobs_before = ngmix.simobs.simulate_obs(
+            gmix_list,
+            self.mb_obs_list,
+            add_noise=True,
+            convolve_psf=True
+        )
+        # for noise added *after* metacal steps
+        mobs_after = ngmix.simobs.simulate_obs(
+            gmix_list,
+            self.mb_obs_list,
+            add_noise=False,
+            convolve_psf=True
+        )
+
+
+        boot_model_before = self._get_bootstrapper(model,mobs_before)
+        boot_model_after = self._get_bootstrapper(model,mobs_after)
+
+        mcal_obs_after = boot_model_after.get_metacal_obsdict(
+            mbobs_after[0][0],
+            self['metacal_pars']
+        )
+
+        # now add noise after creating the metacal observations
+        print("    adding noise after")
+        noise = simobs._get_noise_image(self.mb_obs_list[0][0].weight)
+        for key in mcal_obs_after:
+            obs=mcal_obs_after[key]
+            obs.image = obs.image + noise
+
+        self._do_metacal(model, boot=boot_model_before)
+        self._do_metacal(model, boot=boot_model_after,
+                         metacal_obs=mcal_obs_after)
+
+        res_before = boot_model_before.get_metacal_max_result()
+        res_after = boot_model_after.get_metacal_max_result()
+
+        Rnoise = res_before['mcal_R'] - res['after']['mcal_R']
+
+        metacal_res = self.boot.get_metacal_max_result()
+        metacal_res['Rnoise'] = Rnoise
+
+    def _get_metacal_dtype(self, coadd):
+        dt = super(MetacalSimnoiseNGMixBootFitter,self)._get_metacal_dtype(coadd)
+
+        dt_extra=[]
+        for model in self._get_all_models(coadd):
+            n=Namer('%s_mcal' % (model))
+            dt_extra += [
+                (n('Rnoise'), 'f8', (2,2)),
+            ]
+
+        self.mcal_flist += [d[0] for d in dt_extra]
+
+        dt += dt_extra
+
+        return dt
 
 
 class MetacalRegaussBootFitter(MaxNGMixBootFitter):
