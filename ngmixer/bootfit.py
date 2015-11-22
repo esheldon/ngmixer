@@ -17,6 +17,8 @@ from ngmix.fitting import EIG_NOTFINITE
 from ngmix.gexceptions import BootPSFFailure, BootGalFailure
 from ngmix.gmix import GMixModel, GMix, GMixCM
 
+from pprint import pprint
+
 def get_bootstrapper(obs, type='boot', **keys):
     from ngmix.bootstrap import Bootstrapper
     from ngmix.bootstrap import CompositeBootstrapper
@@ -1305,7 +1307,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         max_pars=self['max_pars']
 
         # need to make this more general, rather than a single extra noise value
-        print("    nrand:",self['nrand'])
+        if self['nrand'] is not None and self['nrand'] > 1:
+            print("    nrand:",self['nrand'])
 
         try:
             boot.fit_metacal_max(ppars['model'],
@@ -1348,9 +1351,10 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         if res['flags'] == 0:
 
             for f in self.mcal_flist:
-                mf = 'mcal_%s' % f
-                self.data[n(f)][dindex] = res[mf]
-
+                front='%s_' % (model)
+                mf = f.replace(front,'')
+                #print("copying %s -> %s" % (f,mf))
+                self.data[f][dindex] = res[mf]
 
     def _get_metacal_dtype(self, coadd):
 
@@ -1360,7 +1364,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         dt=[]
         for model in self._get_all_models(coadd):
-            n=Namer('%s_mcal' % (model))
+            front='%s_mcal' % (model)
+            n=Namer(front)
             dt += [
                 (n('pars'),'f8',np),
                 (n('pars_cov'),'f8',(np,np)),
@@ -1384,11 +1389,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         models=self._get_all_models(coadd)
         for model in models:
-            n=Namer('%s_mcal' % (model))
-
             for f in self.mcal_flist:
-                name = n(f)
-                data[name] = DEFVAL
+                data[f] = DEFVAL
 
         return data
 
@@ -1427,15 +1429,17 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
 
         boot_model_before = self._get_bootstrapper(model,mobs_before)
         boot_model_after = self._get_bootstrapper(model,mobs_after)
+        #boot_model_before.verbose=True
+        #boot_model_after.verbose=True
 
         mcal_obs_after = boot_model_after.get_metacal_obsdict(
-            mbobs_after[0][0],
+            mobs_after[0][0],
             self['metacal_pars']
         )
 
         # now add noise after creating the metacal observations
-        print("    adding noise after")
-        noise = simobs._get_noise_image(self.mb_obs_list[0][0].weight)
+        #print("    adding noise after")
+        noise = ngmix.simobs.get_noise_image(self.mb_obs_list[0][0].weight)
         for key in mcal_obs_after:
             obs=mcal_obs_after[key]
             obs.image = obs.image + noise
@@ -1447,19 +1451,26 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
         res_before = boot_model_before.get_metacal_max_result()
         res_after = boot_model_after.get_metacal_max_result()
 
-        Rnoise = res_before['mcal_R'] - res['after']['mcal_R']
+        Rnoise = res_before['mcal_R'] - res_after['mcal_R']
+        Rpsf_noise = res_before['mcal_Rpsf'] - res_after['mcal_Rpsf']
+        print("    Rnoise:")
+        pprint(Rnoise,indent=8)
+        print("    Rpsf_noise:")
+        pprint(Rpsf_noise,indent=8)
 
-        metacal_res = self.boot.get_metacal_max_result()
-        metacal_res['Rnoise'] = Rnoise
+        res = self.boot.get_max_fitter().get_result()
+        res['mcal_Rnoise'] = Rnoise
+        res['mcal_Rpsf_noise'] = Rpsf_noise
 
     def _get_metacal_dtype(self, coadd):
-        dt = super(MetacalSimnoiseNGMixBootFitter,self)._get_metacal_dtype(coadd)
+        dt = super(MetacalSimnNGMixBootFitter,self)._get_metacal_dtype(coadd)
 
         dt_extra=[]
         for model in self._get_all_models(coadd):
             n=Namer('%s_mcal' % (model))
             dt_extra += [
                 (n('Rnoise'), 'f8', (2,2)),
+                (n('Rpsf_noise'), 'f8', 2),
             ]
 
         self.mcal_flist += [d[0] for d in dt_extra]
