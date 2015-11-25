@@ -1513,7 +1513,8 @@ class MetacalAddnNGMixBootFitter(MetacalSimnNGMixBootFitter):
         return new_mobs
 
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
-        super(MetacalAddnNGMixBootFitter,self)._fit_galaxy(model,
+        # note jumping over parent here
+        super(MetacalSimnNGMixBootFitter,self)._fit_galaxy(model,
                                                            coadd,
                                                            guess=guess,
                                                            **kwargs)
@@ -1529,7 +1530,7 @@ class MetacalAddnNGMixBootFitter(MetacalSimnNGMixBootFitter):
         boot_model_after = self._get_bootstrapper(model,self.mb_obs_list)
 
         mcal_obs_after = boot_model_after.get_metacal_obsdict(
-            mobs_after[0][0],
+            self.mb_obs_list[0][0],
             self['metacal_pars']
         )
 
@@ -1537,9 +1538,11 @@ class MetacalAddnNGMixBootFitter(MetacalSimnNGMixBootFitter):
         # using the same noise image!
 
         noise_image = mobs_before[0][0].noise_image
+        new_weight = mobs_before[0][0].weight
         for key in mcal_obs_after:
             obs=mcal_obs_after[key]
             obs.image = obs.image + noise_image
+            obs.weight = new_weight.copy()
 
         self._do_metacal(model, boot=boot_model_before)
         self._do_metacal(model, boot=boot_model_after,
@@ -1548,30 +1551,13 @@ class MetacalAddnNGMixBootFitter(MetacalSimnNGMixBootFitter):
         res_before = boot_model_before.get_metacal_max_result()
         res_after = boot_model_after.get_metacal_max_result()
 
-        Rnoise = res_before['mcal_R'] - res_after['mcal_R']
-        Rpsf_noise = res_before['mcal_Rpsf'] - res_after['mcal_Rpsf']
+        fac=self['simnoise']['noise_fac']
+        Rnoise = (res_before['mcal_R'] - res_after['mcal_R'])/fac
+        Rpsf_noise = (res_before['mcal_Rpsf'] - res_after['mcal_Rpsf'])/fac
 
         res = self.boot.get_max_fitter().get_result()
         res['mcal_Rnoise'] = Rnoise
         res['mcal_Rpsf_noise'] = Rpsf_noise
-
-    def _get_metacal_dtype(self, coadd):
-        dt = super(MetacalSimnNGMixBootFitter,self)._get_metacal_dtype(coadd)
-
-        dt_extra=[]
-        for model in self._get_all_models(coadd):
-            n=Namer('%s_mcal' % (model))
-            dt_extra += [
-                (n('Rnoise'), 'f8', (2,2)),
-                (n('Rpsf_noise'), 'f8', 2),
-            ]
-
-        self.mcal_flist += [d[0] for d in dt_extra]
-
-        dt += dt_extra
-
-        return dt
-
 
 
 class MetacalRegaussBootFitter(MaxNGMixBootFitter):
