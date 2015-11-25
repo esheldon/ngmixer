@@ -1480,7 +1480,8 @@ class MetacalAddnNGMixBootFitter(MetacalSimnNGMixBootFitter):
     def _get_noisier_mobs(self):
 
         fac=self['simnoise']['noise_fac']
-        ofacsq=1.0/(1.0 + fac)**2
+        ofacsq=1.0/(1.0 + fac**2)
+        #ofacsq=1.0
 
         mobs=self.mb_obs_list
 
@@ -1522,7 +1523,7 @@ class MetacalAddnNGMixBootFitter(MetacalSimnNGMixBootFitter):
         if len(self.mb_obs_list) > 1 or len(self.mb_obs_list[0]) > 1:
             raise NotImplementedError("only a single obs for now")
 
-        print("    Calculating Rnoise")
+        print("    Calculating Rnoise by adding noise to image")
 
         mobs_before = self._get_noisier_mobs()
 
@@ -1551,9 +1552,12 @@ class MetacalAddnNGMixBootFitter(MetacalSimnNGMixBootFitter):
         res_before = boot_model_before.get_metacal_max_result()
         res_after = boot_model_after.get_metacal_max_result()
 
-        fac=self['simnoise']['noise_fac']
-        Rnoise = (res_before['mcal_R'] - res_after['mcal_R'])/fac
-        Rpsf_noise = (res_before['mcal_Rpsf'] - res_after['mcal_Rpsf'])/fac
+        fac2inv=1.0/self['simnoise']['noise_fac']**2
+        #print("        multiplying by:",fac2inv)
+        Rnoise = (res_before['mcal_R'] - res_after['mcal_R'])*fac2inv
+        Rpsf_noise = (res_before['mcal_Rpsf'] - res_after['mcal_Rpsf'])*fac2inv
+
+        print("    Rnoise[0,0]: %g" % Rnoise[0,0])
 
         res = self.boot.get_max_fitter().get_result()
         res['mcal_Rnoise'] = Rnoise
