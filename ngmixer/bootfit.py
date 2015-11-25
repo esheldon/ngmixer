@@ -1445,9 +1445,21 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
             obs=mcal_obs_after[key]
             obs.image = obs.image + noise
 
-        self._do_metacal(model, boot=boot_model_before)
-        self._do_metacal(model, boot=boot_model_after,
-                         metacal_obs=mcal_obs_after)
+        target_noise=self.get('target_noise',None)
+        extra_noise=self.get('extra_noise',None)
+        self._do_metacal(
+            model,
+            target_noise=target_noise,
+            extra_noise=extra_noise,
+            boot=boot_model_before
+        )
+        self._do_metacal(
+            model,
+            boot=boot_model_after,
+            target_noise=target_noise,
+            extra_noise=extra_noise,
+            metacal_obs=mcal_obs_after
+        )
 
         res_before = boot_model_before.get_metacal_max_result()
         res_after = boot_model_after.get_metacal_max_result()
