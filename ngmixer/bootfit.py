@@ -1396,14 +1396,41 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
 
 class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
-    def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
-        super(MetacalSimnNGMixBootFitter,self)._fit_galaxy(model,
-                                                           coadd,
-                                                           guess=guess,
-                                                           **kwargs)
+    def _add_extra_sim_noise(self, mb_obs_list):
+        extra_sim_noise = self['extra_sim_noise']
+        print("    adding extra sim noise:",extra_sim_noise)
 
-        if len(self.mb_obs_list) > 1 or len(self.mb_obs_list[0]) > 1:
+        boot=self.boot
+
+        for obslist in mb_obs_list:
+            for obs in obslist:
+
+                obs.image_orig=obs.image
+                obs.weight_orig=obs.weight
+
+                noise_image = boot._get_noise_image(obs.image.shape,
+                                                    extra_sim_noise)
+                new_weight = boot._get_degraded_weight_image(obs,
+                                                             extra_sim_noise)
+                obs.image = obs.image + noise_image
+                obs.weight = new_weight
+
+    def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
+        boot=self.boot
+        mb_obs_list = boot.mb_obs_list
+
+        if len(mb_obs_list) > 1 or len(mb_obs_list[0]) > 1:
             raise NotImplementedError("only a single obs for now")
+
+        if 'extra_sim_noise' in self:
+            self._add_extra_sim_noise(mb_obs_list)
+
+        super(MetacalSimnNGMixBootFitter,self)._fit_galaxy(
+            model,
+            coadd,
+            guess=guess,
+            **kwargs
+        )
 
         print("    Calculating Rnoise")
 
@@ -1416,14 +1443,14 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
         # for noise added *before* metacal steps
         mobs_before = ngmix.simobs.simulate_obs(
             gmix_list,
-            self.mb_obs_list,
+            mb_obs_list,
             add_noise=True,
             convolve_psf=True
         )
         # for noise added *after* metacal steps
         mobs_after = ngmix.simobs.simulate_obs(
             gmix_list,
-            self.mb_obs_list,
+            mb_obs_list,
             add_noise=False,
             convolve_psf=True
         )
