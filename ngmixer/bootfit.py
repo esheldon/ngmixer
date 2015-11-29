@@ -1491,10 +1491,12 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
         res_before = boot_model_before.get_metacal_max_result()
         res_after = boot_model_after.get_metacal_max_result()
 
+        gnoise = res_before['mcal_g'] - res_after['mcal_g']
         Rnoise = res_before['mcal_R'] - res_after['mcal_R']
         Rpsf_noise = res_before['mcal_Rpsf'] - res_after['mcal_Rpsf']
 
         res = self.boot.get_max_fitter().get_result()
+        res['mcal_gnoise'] = gnoise
         res['mcal_Rnoise'] = Rnoise
         res['mcal_Rpsf_noise'] = Rpsf_noise
 
@@ -1505,6 +1507,7 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
         for model in self._get_all_models(coadd):
             n=Namer('%s_mcal' % (model))
             dt_extra += [
+                (n('gnoise'), 'f8', 2),
                 (n('Rnoise'), 'f8', (2,2)),
                 (n('Rpsf_noise'), 'f8', 2),
             ]
