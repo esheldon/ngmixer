@@ -11,6 +11,36 @@ from ngmix import srandu, GMixRangeError
 from ngmix.priors import LOWVAL
 from .defaults import VERBOSITY
 
+# coordinates
+# ra = -u
+# ra = -phi
+# v = dec
+# theta = 90 - dec
+
+# unit vector directions
+# u = -ra on sphere = +phi on sphere
+# v = dec on sphere = -theta on sphere
+
+def radec_to_unitvecs_ruv(ra,dec):
+    theta,phi = radec_to_thetaphi(ra,dec)
+    return thetaphi_to_unitvecs_ruv(theta,phi)
+
+def radec_to_thetaphi(ra,dec):
+    return (90.0-dec)/180.0*numpy.pi,-1.0*ra/180.0*numpy.pi
+
+def thetaphi_to_unitvecs_ruv(theta,phi):
+    sint = numpy.sin(theta)
+    cost = numpy.cos(theta)
+    sinp = numpy.sin(phi)
+    cosp = numpy.cos(phi)
+
+    rhat = numpy.array([sint*cosp,sint*sinp,cost])
+    that = numpy.array([cost*cosp,cost*sinp,-1.0*sint])
+    phat = numpy.array([-1.0*sinp,cosp,0.0])
+
+    return rhat,phat,-1.0*that
+
+
 def interpolate_image(rowcen1, colcen1, jacob1, im1, 
                       rowcen2, colcen2, jacob2):
     """

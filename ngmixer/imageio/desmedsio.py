@@ -7,7 +7,11 @@ import fitsio
 
 from .medsio import MEDSImageIO
 from .. import nbrsfofs
-from ..util import print_with_verbosity
+from ..util import print_with_verbosity, \
+    interpolate_image, \
+    radec_to_unitvecs_ruv, \
+    radec_to_thetaphi, \
+    thetaphi_to_unitvecs_ruv, \
 
 import meds
 
@@ -322,7 +326,8 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
     def _set_defaults(self):
         super(Y1DESMEDSImageIO,self)._set_defaults()
         self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
-
+        self.conf['prop_sat_starpix'] = self.conf.get('prop_sat_starpix',False)
+        
     def _load_wcs_data(self):
         """
         Load the WCS transforms for each meds file
@@ -451,6 +456,103 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         print('            r,c nbr:           ',rowcol_nbr)
         print('            box_size - r,c nbr:',self.meds_list[band]['box_size'][nbr_mindex]- rowcol_nbr)
         return cen_obs.get_psf(),J_nbr
+
+    def _get_extra_bitmasks(self,mb_obs_list):
+        
+        def interpolate_maskbits(iobj,m1,icutout1,m2,icutout2):
+            rowcen1 = m1['cutout_row'][iobj,icutout1]
+            colcen1 = m1['cutout_col'][iobj,icutout1]
+            jacob1 = m1.get_jacobian_matrix(iobj,icutout1)
+            
+            rowcen2 = m2['cutout_row'][iobj,icutout2]
+            colcen2 = m2['cutout_col'][iobj,icutout2]
+            jacob2 = m2.get_jacobian_matrix(iobj,icutout2)
+            
+            im1 = m1.get_cutout(iobj,icutout1,type='bmask')
+            
+            msk = np.array([2048+1024+512+256+128+16+8+1],dtype='u4')
+            
+            q = np.where( ((im1&2 != 0) | (im1&4 != 0)) 
+                          & 
+                          (im1&32 != 0) 
+                          &
+                          (im1&msk == 0))
+            im1[:,:] = 0
+            im1[q] = 1
+            
+            assert m1['box_size'][iobj] == m2['box_size'][iobj]
+            assert m1['id'][iobj] == m2['id'][iobj]
+            
+            return interpolate_image(rowcen1, colcen1, jacob1, im1, 
+                                     rowcen2, colcen2, jacob2)[0]
+
+        
+        marr = self.meds_list
+        mindex = mb_obs_list.meta['meds_index']
+        
+        bmasks = []
+        for mt in marr:
+            bmask = mt.get_cutout(mindex,0,type='bmask')
+            
+            for band,obs_list in enumerate(mb_obs_list):
+                for obs in obs_list:
+                    if obs.meta['flags'] == 0:                        
+                        bmaski = interpolate_maskbits(mindex,
+                                                      marr[band],
+                                                      obs.meta['icut'],
+                                                      mt,
+                                                      0)
+                        bmask |= bmaski
+    
+            bmasks.append(bmask)
+            
+        return bmasks
+
+   def _get_multi_band_observations(self, mindex):
+       coadd_mb_obs_list, mb_obs_list = super(Y1DESMEDSImageIO, self)._get_multi_band_observations(mindex)
+       
+       # mask extra pixels in saturated stars
+       if self.conf['prop_sat_starpix']:
+           mindex = mb_obs_list.meta['meds_index']
+           
+           # get total OR'ed bit mask
+           bmasks = self._get_extra_bitmasks(mb_obs_list)
+           
+           # interp to each image
+           for band,obs_list in enumerate(mb_obs_list):
+               m = self.meds_list[band]
+               bmask = bmasks[band]
+               
+               for obs in obs_list:
+                   if obs.meta['flags'] == 0:
+                       # interp
+                       icut = obs.meta['icut']
+                       
+                       rowcen1 = m['cutout_row'][mindex,0]
+                       colcen1 = m['cutout_col'][mindex,0]
+                       jacob1 = m1.get_jacobian_matrix(mindex,0)
+                        
+                       rowcen2 = m2['cutout_row'][mindex,icut]
+                       colcen2 = m2['cutout_col'][mindex,icut]
+                       jacob2 = m2.get_jacobian_matrix(mindex,icut)
+                        
+                       bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
+                                                  rowcen2, colcen2, jacob2)[0]
+                       
+                       # now set weights to zero
+                       q = numpy.where(bmaski != 0)
+                       if hasattr(obs,'weight_raw'):
+                           obs.weight_raw[q] = 0.0
+                       
+                       if hasattr(obs,'weight_us'):
+                           obs.weight_us[q] = 0.0
+                       
+                       if hasattr(obs,'weight'):
+                           obs.weight[q] = 0.0
+
+                       if hasattr(obs,'weight_orig'):
+                           obs.weight_orig[q] = 0.0
+                           
 
 # coordinates
 # ra = -u
