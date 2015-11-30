@@ -1270,7 +1270,31 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         if self['nrand'] is None:
             self['nrand']=1
 
+    def _add_extra_sim_noise(self, mb_obs_list):
+        extra_sim_noise = self['extra_sim_noise']
+        print("    adding extra sim noise:",extra_sim_noise)
+
+        boot=self.boot
+
+        for obslist in mb_obs_list:
+            for obs in obslist:
+
+                obs.image_orig=obs.image
+                obs.weight_orig=obs.weight
+
+                noise_image = boot._get_noise_image(obs.image.shape,
+                                                    extra_sim_noise)
+                new_weight = boot._get_degraded_weight_image(obs,
+                                                             extra_sim_noise)
+                obs.image = obs.image + noise_image
+                obs.weight = new_weight
+
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
+        mb_obs_list = self.boot.mb_obs_list
+
+        if 'extra_sim_noise' in self:
+            self._add_extra_sim_noise(mb_obs_list)
+
         super(MetacalNGMixBootFitter,self)._fit_galaxy(model,
                                                        coadd,
                                                        guess=guess,
@@ -1394,36 +1418,78 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         return data
 
+class MetacalSubnNGMixBootFitter(MetacalNGMixBootFitter):
+    def _get_subn_metacal_obs(self):
+        """
+        subtract a correlated noise image sheared by
+        negative of the shear applied to the real obs
+        """
+        print("    subtracting sheared correlated noise")
+        mb_obs_list = self.boot.mb_obs_list
 
-class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
-    def _add_extra_sim_noise(self, mb_obs_list):
-        extra_sim_noise = self['extra_sim_noise']
-        print("    adding extra sim noise:",extra_sim_noise)
+        # simulated noise for these observations
+        noise_mb_obs = ngmix.simobs.simulate_obs(None,
+                                                 mb_obs_list)
 
-        boot=self.boot
+        # currentlly only works for single obs
+        mcal_obs = self.boot.get_metacal_obsdict(
+            mb_obs_list[0][0],
+            self['metacal_pars']
+        )
 
-        for obslist in mb_obs_list:
-            for obs in obslist:
+        mcal_noise_obs = self.boot.get_metacal_obsdict(
+            noise_mb_obs[0][0],
+            self['metacal_pars']
+        )
 
-                obs.image_orig=obs.image
-                obs.weight_orig=obs.weight
+        # add the noise sheared by negative of the shear
+        # applied to observation
 
-                noise_image = boot._get_noise_image(obs.image.shape,
-                                                    extra_sim_noise)
-                new_weight = boot._get_degraded_weight_image(obs,
-                                                             extra_sim_noise)
-                obs.image = obs.image + noise_image
-                obs.weight = new_weight
+        for ipairs in [('1p','1m'),
+                       ('1m','1p'),
+                       ('2p','2m'),
+                       ('2m','2p'),
+                       ('1p_psf','1m_psf'),
+                       ('1m_psf','1p_psf'),
+                       ('2p_psf','2m_psf'),
+                       ('2m_psf','2p_psf')]:
+
+
+            mk=ipairs[0]
+            nk=ipairs[1]
+            im  = mcal_obs[mk].image
+            nim = mcal_noise_obs[nk].image
+
+            mcal_obs[mk].image = im + nim
+            mcal_obs[mk].weight = 0.5*mcal_obs[mk].weight
+
+        return mcal_obs
 
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
-        boot=self.boot
-        mb_obs_list = boot.mb_obs_list
+        mb_obs_list = self.boot.mb_obs_list
+        if 'extra_sim_noise' in self:
+            self._add_extra_sim_noise(mb_obs_list)
 
+        super(MetacalNGMixBootFitter,self)._fit_galaxy(model,
+                                                       coadd,
+                                                       guess=guess,
+                                                       **kwargs)
+        metacal_obs = self._get_subn_metacal_obs()
+        self._do_metacal(model, metacal_obs=metacal_obs)
+
+        metacal_res = self.boot.get_metacal_max_result()
+
+        res=self.gal_fitter.get_result()
+        res.update(metacal_res)
+
+
+class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
+
+    def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
+        mb_obs_list = boot.mb_obs_list
         if len(mb_obs_list) > 1 or len(mb_obs_list[0]) > 1:
             raise NotImplementedError("only a single obs for now")
 
-        if 'extra_sim_noise' in self:
-            self._add_extra_sim_noise(mb_obs_list)
 
         super(MetacalSimnNGMixBootFitter,self)._fit_galaxy(
             model,
