@@ -11,6 +11,58 @@ from ngmix import srandu, GMixRangeError
 from ngmix.priors import LOWVAL
 from .defaults import VERBOSITY
 
+def interpolate_image(rowcen1, colcen1, jacob1, im1, 
+                      rowcen2, colcen2, jacob2):
+    """
+    interpolate from im1 to im2 using jacobs
+    
+    assumes im1 and im2 are the same size
+    
+    returns 
+        
+        interpolated image, pixels in im2 off of im1, pixels in im2 on im1
+    """
+    
+    im2 = numpy.zeros_like(im1)
+        
+    rows2,cols2 = numpy.mgrid[0:im2.shape[0], 0:im2.shape[1]]
+    rows2 = rows2 - rowcen2
+    cols2 = cols2 - colcen2
+
+    jinv1 = jacob1.getI()
+            
+    # convert pixel coords in second cutout to u,v
+    u = rows2*jacob2[0,0] + cols2*jacob2[0,1]
+    v = rows2*jacob2[1,0] + cols2*jacob2[1,1]
+    
+    # now convert into pixels for first image
+    row1 = rowcen1 + u*jinv1[0,0] + v*jinv1[0,1]
+    col1 = colcen1 + u*jinv1[1,0] + v*jinv1[1,1]
+    
+    row1 = row1.round().astype('i8')
+    col1 = col1.round().astype('i8')
+    
+    wbad = numpy.where((row1 < 0)             | 
+                       (row1 >= im1.shape[0]) |
+                       (col1 < 0)             | 
+                       (col1 >= im1.shape[1]))
+
+    wgood = numpy.where(!((row1 < 0)             |
+                          (row1 >= im1.shape[0]) |
+                          (col1 < 0)             |
+                          (col1 >= im1.shape[1])))
+    
+    # clipping makes the notation easier
+    row1 = row1.clip(0,im1.shape[0]-1)
+    col1 = col1.clip(0,im1.shape[1]-1)
+        
+    rows2,cols2 = numpy.mgrid[0:im2.shape[0], 0:im2.shape[1]]
+    
+    # fill the image
+    im2[rows2[wgood],cols2[wgood]] = im1[row1[wgood],col1[wgood]]
+
+    return im2,wbad,wgood
+
 def print_with_verbosity(*args,**kwargs):
     """
     print with verbosity=XXX keyword
