@@ -1424,6 +1424,8 @@ class MetacalSubnNGMixBootFitter(MetacalNGMixBootFitter):
         subtract a correlated noise image sheared by
         negative of the shear applied to the real obs
         """
+        from ngmix.metacal import get_all_metacal
+
         print("    subtracting sheared correlated noise")
         mb_obs_list = self.boot.mb_obs_list
 
@@ -1431,16 +1433,11 @@ class MetacalSubnNGMixBootFitter(MetacalNGMixBootFitter):
         noise_mb_obs = ngmix.simobs.simulate_obs(None,
                                                  mb_obs_list)
 
+        step = self['metacal_pars']['step']
         # currentlly only works for single obs
-        mcal_obs = self.boot.get_metacal_obsdict(
-            mb_obs_list,
-            self['metacal_pars']
-        )
+        mcal_obs = get_all_metacal(mb_obs_list, step)
 
-        mcal_noise_obs = self.boot.get_metacal_obsdict(
-            noise_mb_obs,
-            self['metacal_pars']
-        )
+        mcal_noise_obs = get_all_metacal(noise_mb_obs, step)
 
         # add the noise sheared by negative of the shear
         # applied to observation
@@ -1538,9 +1535,9 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
         boot_model_before = self._get_bootstrapper(model,mobs_before)
         boot_model_after = self._get_bootstrapper(model,mobs_after)
 
-        mcal_obs_after = boot_model_after.get_metacal_obsdict(
+        mcal_obs_after = ngmix.metacal.get_all_metacal(
             mobs_after[0][0],
-            self['metacal_pars']
+            self['metacal_pars']['step'],
         )
 
         # now add noise after creating the metacal observations
@@ -1651,9 +1648,9 @@ class MetacalAddnNGMixBootFitter(MetacalSimnNGMixBootFitter):
         boot_model_before = self._get_bootstrapper(model,mobs_before)
         boot_model_after = self._get_bootstrapper(model,self.mb_obs_list)
 
-        mcal_obs_after = boot_model_after.get_metacal_obsdict(
+        mcal_obs_after = ngmix.metacal.get_all_metacal(
             self.mb_obs_list[0][0],
-            self['metacal_pars']
+            self['metacal_pars']['step'],
         )
 
         # now add noise after creating the metacal observations
