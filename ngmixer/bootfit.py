@@ -1433,12 +1433,12 @@ class MetacalSubnNGMixBootFitter(MetacalNGMixBootFitter):
 
         # currentlly only works for single obs
         mcal_obs = self.boot.get_metacal_obsdict(
-            mb_obs_list[0][0],
+            mb_obs_list,
             self['metacal_pars']
         )
 
         mcal_noise_obs = self.boot.get_metacal_obsdict(
-            noise_mb_obs[0][0],
+            noise_mb_obs,
             self['metacal_pars']
         )
 
@@ -1457,11 +1457,24 @@ class MetacalSubnNGMixBootFitter(MetacalNGMixBootFitter):
 
             mk=ipairs[0]
             nk=ipairs[1]
-            im  = mcal_obs[mk].image
-            nim = mcal_noise_obs[nk].image
 
-            mcal_obs[mk].image = im + nim
-            mcal_obs[mk].weight = 0.5*mcal_obs[mk].weight
+            imbobs = mcal_obs[mk]
+            nmbobs = mcal_noise_obs[nk]
+
+            for imb in xrange(len(imbobs)):
+                iolist=imbobs[imb]
+                nolist=nmbobs[imb]
+
+                for iobs in xrange(len(iolist)):
+
+                    obs  = iolist[iobs]
+                    nobs = nolist[iobs]
+
+                    im  = obs.image
+                    nim = nobs.image
+
+                    obs.image = im + nim
+                    obs.weight = 0.5*obs.weight
 
         return mcal_obs
 
