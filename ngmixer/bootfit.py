@@ -1430,14 +1430,46 @@ class MetacalSubnNGMixBootFitter(MetacalNGMixBootFitter):
         mb_obs_list = self.boot.mb_obs_list
 
         # simulated noise for these observations
-        noise_mb_obs = ngmix.simobs.simulate_obs(None,
-                                                 mb_obs_list)
 
         step = self['metacal_pars']['step']
         # currentlly only works for single obs
         mcal_obs = get_all_metacal(mb_obs_list, step)
 
-        mcal_noise_obs = get_all_metacal(noise_mb_obs, step)
+        nrand = self.get('subn_nrand',1)
+
+        for irand in xrange(nrand):
+            tnoise_mb_obs = ngmix.simobs.simulate_obs(None,
+                                                      mb_obs_list)
+            tmcal_noise_obs = get_all_metacal(tnoise_mb_obs, step)
+
+            if irand==0:
+                mcal_noise_obs = tmcal_noise_obs 
+            else:
+                #print("    adding extra realization:",irand)
+                for key in mcal_noise_obs:
+
+                    # these are MultiBandObsLists
+                    mobs = mcal_obs[key]
+                    nmobs = mcal_noise_obs[key]
+                    tnmobs = tmcal_noise_obs[key] 
+
+                    assert len(mobs)==len(nmobs)
+
+                    # loop over bands
+                    for band in xrange(len(mobs)):
+                        # mobs[band] etc are ObsLists
+
+                        # append copies of the original, for adding
+                        # the noise images to later
+                        nn = len(tnmobs[band])
+
+                        mobs[band].extend( deepcopy(mobs[band][0:nn] ) )
+
+                        # append more observations from the ObsList
+                        nmobs[band].extend( tnmobs[band] )
+
+                        assert len(mobs[band])==len(nmobs[band])
+
 
         # add the noise sheared by negative of the shear
         # applied to observation
