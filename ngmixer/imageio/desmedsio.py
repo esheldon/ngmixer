@@ -507,13 +507,12 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         return bmasks
 
     def _expand_mask(self,bmask,rounds=1):
-        # not the most efficient algorithm
-        # better to put new pixels from round 0 in a queue 
-        #  and just look at those...
-        for r in xrange(rounds):
-            q = numpy.where(bmask != 0)
+        qx_prev,qy_prev = numpy.where(bmask != 0)
         
-            for ix,iy in zip(q[0],q[1]):
+        for r in xrange(rounds):
+            qx = []
+            qy = []
+            for ix,iy in zip(qx_prev,qy_prev):
                 for dx in [-1,0,1]:
                     iix = ix + dx
                     if iix >= 0 and iix < bmask.shape[0]:
@@ -521,6 +520,11 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                             iiy = iy + dy
                             if iiy >= 0 and iiy < bmask.shape[1]:
                                 bmask[iix,iiy] = 1
+                                qx.append(iix)
+                                qy.append(iiy)
+                                
+            qx_prev = numpy.array(qx)
+            qy_prev = numpy.array(qy)
                             
         return bmask
 
@@ -547,7 +551,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                     
                     bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
                                                rowcen2, colcen2, jacob2)[0]
-                    bmaski = self._expand_mask(bmaski)
+                    bmaski = self._expand_mask(bmaski,rounds=2)
                     
                     # now set weights to zero
                     q = numpy.where(bmaski != 0)
