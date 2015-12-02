@@ -72,15 +72,15 @@ def interpolate_image(rowcen1, colcen1, jacob1, im1,
     row1 = row1.round().astype('i8')
     col1 = col1.round().astype('i8')
     
-    wbad = numpy.where((row1 < 0)             | 
+    wbad = numpy.where((row1 < 0)             |
                        (row1 >= im1.shape[0]) |
-                       (col1 < 0)             | 
+                       (col1 < 0)             |
                        (col1 >= im1.shape[1]))
 
-    wgood = numpy.where(!((row1 < 0)             |
-                          (row1 >= im1.shape[0]) |
-                          (col1 < 0)             |
-                          (col1 >= im1.shape[1])))
+    wgood = numpy.where((row1 >= 0)            &
+                        (row1 < im1.shape[0])  &
+                        (col1 >= 0)            &
+                        (col1 < im1.shape[1]))
     
     # clipping makes the notation easier
     row1 = row1.clip(0,im1.shape[0]-1)

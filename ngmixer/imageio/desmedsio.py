@@ -468,13 +468,13 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         
         im1 = m1.get_cutout(iobj,icutout1,type='bmask')
         
-        msk = np.array([2048+1024+512+256+128+16+8+1],dtype='u4')
+        msk = numpy.array([2048+1024+512+256+128+16+8+1],dtype='u4')
         
-        q = np.where( ((im1&2 != 0) | (im1&4 != 0)) 
-                      & 
-                      (im1&32 != 0) 
-                      &
-                      (im1&msk == 0))
+        q = numpy.where( ((im1&2 != 0) | (im1&4 != 0)) 
+                         & 
+                         (im1&32 != 0) 
+                         &
+                         (im1&msk == 0))
         im1[:,:] = 0
         im1[q] = 1
         
@@ -506,6 +506,24 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
             
         return bmasks
 
+    def _expand_mask(self,bmask,rounds=1):
+        # not the most efficient algorithm
+        # better to put new pixels from round 0 in a queue 
+        #  and just look at those...
+        for r in xrange(rounds):
+            q = numpy.where(bmask != 0)
+        
+            for ix,iy in zip(q[0],q[1]):
+                for dx in [-1,0,1]:
+                    iix = ix + dx
+                    if iix >= 0 and iix < bmask.shape[0]:
+                        for dy in [-1,0,1]:
+                            iiy = iy + dy
+                            if iiy >= 0 and iiy < bmask.shape[1]:
+                                bmask[iix,iiy] = 1
+                            
+        return bmask
+
     def _prop_extra_bitmasks(self, bmasks, mb_obs_list):
         mindex = mb_obs_list.meta['meds_index']
             
@@ -521,14 +539,15 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                     
                     rowcen1 = m['cutout_row'][mindex,0]
                     colcen1 = m['cutout_col'][mindex,0]
-                    jacob1 = m1.get_jacobian_matrix(mindex,0)
+                    jacob1 = m.get_jacobian_matrix(mindex,0)
                     
-                    rowcen2 = m2['cutout_row'][mindex,icut]
-                    colcen2 = m2['cutout_col'][mindex,icut]
-                    jacob2 = m2.get_jacobian_matrix(mindex,icut)
+                    rowcen2 = m['cutout_row'][mindex,icut]
+                    colcen2 = m['cutout_col'][mindex,icut]
+                    jacob2 = m.get_jacobian_matrix(mindex,icut)
                     
                     bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
                                                rowcen2, colcen2, jacob2)[0]
+                    bmaski = self._expand_mask(bmaski)
                     
                     # now set weights to zero
                     q = numpy.where(bmaski != 0)
