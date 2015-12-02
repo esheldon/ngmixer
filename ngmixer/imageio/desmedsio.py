@@ -11,7 +11,7 @@ from ..util import print_with_verbosity, \
     interpolate_image, \
     radec_to_unitvecs_ruv, \
     radec_to_thetaphi, \
-    thetaphi_to_unitvecs_ruv, \
+    thetaphi_to_unitvecs_ruv
 
 import meds
 
@@ -457,36 +457,34 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         print('            box_size - r,c nbr:',self.meds_list[band]['box_size'][nbr_mindex]- rowcol_nbr)
         return cen_obs.get_psf(),J_nbr
 
-    def _get_extra_bitmasks(self,mb_obs_list):
+    def _interpolate_maskbits(self,iobj,m1,icutout1,m2,icutout2):
+        rowcen1 = m1['cutout_row'][iobj,icutout1]
+        colcen1 = m1['cutout_col'][iobj,icutout1]
+        jacob1 = m1.get_jacobian_matrix(iobj,icutout1)
         
-        def interpolate_maskbits(iobj,m1,icutout1,m2,icutout2):
-            rowcen1 = m1['cutout_row'][iobj,icutout1]
-            colcen1 = m1['cutout_col'][iobj,icutout1]
-            jacob1 = m1.get_jacobian_matrix(iobj,icutout1)
-            
-            rowcen2 = m2['cutout_row'][iobj,icutout2]
-            colcen2 = m2['cutout_col'][iobj,icutout2]
-            jacob2 = m2.get_jacobian_matrix(iobj,icutout2)
-            
-            im1 = m1.get_cutout(iobj,icutout1,type='bmask')
-            
-            msk = np.array([2048+1024+512+256+128+16+8+1],dtype='u4')
-            
-            q = np.where( ((im1&2 != 0) | (im1&4 != 0)) 
-                          & 
-                          (im1&32 != 0) 
-                          &
-                          (im1&msk == 0))
-            im1[:,:] = 0
-            im1[q] = 1
-            
-            assert m1['box_size'][iobj] == m2['box_size'][iobj]
-            assert m1['id'][iobj] == m2['id'][iobj]
-            
-            return interpolate_image(rowcen1, colcen1, jacob1, im1, 
-                                     rowcen2, colcen2, jacob2)[0]
+        rowcen2 = m2['cutout_row'][iobj,icutout2]
+        colcen2 = m2['cutout_col'][iobj,icutout2]
+        jacob2 = m2.get_jacobian_matrix(iobj,icutout2)
+        
+        im1 = m1.get_cutout(iobj,icutout1,type='bmask')
+        
+        msk = np.array([2048+1024+512+256+128+16+8+1],dtype='u4')
+        
+        q = np.where( ((im1&2 != 0) | (im1&4 != 0)) 
+                      & 
+                      (im1&32 != 0) 
+                      &
+                      (im1&msk == 0))
+        im1[:,:] = 0
+        im1[q] = 1
+        
+        assert m1['box_size'][iobj] == m2['box_size'][iobj]
+        assert m1['id'][iobj] == m2['id'][iobj]
 
-        
+        return interpolate_image(rowcen1, colcen1, jacob1, im1, 
+                                 rowcen2, colcen2, jacob2)[0]
+    
+    def _get_extra_bitmasks(self,mb_obs_list):        
         marr = self.meds_list
         mindex = mb_obs_list.meta['meds_index']
         
@@ -497,88 +495,62 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
             for band,obs_list in enumerate(mb_obs_list):
                 for obs in obs_list:
                     if obs.meta['flags'] == 0:                        
-                        bmaski = interpolate_maskbits(mindex,
-                                                      marr[band],
-                                                      obs.meta['icut'],
-                                                      mt,
-                                                      0)
+                        bmaski = self._interpolate_maskbits(mindex,
+                                                            marr[band],
+                                                            obs.meta['icut'],
+                                                            mt,
+                                                            0)
                         bmask |= bmaski
     
             bmasks.append(bmask)
             
         return bmasks
 
-   def _get_multi_band_observations(self, mindex):
-       coadd_mb_obs_list, mb_obs_list = super(Y1DESMEDSImageIO, self)._get_multi_band_observations(mindex)
-       
-       # mask extra pixels in saturated stars
-       if self.conf['prop_sat_starpix']:
-           mindex = mb_obs_list.meta['meds_index']
-           
-           # get total OR'ed bit mask
-           bmasks = self._get_extra_bitmasks(mb_obs_list)
-           
-           # interp to each image
-           for band,obs_list in enumerate(mb_obs_list):
-               m = self.meds_list[band]
-               bmask = bmasks[band]
-               
-               for obs in obs_list:
-                   if obs.meta['flags'] == 0:
-                       # interp
-                       icut = obs.meta['icut']
-                       
-                       rowcen1 = m['cutout_row'][mindex,0]
-                       colcen1 = m['cutout_col'][mindex,0]
-                       jacob1 = m1.get_jacobian_matrix(mindex,0)
+    def _prop_extra_bitmasks(self, bmasks, mb_obs_list):
+        mindex = mb_obs_list.meta['meds_index']
+            
+        # interp to each image
+        for band,obs_list in enumerate(mb_obs_list):
+            m = self.meds_list[band]
+            bmask = bmasks[band]
+            
+            for obs in obs_list:
+                if obs.meta['flags'] == 0:
+                    # interp
+                    icut = obs.meta['icut']
+                    
+                    rowcen1 = m['cutout_row'][mindex,0]
+                    colcen1 = m['cutout_col'][mindex,0]
+                    jacob1 = m1.get_jacobian_matrix(mindex,0)
+                    
+                    rowcen2 = m2['cutout_row'][mindex,icut]
+                    colcen2 = m2['cutout_col'][mindex,icut]
+                    jacob2 = m2.get_jacobian_matrix(mindex,icut)
+                    
+                    bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
+                                               rowcen2, colcen2, jacob2)[0]
+                    
+                    # now set weights to zero
+                    q = numpy.where(bmaski != 0)
+                    if hasattr(obs,'weight_raw'):
+                        obs.weight_raw[q] = 0.0
                         
-                       rowcen2 = m2['cutout_row'][mindex,icut]
-                       colcen2 = m2['cutout_col'][mindex,icut]
-                       jacob2 = m2.get_jacobian_matrix(mindex,icut)
+                    if hasattr(obs,'weight_us'):
+                        obs.weight_us[q] = 0.0
                         
-                       bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
-                                                  rowcen2, colcen2, jacob2)[0]
-                       
-                       # now set weights to zero
-                       q = numpy.where(bmaski != 0)
-                       if hasattr(obs,'weight_raw'):
-                           obs.weight_raw[q] = 0.0
-                       
-                       if hasattr(obs,'weight_us'):
-                           obs.weight_us[q] = 0.0
-                       
-                       if hasattr(obs,'weight'):
-                           obs.weight[q] = 0.0
+                    if hasattr(obs,'weight'):
+                        obs.weight[q] = 0.0
 
-                       if hasattr(obs,'weight_orig'):
-                           obs.weight_orig[q] = 0.0
-                           
+                    if hasattr(obs,'weight_orig'):
+                        obs.weight_orig[q] = 0.0        
 
-# coordinates
-# ra = -u
-# ra = -phi
-# v = dec
-# theta = 90 - dec
+    def _get_multi_band_observations(self, mindex):
+        coadd_mb_obs_list, mb_obs_list = super(Y1DESMEDSImageIO, self)._get_multi_band_observations(mindex)
+        
+        # mask extra pixels in saturated stars
+        if self.conf['prop_sat_starpix']:
+            # get total OR'ed bit mask
+            bmasks = self._get_extra_bitmasks(mb_obs_list)
+            self._prop_extra_bitmasks(bmasks,mb_obs_list)
 
-# unit vector directions
-# u = -ra on sphere = +phi on sphere
-# v = dec on sphere = -theta on sphere
-
-def radec_to_unitvecs_ruv(ra,dec):
-    theta,phi = radec_to_thetaphi(ra,dec)
-    return thetaphi_to_unitvecs_ruv(theta,phi)
-
-def radec_to_thetaphi(ra,dec):
-    return (90.0-dec)/180.0*numpy.pi,-1.0*ra/180.0*numpy.pi
-
-def thetaphi_to_unitvecs_ruv(theta,phi):
-    sint = numpy.sin(theta)
-    cost = numpy.cos(theta)
-    sinp = numpy.sin(phi)
-    cosp = numpy.cos(phi)
-
-    rhat = numpy.array([sint*cosp,sint*sinp,cost])
-    that = numpy.array([cost*cosp,cost*sinp,-1.0*sint])
-    phat = numpy.array([-1.0*sinp,cosp,0.0])
-
-    return rhat,phat,-1.0*that
+        return coadd_mb_obs_list, mb_obs_list
