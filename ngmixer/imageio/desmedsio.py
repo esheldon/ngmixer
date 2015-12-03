@@ -507,7 +507,9 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         return bmasks
 
     def _expand_mask(self,bmask,rounds=1):
-        qx_prev,qy_prev = numpy.where(bmask != 0)
+        cbmask = bmask.copy()
+        
+        qx_prev,qy_prev = numpy.where(cbmask != 0)
         
         for r in xrange(rounds):
             qx = []
@@ -519,14 +521,14 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                         for dy in [-1,0,1]:
                             iiy = iy + dy
                             if iiy >= 0 and iiy < bmask.shape[1]:
-                                bmask[iix,iiy] = 1
+                                cbmask[iix,iiy] = 1
                                 qx.append(iix)
                                 qy.append(iiy)
                                 
             qx_prev = numpy.array(qx)
             qy_prev = numpy.array(qy)
                             
-        return bmask
+        return cbmask
 
     def _prop_extra_bitmasks(self, bmasks, mb_obs_list):
         mindex = mb_obs_list.meta['meds_index']
@@ -551,21 +553,36 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                     
                     bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
                                                rowcen2, colcen2, jacob2)[0]
+                    
+                    """
+                    if band == 0 and mb_obs_list.meta['id'] == 3076597980:
+                        import matplotlib.pyplot as plt
+
+                        fig,axs = plt.subplots(1,3)
+                        axs[0].imshow(bmaski)
+                        axs[1].imshow(self._expand_mask(bmaski,rounds=1))
+                        axs[2].imshow(self._expand_mask(bmaski,rounds=2))
+                        
+                        import ipdb
+                        ipdb.set_trace()
+                    """
+                    
                     bmaski = self._expand_mask(bmaski,rounds=2)
                     
                     # now set weights to zero
-                    q = numpy.where(bmaski != 0)
-                    if hasattr(obs,'weight_raw'):
-                        obs.weight_raw[q] = 0.0
-                        
-                    if hasattr(obs,'weight_us'):
-                        obs.weight_us[q] = 0.0
-                        
-                    if hasattr(obs,'weight'):
-                        obs.weight[q] = 0.0
-
-                    if hasattr(obs,'weight_orig'):
-                        obs.weight_orig[q] = 0.0        
+                    q = numpy.where((bmaski != 0) & (obs.seg == 0))
+                    if len(q[0]) > 0:
+                        if hasattr(obs,'weight_raw'):
+                            obs.weight_raw[q] = 0.0
+                            
+                        if hasattr(obs,'weight_us'):
+                            obs.weight_us[q] = 0.0
+                            
+                        if hasattr(obs,'weight'):
+                            obs.weight[q] = 0.0
+                            
+                        if hasattr(obs,'weight_orig'):
+                            obs.weight_orig[q] = 0.0        
 
     def _get_multi_band_observations(self, mindex):
         coadd_mb_obs_list, mb_obs_list = super(Y1DESMEDSImageIO, self)._get_multi_band_observations(mindex)
