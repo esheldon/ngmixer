@@ -509,6 +509,14 @@ class MEDSImageIO(ImageIO):
             else:
                 obs_list.append(obs)
 
+        if ncutout == 0:
+            for o in [coadd_obs_list,obs_list]:
+                flags = IMAGE_FLAGS
+                obs = Observation(numpy.zeros((0,0)))
+                meta = {'flags':flags}
+                obs.update_meta_data(meta)            
+                o.append(obs)
+
         if self.conf['reject_outliers'] and len(obs_list) > 0:
             self._reject_outliers(obs_list)
 
