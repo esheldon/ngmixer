@@ -340,15 +340,8 @@ class NGMixBootFitter(BaseFitter):
                     else:
                         print('        masked nbr: %d' % (nbrs_ind+1))
                         
-                        if not nbrs_psf.has_gmix():
-                            # FIXME - better flagging of nbrs
-                            if 'fit_flags' in obs.meta and obs.meta['fit_flags'] != 0:
-                                print('        bad PSF fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
-                            else:
-                                # FIXME - need to fit psf from off chip nbrs
-                                print('        FIXME: need to fit PSF for '
-                                      'off-chip nbr %d for cen %d' % (nbrs_ind+1,cen_ind+1))
-
+                        if nbrs_flags != 0:
+                            print('        nbrs_flags set to %d: FoF obj = %d' % (nbrs_flags,nbrs_ind+1))
                         elif nbrs_fit_data[fit_flags_tag][nbrs_ind] != 0 or (nbrs_fit_data['flags'][nbrs_ind] & GAL_FIT_FAILURE) != 0:
                             print('        bad fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
                         elif (nbrs_fit_data['flags'][nbrs_ind] & LOW_PSF_FLUX) != 0:
@@ -357,8 +350,14 @@ class NGMixBootFitter(BaseFitter):
                             print('        bad PSF flux fit for nbr: FoF obj = %d' % (nbrs_ind+1))
                         elif (nbrs_fit_data['flags'][nbrs_ind] & PSF_FIT_FAILURE) != 0:
                             print('        bad PSF fit for nbr: FoF obj = %d' % (nbrs_ind+1))
-                        elif nbrs_flags != 0:
-                            print('        nbrs_flags set to %d: FoF obj = %d' % (nbrs_flags,nbrs_ind+1))
+                        elif not nbrs_psf.has_gmix():
+                            # FIXME - better flagging of nbrs
+                            if 'fit_flags' in obs.meta and obs.meta['fit_flags'] != 0:
+                                print('        bad PSF fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
+                            else:
+                                # FIXME - need to fit psf from off chip nbrs
+                                print('        FIXME: need to fit PSF for '
+                                      'off-chip nbr %d for cen %d' % (nbrs_ind+1,cen_ind+1))
                         else:
                             print('        nbr not rendered for unknown reason: FoF obj = %d' % (nbrs_ind+1))
                             
