@@ -6,7 +6,9 @@ import os
 from copy import deepcopy
 
 # local imports
-from .defaults import DEFVAL,NO_ATTEMPT,PSF_FIT_FAILURE,GAL_FIT_FAILURE,LOW_PSF_FLUX
+from .defaults import DEFVAL, NO_ATTEMPT, \
+    PSF_FIT_FAILURE, GAL_FIT_FAILURE, \
+    LOW_PSF_FLUX, PSF_FLUX_FIT_FAILURE
 from .fitting import BaseFitter
 from .util import Namer, print_pars
 
