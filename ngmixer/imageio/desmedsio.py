@@ -484,14 +484,19 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         return interpolate_image(rowcen1, colcen1, jacob1, im1, 
                                  rowcen2, colcen2, jacob2)[0]
     
-    def _get_extra_bitmasks(self,mb_obs_list):        
+    def _get_extra_bitmasks(self,coadd_mb_obs_list,mb_obs_list):        
         marr = self.meds_list
         mindex = mb_obs_list.meta['meds_index']
         
         bmasks = []
-        for mt in marr:
-            bmask = mt.get_cutout(mindex,0,type='bmask')
+        for bandt,mt in enumerate(marr):
+            bmask = numpy.zeros((mt['box_size'][mindex],mt['box_size'][mindex])).astype('i4')
             
+            # do the coadd
+            if len(coadd_mb_obs_list[bandt]) > 0 and coadd_mb_obs_list[bandt][0].meta['flags'] == 0:
+                bmask |= mt.get_cutout(mindex,0,type='bmask')
+            
+            # do each band
             for band,obs_list in enumerate(mb_obs_list):
                 for obs in obs_list:
                     if obs.meta['flags'] == 0:                        
@@ -590,7 +595,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         # mask extra pixels in saturated stars
         if self.conf['prop_sat_starpix']:
             # get total OR'ed bit mask
-            bmasks = self._get_extra_bitmasks(mb_obs_list)
+            bmasks = self._get_extra_bitmasks(coadd_mb_obs_list,mb_obs_list)
             self._prop_extra_bitmasks(bmasks,mb_obs_list)
 
         return coadd_mb_obs_list, mb_obs_list
