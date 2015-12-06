@@ -16,6 +16,7 @@ from ngmix import Observation, ObsList, MultiBandObsList, GMixRangeError
 from ngmix.fitting import EIG_NOTFINITE
 from ngmix.gexceptions import BootPSFFailure, BootGalFailure
 from ngmix.gmix import GMixModel, GMix, GMixCM
+from ngmix.shape import Shape
 
 from pprint import pprint
 
@@ -643,14 +644,15 @@ class NGMixBootFitter(BaseFitter):
 
         return flagsall
 
-    def _fit_psfs(self,coadd):
+    def _fit_psfs(self,coadd, boot=None):
         """
         fit the psf model to every observation's psf image
         """
 
         print('    fitting the PSFs')
 
-        boot=self.boot
+        if boot is None:
+            boot=self.boot
 
         psf_pars = {}
         for k,v in self['psf_pars'].iteritems():
@@ -1447,9 +1449,9 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
         psf_obs = obs.psf
 
         im = obs.image.copy()
-        psf_im = psf_obs.copy()
-        gs_im = galsim.Image(im, scale=1)
-        gs_psf = galsim.Image(psf_im, scale=1)
+        psf_im = psf_obs.image.copy()
+        gs_im = galsim.Image(im, scale=1.0)
+        gs_psf = galsim.Image(psf_im, scale=1.0)
 
         i_im = galsim.InterpolatedImage(gs_im)
         i_psf = galsim.InterpolatedImage(gs_psf)
@@ -1470,10 +1472,12 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
             s_i_psf = i_psf.shear(g1=shear.g1, g2=shear.g2)
 
             s_im = s_i_im.drawImage(ny=im.shape[0],
-                                   nx=im.shape[1],
-                                   method='no_pixel')
+                                    nx=im.shape[1],
+                                    scale=1.0,
+                                    method='no_pixel')
             s_psf_im = s_i_psf.drawImage(ny=psf_im.shape[0],
                                          nx=psf_im.shape[1],
+                                         scale=1.0,
                                          method='no_pixel')
 
             spsf_obs = Observation(
@@ -1483,8 +1487,8 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
             )
             sobs = Observation(
                 s_im.array,
-                weight=im.weight.copy(),
-                jacobian=im.jacobian.copy(),
+                weight=obs.weight.copy(),
+                jacobian=obs.jacobian.copy(),
                 psf=spsf_obs
             )
 
@@ -1500,8 +1504,16 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
         the basic fitter for this class
         """
 
+        print("    doing postcal")
 
         odict = self._get_postcal_obsdict(self.boot.mb_obs_list)
+
+        Tguess = self.boot.mb_obs_list[0][0].psf.meta['Tguess']
+
+        psf_pars = {}
+        for k,v in self['psf_pars'].iteritems():
+            if k != 'model' and k != 'ntry':
+                psf_pars.update({k:v})
 
         fits={}
         for key in odict:
@@ -1509,9 +1521,19 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
 
             boot=self._get_bootstrapper(model, obs)
             
+            boot.fit_psfs(self['psf_pars']['model'],
+                          Tguess,
+                          ntry=self['psf_pars']['ntry'],
+                          fit_pars=psf_pars)
+
+
             self._fit_max(model, boot=boot)
 
+            boot.set_round_s2n()
             res=boot.get_max_fitter().get_result()
+            rres=boot.get_round_result()
+            res['s2n_r'] = rres['s2n_r']
+            res['T_r'] = rres['T_r']
 
             fits[key] = res
 
@@ -1535,6 +1557,7 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
                      res1m['pars']+
                      res2p['pars']+
                      res2m['pars'])/4.0
+
         pars_cov_mean = (res1p['pars_cov']+
                          res1m['pars_cov']+
                          res2p['pars_cov']+
@@ -1548,11 +1571,11 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
                       + res2p['s2n_r']
                       + res2m['s2n_r'])/4.0
 
-        if self.verbose:
+        if self['verbose']:
             print_pars(pars_mean, front='    parsmean:   ')
 
-        R=zeros( (2,2) ) 
-        Rpsf=zeros(2)
+        R=numpy.zeros( (2,2) ) 
+        Rpsf=numpy.zeros(2)
 
         fac = 1.0/(2.0*step)
 
@@ -1606,7 +1629,7 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
             for f in self.pcal_flist:
                 front='%s_' % (model)
                 mf = f.replace(front,'')
-                #print("copying %s -> %s" % (f,mf))
+                #print("copying %s -> %s" % (f,mf), res[mf])
                 self.data[f][dindex] = res[mf]
 
     def _get_postcal_dtype(self, coadd):
@@ -1624,14 +1647,14 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
                 (n('pars_cov'),'f8',(np,np)),
                 (n('g'),'f8',2),
                 (n('g_cov'),'f8', (2,2) ),
-                (n('c'),'f8',2),
+                #(n('c'),'f8',2),
                 (n('s2n_r'),'f8'),
                 (n('R'),'f8',(2,2)),
                 #(n('Rpsf'),'f8',2),
                 #(n('gpsf'),'f8',2),
             ]
 
-        self.ncal_flist = [d[0] for d in dt]
+        self.pcal_flist = [d[0] for d in dt]
 
         return dt
 
@@ -1641,7 +1664,7 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
 
         models=self._get_all_models(coadd)
         for model in models:
-            for f in self.ncal_flist:
+            for f in self.pcal_flist:
                 data[f] = DEFVAL
 
         return data
