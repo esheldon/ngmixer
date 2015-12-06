@@ -1100,13 +1100,15 @@ class NGMixBootFitter(BaseFitter):
         return d
 
 class MaxNGMixBootFitter(NGMixBootFitter):
-    def _fit_max(self, model, guess=None, **kwargs):
+    def _fit_max(self, model, guess=None, boot=None, **kwargs):
         """
         do a maximum likelihood fit
 
         note prior applied during
         """
-        boot=self.boot
+
+        if boot is None:
+            boot=self.boot
 
         max_pars=self['max_pars']
         prior=self['model_pars'][model]['prior']
@@ -1417,6 +1419,235 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 data[f] = DEFVAL
 
         return data
+
+class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
+    def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
+        mb_obs_list = self.boot.mb_obs_list
+
+        if 'extra_sim_noise' in self:
+            self._add_extra_sim_noise(mb_obs_list)
+
+        super(MetacalNGMixBootFitter,self)._fit_galaxy(model,
+                                                       coadd,
+                                                       guess=guess,
+                                                       **kwargs)
+        target_noise=self.get('target_noise',None)
+        extra_noise=self.get('extra_noise',None)
+        postcal_res=self._do_postcal(model,
+                                     target_noise=target_noise,
+                                     extra_noise=extra_noise)
+
+        res=self.gal_fitter.get_result()
+        res.update(postcal_res)
+
+    def _get_postcal_obsdict(self, mb_obs_list):
+        import galsim
+
+        obs = mb_obs_list[0][0]
+        psf_obs = obs.psf
+
+        im = obs.image.copy()
+        psf_im = psf_obs.copy()
+        gs_im = galsim.Image(im, scale=1)
+        gs_psf = galsim.Image(psf_im, scale=1)
+
+        i_im = galsim.InterpolatedImage(gs_im)
+        i_psf = galsim.InterpolatedImage(gs_psf)
+
+        step=self['postcal_pars']['step']
+
+        shts = [('1p',Shape( step, 0.0)),
+                ('1m',Shape(-step, 0.0)),
+                ('2p',Shape( 0.0,  step)),
+                ('2m',Shape( 0.0, -step))]
+
+        odict={}
+        for t in shts:
+            name = t[0]
+            shear = t[1]
+
+            s_i_im = i_im.shear(g1=shear.g1, g2=shear.g2)
+            s_i_psf = i_psf.shear(g1=shear.g1, g2=shear.g2)
+
+            s_im = s_i_im.drawImage(ny=im.shape[0],
+                                   nx=im.shape[1],
+                                   method='no_pixel')
+            s_psf_im = s_i_psf.drawImage(ny=psf_im.shape[0],
+                                         nx=psf_im.shape[1],
+                                         method='no_pixel')
+
+            spsf_obs = Observation(
+                s_psf_im.array,
+                weight=psf_obs.weight.copy(),
+                jacobian=psf_obs.jacobian.copy()
+            )
+            sobs = Observation(
+                s_im.array,
+                weight=im.weight.copy(),
+                jacobian=im.jacobian.copy(),
+                psf=spsf_obs
+            )
+
+            odict[name] = sobs
+
+        return odict
+
+    def _do_postcal(self,
+                    model,
+                    target_noise=None,
+                    extra_noise=None):
+        """
+        the basic fitter for this class
+        """
+
+
+        odict = self._get_postcal_obsdict(self.boot.mb_obs_list)
+
+        fits={}
+        for key in odict:
+            obs = odict[key]
+
+            boot=self._get_bootstrapper(model, obs)
+            
+            self._fit_max(model, boot=boot)
+
+            res=boot.get_max_fitter().get_result()
+
+            fits[key] = res
+
+        res = self._extract_postcal_responses(fits)
+        return res
+
+    def _extract_postcal_responses(self, fits):
+        """
+        pars pars_cov gpsf, s2n_r, s2n_simple, T_r, psf_T_r required
+
+        expect the shape to be in pars[2] and pars[3]
+        """
+        step = self['postcal_pars']['step']
+
+        res1p = fits['1p']
+        res1m = fits['1m']
+        res2p = fits['2p']
+        res2m = fits['2m']
+
+        pars_mean = (res1p['pars']+
+                     res1m['pars']+
+                     res2p['pars']+
+                     res2m['pars'])/4.0
+        pars_cov_mean = (res1p['pars_cov']+
+                         res1m['pars_cov']+
+                         res2p['pars_cov']+
+                         res2m['pars_cov'])/4.0
+
+        pars_mean[2] = 0.5*(fits['1p']['pars'][2] + fits['1m']['pars'][2])
+        pars_mean[3] = 0.5*(fits['2p']['pars'][3] + fits['2m']['pars'][3])
+
+        s2n_r_mean = (res1p['s2n_r']
+                      + res1m['s2n_r']
+                      + res2p['s2n_r']
+                      + res2m['s2n_r'])/4.0
+
+        if self.verbose:
+            print_pars(pars_mean, front='    parsmean:   ')
+
+        R=zeros( (2,2) ) 
+        Rpsf=zeros(2)
+
+        fac = 1.0/(2.0*step)
+
+        R[0,0] = (fits['1p']['pars'][2]-fits['1m']['pars'][2])*fac
+        R[0,1] = (fits['1p']['pars'][3]-fits['1m']['pars'][3])*fac
+        R[1,0] = (fits['2p']['pars'][2]-fits['2m']['pars'][2])*fac
+        R[1,1] = (fits['2p']['pars'][3]-fits['2m']['pars'][3])*fac
+
+        #Rpsf[0] = (pars['1p_psf'][2]-pars['1m_psf'][2])*fac
+        #Rpsf[1] = (pars['2p_psf'][3]-pars['2m_psf'][3])*fac
+
+
+        #gpsf_name = 'pcal_%spsf' % shape_type
+        #raw_gpsf_name = '%spsf' % shape_type
+        res = {
+            'pcal_pars':pars_mean,
+            'pcal_pars_cov':pars_cov_mean,
+            'pcal_g':pars_mean[2:2+2],
+            'pcal_g_cov':pars_cov_mean[2:2+2, 2:2+2],
+            'pcal_R':R,
+            #'pcal_Rpsf':Rpsf,
+            #'pcal_gpsf':fits['gpsf'],
+            'pcal_s2n_r':s2n_r_mean,
+            #'pcal_s2n_simple':fits['s2n_simple'],
+        }
+        return res
+
+
+
+
+    def _get_fit_data_dtype(self,coadd):
+        dt=super(MetacalNGMixBootFitter,self)._get_fit_data_dtype(coadd)
+
+        dt_pcal = self._get_postcal_dtype(coadd)
+        dt += dt_pcal
+        return dt
+
+    def _copy_galaxy_result(self, model, coadd):
+        super(MetacalNGMixBootFitter,self)._copy_galaxy_result(model,coadd)
+
+        dindex=0
+        res=self.gal_fitter.get_result()
+
+        if coadd:
+            n=Namer('coadd_%s_pcal' % model)
+        else:
+            n=Namer('%s_pcal' % model)
+
+        if res['flags'] == 0:
+
+            for f in self.pcal_flist:
+                front='%s_' % (model)
+                mf = f.replace(front,'')
+                #print("copying %s -> %s" % (f,mf))
+                self.data[f][dindex] = res[mf]
+
+    def _get_postcal_dtype(self, coadd):
+
+        nband=self['nband']
+        simple_npars=5+nband
+        np=simple_npars
+
+        dt=[]
+        for model in self._get_all_models(coadd):
+            front='%s_pcal' % (model)
+            n=Namer(front)
+            dt += [
+                (n('pars'),'f8',np),
+                (n('pars_cov'),'f8',(np,np)),
+                (n('g'),'f8',2),
+                (n('g_cov'),'f8', (2,2) ),
+                (n('c'),'f8',2),
+                (n('s2n_r'),'f8'),
+                (n('R'),'f8',(2,2)),
+                #(n('Rpsf'),'f8',2),
+                #(n('gpsf'),'f8',2),
+            ]
+
+        self.ncal_flist = [d[0] for d in dt]
+
+        return dt
+
+
+    def _make_struct(self,coadd):
+        data=super(MetacalNGMixBootFitter,self)._make_struct(coadd)
+
+        models=self._get_all_models(coadd)
+        for model in models:
+            for f in self.ncal_flist:
+                data[f] = DEFVAL
+
+        return data
+
+
+
 
 class MetacalSubnNGMixBootFitter(MetacalNGMixBootFitter):
     def _get_subn_metacal_obs(self):
