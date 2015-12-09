@@ -23,11 +23,17 @@ else:
     UTTER_FAILURE        = 2**29
     NO_ATTEMPT           = 2**30
 
+
+
     # flags for fitting codes
     PSF_FIT_FAILURE      = 2**0
     GAL_FIT_FAILURE      = 2**1
     PSF_FLUX_FIT_FAILURE = 2**2
     LOW_PSF_FLUX         = 2**3
+
+# flags used by MOF 
+MOF_SKIPPED_IN_CONV_CHECK  = 2**0
+MOF_NOT_CONVERGED          = 2**1
 
 # defaults
 DEFVAL = -9999

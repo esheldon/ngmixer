@@ -14,6 +14,7 @@ from . import files
 from .ngmixing import NGMixer
 from .defaults import DEFVAL,_CHECKPOINTS_DEFAULT_MINUTES
 from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS
+from .defaults import MOF_SKIPPED_IN_CONV_CHECK, MOF_NOT_CONVERGED 
 from .util import UtterFailure,Namer,print_pars
 from .util import print_with_verbosity
 
@@ -63,9 +64,14 @@ class MOFNGMixer(NGMixer):
             for model,pars_model,model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
                 if pars_model not in self.curr_data.dtype.names:
                     continue
-
+                
+                n = Namer(model)
+                
+                self.curr_data[n('mof_num_itr')][fofind] = itr+1
+                
                 if self.curr_data['flags'][fofind] or self.prev_data['flags'][fofind]:
                     print('    skipping fof obj %s in convergence check' % (fofind+1))
+                    self.curr_data[n('mof_flags')][fofind] = MOF_SKIPPED_IN_CONV_CHECK
                     continue
 
                 old = self.prev_data[pars_model][fofind]
@@ -74,7 +80,7 @@ class MOFNGMixer(NGMixer):
                 absfracdiff = numpy.abs(new/old-1.0)
                 abserr = numpy.abs((old-new)/numpy.sqrt(numpy.diag(self.curr_data[model_cov][fofind])))
 
-                n = Namer(model)
+
                 self.curr_data[n('mof_abs_diff')][fofind] = absdiff
                 self.curr_data[n('mof_frac_diff')][fofind] = absfracdiff
                 self.curr_data[n('mof_err_diff')][fofind] = abserr
@@ -83,8 +89,8 @@ class MOFNGMixer(NGMixer):
                              (abserr <= self['mof']['maxerr_conv'])):
                     self.curr_data[n('mof_flags')][fofind] = 0
                 else:
-                    self.curr_data[n('mof_flags')][fofind] = 1
-                self.curr_data[n('mof_num_itr')][fofind] = itr+1
+                    self.curr_data[n('mof_flags')][fofind] = MOF_NOT_CONVERGED
+
 
                 for i in xrange(npars):
                     if absdiff[i] > maxabs[i]:
@@ -118,6 +124,11 @@ class MOFNGMixer(NGMixer):
         else:
             return False
 
+    def _set_default_data_for_fofind(self,fofind):
+        for tag in self.default_data.dtype.names:
+            self.curr_data[tag][fofind] = self.default_data[tag]
+        self.curr_data['fofind'][fofind] = fofind
+
     def do_fits(self):
         """
         Fit all objects in our list
@@ -141,12 +152,8 @@ class MOFNGMixer(NGMixer):
 
             # get data to fill
             self.curr_data = self._make_struct(num=foflen)
-            for tag in self.default_data.dtype.names:
-                self.curr_data[tag][:] = self.default_data[tag]
-                
-            # fill in fofind
             for i in xrange(foflen):
-                self.curr_data['fofind'][i] = i
+                self._set_default_data_for_fofind(i)
                 
             #####################################################################
             # fit the fof once with no nbrs
@@ -228,10 +235,10 @@ class MOFNGMixer(NGMixer):
                     # fitting
                     for i in numpy.random.choice(foflen,size=foflen,replace=False):
                         self.curr_data_index = i
+                        
                         coadd_mb_obs_list = coadd_mb_obs_lists[i]
                         mb_obs_list = mb_obs_lists[i]
-                        if foflen > 1:
-                            print('  fof obj: %d:%d - itr %d' % (self.curr_data_index+1,foflen,itr+1))
+                        print('  fof obj: %d:%d - itr %d' % (self.curr_data_index+1,foflen,itr+1))
                         print('    id: %d' % mb_obs_list.meta['id'])
 
                         num += 1

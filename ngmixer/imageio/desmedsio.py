@@ -327,6 +327,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         super(Y1DESMEDSImageIO,self)._set_defaults()
         self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
         self.conf['prop_sat_starpix'] = self.conf.get('prop_sat_starpix',False)
+        self.conf['flag_y1_stellarhalo_masked'] = self.conf.get('flag_y1_stellarhalo_masked',False)
         
     def _load_wcs_data(self):
         """
@@ -577,6 +578,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                     # now set weights to zero
                     q = numpy.where((bmaski != 0) & (obs.seg == 0))
                     if len(q[0]) > 0:
+                        print('    masked %d pixels due to saturation in any band' % q[0].size)
                         if hasattr(obs,'weight_raw'):
                             obs.weight_raw[q] = 0.0
                             
@@ -589,6 +591,63 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                         if hasattr(obs,'weight_orig'):
                             obs.weight_orig[q] = 0.0        
 
+    def _flag_y1_stellarhalo_masked_one(self,mb_obs_list):
+        mindex = mb_obs_list.meta['meds_index']
+        seg_number = self.meds_list[0]['number'][mindex]
+        
+        assert mb_obs_list.meta['id'] == self.meds_list[0]['id'][mindex], \
+            "Problem getting meds index! check value of mb_obs_list.meta['meds_index']"
+        
+        flags = 0
+        for band,obs_list in enumerate(mb_obs_list):
+            for obs in obs_list:
+                if obs.meta['flags'] == 0:
+
+                    icut = obs.meta['icut']
+                    bmask = self.meds_list[band].get_cutout(mindex,icut,type='bmask')
+                    
+                    q = numpy.where((bmask&32 != 0) & (obs.seg == seg_number))
+                    
+                    # debugging code - leave for now
+                    """
+                    if numpy.any(bmask&32 != 0) and q[0].size > 0:
+                        import matplotlib.pyplot as plt
+                        
+                        qq = numpy.where(bmask&32 != 0)
+                        pim = numpy.zeros_like(bmask)
+                        pim[qq] = 1
+                        
+                        pseg = obs.seg.copy()
+                        pseg = pseg.astype('f8')
+                        useg = numpy.sort(numpy.unique(obs.seg))
+                        nuseg = float(len(useg))
+                        for i,sval in enumerate(useg):
+                            qq = numpy.where(obs.seg == sval)
+                            if qq[0].size > 0:
+                                pseg[qq] = float(i)/nuseg
+                                
+                        fig,axs = plt.subplots(1,2)
+                        axs[0].imshow(pim)                                                
+                        axs[1].imshow(pseg)
+                        
+                        import ipdb
+                        ipdb.set_trace()
+                    """
+                    
+                    if q[0].size > 0:                        
+                        flags = 1
+                        return flags
+                    
+        return flags
+    
+    def _flag_y1_stellarhalo_masked(self,coadd_mb_obs_list,mb_obs_list):
+        flags = 0
+        flags |= self._flag_y1_stellarhalo_masked_one(coadd_mb_obs_list)
+        if flags == 0:
+            flags |= self._flag_y1_stellarhalo_masked_one(mb_obs_list)
+            
+        return flags
+
     def _get_multi_band_observations(self, mindex):
         coadd_mb_obs_list, mb_obs_list = super(Y1DESMEDSImageIO, self)._get_multi_band_observations(mindex)
         
@@ -597,5 +656,13 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
             # get total OR'ed bit mask
             bmasks = self._get_extra_bitmasks(coadd_mb_obs_list,mb_obs_list)
             self._prop_extra_bitmasks(bmasks,mb_obs_list)
+
+        # flag things where seg map touches a stellar halo as defined by DESDM
+        if self.conf['flag_y1_stellarhalo_masked']:            
+            flags = self._flag_y1_stellarhalo_masked(coadd_mb_obs_list,mb_obs_list)
+            if flags != 0:
+                print('    flagged object due to seg map touching masked stellar halo')
+                coadd_mb_obs_list.meta['obj_flags'] |= flags
+                mb_obs_list.meta['obj_flags'] |= flags
 
         return coadd_mb_obs_list, mb_obs_list
