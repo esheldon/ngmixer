@@ -14,7 +14,19 @@ from . import files
 from .ngmixing import NGMixer
 from .defaults import DEFVAL,_CHECKPOINTS_DEFAULT_MINUTES
 from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS
-from .defaults import MOF_SKIPPED_IN_CONV_CHECK, MOF_NOT_CONVERGED 
+from .defaults import MOF_SKIPPED_IN_CONV_CHECK, \
+    MOF_NOT_CONVERGED, \
+    MOF_NBR_NOT_CONVERGED, \
+    MOF_NBR_BAD_FIT, \
+    MOF_NBR_NOT_FIT, \
+    MOF_NBR_SKIPPED_IN_CONV_CHECK, \
+    MOF_FOFMEM_NOT_CONVERGED, \
+    MOF_FOFMEM_BAD_FIT, \
+    MOF_FOFMEM_NOT_FIT, \
+    MOF_FOFMEM_SKIPPED_IN_CONV_CHECK, \
+    MOF_NOT_CONVERGED, \
+    MOF_SKIPPED_IN_CONV_CHECK
+
 from .util import UtterFailure,Namer,print_pars
 from .util import print_with_verbosity
 
@@ -59,8 +71,6 @@ class MOFNGMixer(NGMixer):
         maxerr[:] = -numpy.inf
 
         for fofind in xrange(foflen):
-            self.curr_data[n('mof_flags')][fofind] = 0
-            
             print_with_verbosity('    fof obj: %ld' % (fofind+1),verbosity=1)
 
             for model,pars_model,model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
@@ -69,6 +79,7 @@ class MOFNGMixer(NGMixer):
                 
                 n = Namer(model)
                 
+                self.curr_data[n('mof_flags')][fofind] = 0                           
                 self.curr_data[n('mof_num_itr')][fofind] = itr+1
                 
                 if self.curr_data['flags'][fofind] or self.prev_data['flags'][fofind]:
@@ -147,10 +158,10 @@ class MOFNGMixer(NGMixer):
                 nbr_not_fit = 0
                 nbr_skip_conv = 0
                 
-                nbrs_inds = mb_obs_lists[fofind].meta['nbrs_inds']
+                nbrs_inds = mb_obs_lists[cen_ind].meta['nbrs_inds']
                 for nbrs_ind in nbrs_inds:
                     
-                    if mbr_obs_lists[nbrs_ind].meta['obj_flags'] != 0:
+                    if mb_obs_lists[nbrs_ind].meta['obj_flags'] != 0:
                         any_not_fit = 1
                         nbr_not_fit = 1
                     
