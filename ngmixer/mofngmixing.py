@@ -44,7 +44,7 @@ class MOFNGMixer(NGMixer):
 
         return models_to_check,pars_models_to_check,cov_models_to_check,npars
 
-    def _check_convergence(self,foflen,itr):
+    def _check_convergence(self,foflen,itr,coadd_mb_obs_lists,mb_obs_lists):
         """
         check convergence of fits
         """
@@ -59,6 +59,8 @@ class MOFNGMixer(NGMixer):
         maxerr[:] = -numpy.inf
 
         for fofind in xrange(foflen):
+            self.curr_data[n('mof_flags')][fofind] = 0
+            
             print_with_verbosity('    fof obj: %ld' % (fofind+1),verbosity=1)
 
             for model,pars_model,model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
@@ -79,8 +81,7 @@ class MOFNGMixer(NGMixer):
                 absdiff = numpy.abs(new-old)
                 absfracdiff = numpy.abs(new/old-1.0)
                 abserr = numpy.abs((old-new)/numpy.sqrt(numpy.diag(self.curr_data[model_cov][fofind])))
-
-
+                
                 self.curr_data[n('mof_abs_diff')][fofind] = absdiff
                 self.curr_data[n('mof_frac_diff')][fofind] = absfracdiff
                 self.curr_data[n('mof_err_diff')][fofind] = abserr
@@ -115,7 +116,9 @@ class MOFNGMixer(NGMixer):
 
         self.maxabs = maxabs
         self.maxfrac = maxfrac
-        self.maxerr = maxerr
+        self.maxerr = maxerr                
+
+        self._set_nbr_mof_flags(foflen,coadd_mb_obs_lists,mb_obs_lists)
 
         if numpy.all((maxabs <= self['mof']['maxabs_conv'])   | \
                      (maxfrac <= self['mof']['maxfrac_conv']) | \
@@ -124,6 +127,71 @@ class MOFNGMixer(NGMixer):
         else:
             return False
 
+    def _set_nbr_mof_flags(self,foflen,coadd_mb_obs_lists,mb_obs_lists):
+        models_to_check,pars_models_to_check,cov_models_to_check,npars = self._get_models_to_check()
+
+        for model,pars_model,model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
+            if pars_model not in self.curr_data.dtype.names:
+                continue
+
+            any_not_conv = 0
+            any_bad_fit = 0
+            any_not_fit = 0
+            any_skip_conv = 0
+
+            for cen_ind in xrange(foflen):
+                n = Namer(model)
+                
+                nbr_not_conv = 0
+                nbr_bad_fit = 0
+                nbr_not_fit = 0
+                nbr_skip_conv = 0
+                
+                nbrs_inds = mb_obs_lists[fofind].meta['nbrs_inds']
+                for nbrs_ind in nbrs_inds:
+                    
+                    if mbr_obs_lists[nbrs_ind].meta['obj_flags'] != 0:
+                        any_not_fit = 1
+                        nbr_not_fit = 1
+                    
+                    if self.curr_data[n('mof_flags')][nbrs_ind]&MOF_NOT_CONVERGED != 0:
+                        any_not_conv = 1
+                        nbr_not_conv = 1
+                                            
+                    if self.curr_data['flags'][nbrs_ind]:
+                        any_bad_fit = 1
+                        nbr_bad_fit = 1
+                        
+                    if self.curr_data[n('mof_flags')][nbrs_ind]&MOF_SKIPPED_IN_CONV_CHECK != 0:
+                        any_skip_conv = 1
+                        nbr_skip_conv = 1
+                    
+                # set flag for nbrs lists
+                if nbr_not_conv:
+                    self.curr_data[n('mof_flags')][cen_ind] |= MOF_NBR_NOT_CONVERGED
+                    
+                if nbr_bad_fit:
+                    self.curr_data[n('mof_flags')][cen_ind] |= MOF_NBR_BAD_FIT
+                    
+                if nbr_not_fit:
+                    self.curr_data[n('mof_flags')][cen_ind] |= MOF_NBR_NOT_FIT
+                    
+                if nbr_skip_conv:
+                    self.curr_data[n('mof_flags')][cen_ind] |= MOF_NBR_SKIPPED_IN_CONV_CHECK
+
+            # set flags for the whole fof
+            if any_not_conv:
+                self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_NOT_CONVERGED
+                    
+            if any_bad_fit:
+                self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_BAD_FIT
+                
+            if any_not_fit:
+                self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_NOT_FIT
+                
+            if any_skip_conv:
+                self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_SKIPPED_IN_CONV_CHECK
+                
     def _set_default_data_for_fofind(self,fofind):
         for tag in self.default_data.dtype.names:
             self.curr_data[tag][fofind] = self.default_data[tag]
@@ -252,7 +320,7 @@ class MOFNGMixer(NGMixer):
                                                      self['mof']['convergence_model'],init=False)
 
                     print('  convergence itr %d:' % (itr+1))
-                    if self._check_convergence(foflen,itr) and itr >= self['mof']['min_itr']:
+                    if self._check_convergence(foflen,itr,coadd_mb_obs_lists,mb_obs_lists) and itr >= self['mof']['min_itr']:
                         converged = True
                         break
 
