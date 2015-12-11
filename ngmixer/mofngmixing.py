@@ -145,13 +145,14 @@ class MOFNGMixer(NGMixer):
             if pars_model not in self.curr_data.dtype.names:
                 continue
 
+            n = Namer(model)
+            
             any_not_conv = 0
             any_bad_fit = 0
             any_not_fit = 0
             any_skip_conv = 0
 
             for cen_ind in xrange(foflen):
-                n = Namer(model)
 
                 if mb_obs_lists[cen_ind].meta['obj_flags'] != 0:
                     any_not_fit = 1
@@ -198,18 +199,20 @@ class MOFNGMixer(NGMixer):
                 if nbr_skip_conv:
                     self.curr_data[n('mof_flags')][cen_ind] |= MOF_NBR_SKIPPED_IN_CONV_CHECK
 
+
             # set flags for the whole fof
-            if any_not_conv:
-                self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_NOT_CONVERGED
+            for cen_ind in xrange(foflen):
+                if any_not_conv:
+                    self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_NOT_CONVERGED
                     
-            if any_bad_fit:
-                self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_BAD_FIT
+                if any_bad_fit:
+                    self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_BAD_FIT
                 
-            if any_not_fit:
-                self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_NOT_FIT
+                if any_not_fit:
+                    self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_NOT_FIT
                 
-            if any_skip_conv:
-                self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_SKIPPED_IN_CONV_CHECK
+                if any_skip_conv:
+                    self.curr_data[n('mof_flags')][cen_ind] |= MOF_FOFMEM_SKIPPED_IN_CONV_CHECK
                 
     def _set_default_data_for_fofind(self,fofind):
         for tag in self.default_data.dtype.names:
