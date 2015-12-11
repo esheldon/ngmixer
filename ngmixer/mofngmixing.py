@@ -152,6 +152,18 @@ class MOFNGMixer(NGMixer):
 
             for cen_ind in xrange(foflen):
                 n = Namer(model)
+
+                if mb_obs_lists[cen_ind].meta['obj_flags'] != 0:
+                    any_not_fit = 1
+                    
+                if self.curr_data[n('mof_flags')][cen_ind]&MOF_NOT_CONVERGED != 0:
+                    any_not_conv = 1
+                    
+                if self.curr_data['flags'][cen_ind]:
+                    any_bad_fit = 1
+                    
+                if self.curr_data[n('mof_flags')][cen_ind]&MOF_SKIPPED_IN_CONV_CHECK != 0:
+                    any_skip_conv = 1
                 
                 nbr_not_conv = 0
                 nbr_bad_fit = 0
@@ -162,19 +174,15 @@ class MOFNGMixer(NGMixer):
                 for nbrs_ind in nbrs_inds:
                     
                     if mb_obs_lists[nbrs_ind].meta['obj_flags'] != 0:
-                        any_not_fit = 1
                         nbr_not_fit = 1
                     
                     if self.curr_data[n('mof_flags')][nbrs_ind]&MOF_NOT_CONVERGED != 0:
-                        any_not_conv = 1
                         nbr_not_conv = 1
                                             
                     if self.curr_data['flags'][nbrs_ind]:
-                        any_bad_fit = 1
                         nbr_bad_fit = 1
                         
                     if self.curr_data[n('mof_flags')][nbrs_ind]&MOF_SKIPPED_IN_CONV_CHECK != 0:
-                        any_skip_conv = 1
                         nbr_skip_conv = 1
                     
                 # set flag for nbrs lists
