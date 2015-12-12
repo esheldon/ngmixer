@@ -130,6 +130,10 @@ if __name__ == '__main__':
             ngmm.archive_coadd_tile(coadd_run,
                                     compress=not options.nocompress)
         elif cmd == 'link':
-            ngmm.link_coadd_tile(coadd_run)
+            ngmm.link_coadd_tile(coadd_run,
+                                 verify=options.verify,
+                                 blind=not options.noblind,
+                                 clobber=options.clobber,
+                                 skip_errors=options.skip_errors)            
         else:
             raise ValueError("cmd %s not valid!" % cmd)

@@ -10,7 +10,9 @@ import meds
 
 # local imports
 from .medsio import MEDSImageIO
-from ..defaults import PSF_IND_FIELD, PSF_IM_FIELD
+
+PSF_IND_FIELD='ind_psf'
+PSF_IM_FIELD='psf_im'
 
 class SimpSimMEDSImageIO(MEDSImageIO):
     def _set_defaults(self):
