@@ -1340,23 +1340,26 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             print("    nrand:",self['nrand'])
 
         try:
-            boot.fit_metacal_max(ppars['model'],
-                                 model,
-                                 max_pars,
-                                 Tguess,
-                                 psf_fit_pars=psf_fit_pars,
-                                 prior=prior,
-                                 ntry=max_pars['ntry'],
-                                 extra_noise=extra_noise,
-                                 target_noise=target_noise,
-                                 metacal_pars=self['metacal_pars'],
-                                 nrand=self['nrand'],
-                                 metacal_obs=metacal_obs)
+            self._metacal_obs_dict=boot.fit_metacal_max(
+                ppars['model'],
+                model,
+                max_pars,
+                Tguess,
+                psf_fit_pars=psf_fit_pars,
+                prior=prior,
+                ntry=max_pars['ntry'],
+                extra_noise=extra_noise,
+                target_noise=target_noise,
+                metacal_pars=self['metacal_pars'],
+                nrand=self['nrand'],
+                metacal_obs=metacal_obs
+            )
 
 
         except BootPSFFailure as err:
             # the _run_boot code catches this one
             raise BootGalFailure(str(err))
+
 
 
     def _get_fit_data_dtype(self,coadd):
@@ -1423,9 +1426,64 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         return data
 
-class MetacalNGMixDetrendFitter(MetacalNGMixBootFitter):
+def _add_noise_to_obs(obs, noise_image, noise):
+    """
+    parameters
+    ----------
+    obs: Observation, ObsList, MultiBandObsList
+        The obs
+    noise_image: ndarray
+        Array of noise to add
+        if obs is a MultiBandObsList, noise_image can also be a list
+    noise: float
+        sigma of noise, for modifying the weight
+        if obs is a MultiBandObsList, noise can also be a list
+    """
+    if isinstance(obs, MultiBandObsList):
+        new_mb_obs = MultiBandObsList()
+        for i,obslist in enumerate(obs):
+
+            if isinstance(noise_image,list):
+                use_noise_image = noise_image[i]
+                use_noise = noise[i]
+            else:
+                use_noise_image = noise_image
+                use_noise = noise
+
+            new_obslist=_add_noise_to_obs(obslist,use_noise_image,use_noise)
+            new_mb_obs.append(new_obslist)
+
+        return new_mb_obs
+
+    elif isinstance(obs, ObsList):
+        new_obslist = ObsList()
+        for i, tobs in enumerate(obs):
+            new_obs = _add_noise_to_obs(tobs, noise_image, noise)
+            new_obslist.append(new_obs)
+
+        return new_obslist
+
+    elif isinstance(obs, Observation):
+
+        new_weight = obs.weight.copy()
+        w=numpy.where(new_weight > 0)
+        new_weight[w] = 1.0/(1.0/new_weight[w] + noise**2)
+
+        new_obs = Observation(obs.image + noise_image,
+                              weight=obs.weight.copy(),
+                              jacobian=obs.jacobian.copy(),
+                              psf=deepcopy(obs.psf) )
+
+        return new_obs
+
+    else:
+        raise ValueError("obs should be an Observation,ObsList,MultiBandObsList")
+
+class MetacalDetrendNGMixFitter(MetacalNGMixBootFitter):
     def _fit_galaxy(self, model, coadd, guess=None,**kw):
-        super(MetacalNGMixDetrendFitter,self)._fit_galaxy(
+
+        # this runs the psfs, max fitter, and metacal
+        super(MetacalDetrendNGMixFitter,self)._fit_galaxy(
             model,
             coadd,
             guess=guess,
@@ -1434,20 +1492,108 @@ class MetacalNGMixDetrendFitter(MetacalNGMixBootFitter):
 
         boot=self.boot
 
-    def _get_metacal_dtype(self, coadd):
-        dt=super(MetacalNGMixDetrendFitter,self)._get_metacal_dtype(coadd)
+        mb_obs_list=boot.mb_obs_list
+        if len(mb_obs_list) > 1 or len(mb_obs_list[0]) > 1:
+            raise NotImplementedError("fix to work with multiple obs/bands")
 
-        ndetrend = len(self['target_noises'])
+        obs = mb_obs_list[0][0]
+        im=obs.image
+        wt=obs.weight
+
+        noise_image1 = numpy.random.normal(loc=0.0,
+                                           scale=1.0,
+                                           size=im.shape)
+        w=numpy.where(wt > 0)
+        base_noise = numpy.sqrt( numpy.median(1.0/wt[w]) )
+
+        #
+        # now add extra noise before and after metacal
+        #
+
+        print("    doing detrend noise")
+        new_results=[]
+        for i, dtnoise in enumerate(self['detrend_noises']):
+            extra_noise = numpy.sqrt(dtnoise**2 - base_noise**2)
+
+            #print("    doing detrend noise: %.3f "
+            #      "extra noise: %.3f" % (dtnoise,extra_noise))
+
+
+            # same noise image, just scaled
+            noise_image = noise_image1*extra_noise
+
+            #
+            # adding noise *before* metacal
+            # new psf observations are generated, psf models are refit currently
+            #
+            mb_obs_before = _add_noise_to_obs(mb_obs_list, noise_image, extra_noise)
+            mcal_obs_before = ngmix.metacal.get_all_metacal(
+                mb_obs_before,
+                types=['1p','1m','2p','2m'],
+                **self['metacal_pars']
+            )
+            self._do_metacal(model, metacal_obs=mcal_obs_before)
+            res_before = boot.get_metacal_max_result()
+
+            #
+            # adding noise *after* metacal
+            # psf models get copied over
+            #
+            mcal_obs_after = {}
+            for key,tobs in self._metacal_obs_dict.iteritems():
+                tobs = self._metacal_obs_dict[key]
+                new_obs = _add_noise_to_obs(tobs, noise_image, extra_noise)
+                mcal_obs_after[key] = new_obs
+
+            self._do_metacal(model, metacal_obs=mcal_obs_after)
+            res_after = boot.get_metacal_max_result()
+
+            Rnoise     = res_before['mcal_R']    - res_after['mcal_R']
+
+            new_res={
+                'mcal_Rnoise':Rnoise,
+            }
+            new_results.append(new_res)
+
+        res=self.gal_fitter.get_result()
+        res['mcal_dt_results'] = new_results
+
+    def _copy_galaxy_result(self, model, coadd):
+        """
+        copy parameters specific to this class
+        """
+        super(MetacalDetrendNGMixFitter,self)._copy_galaxy_result(model, coadd)
+
+        dindex=0
+        res=self.gal_fitter.get_result()
+
+        if res['flags'] == 0:
+            if coadd:
+                n=Namer('coadd_%s_mcal' % model)
+            else:
+                n=Namer('%s_mcal' % model)
+
+            d=self.data
+
+            for idt,dtres in enumerate(res['mcal_dt_results']):
+
+                f=n('dt_Rnoise')
+                d[f][dindex,idt,:,:] = dtres['mcal_Rnoise']
+
+    def _get_metacal_dtype(self, coadd):
+        dt=super(MetacalDetrendNGMixFitter,self)._get_metacal_dtype(coadd)
+
+        ndetrend = len(self['detrend_noises'])
 
         for model in self._get_all_models(coadd):
             front='%s_mcal' % (model)
             n=Namer(front)
             dt += [
-                (n('dt_R'),'f8',(ndetrend,2,2)),
-                (n('dt_Rpsf'),'f8',(ndetrend,2)),
+                (n('dt_Rnoise'),'f8',(ndetrend,2,2)),
             ]
 
-        self.mcal_flist = [d[0] for d in dt]
+        # not adding these to mcal_flist
+        #self.mcal_flist = [d[0] for d in dt]
 
         return dt
 
@@ -1714,10 +1860,10 @@ class PostcalNGMixSimFitter(PostcalNGMixBootFitter):
             raise NotImplementedError("only a single obs for now")
 
 
-        res=super(PostcalNGMixSimFitter,self._do_postcal(
+        res=super(PostcalNGMixSimFitter,self)._do_postcal(
             model,
             target_noise=target_noise,
-            extra_noise=extra_noise
+            extra_noise=extra_noise,
         )
 
 

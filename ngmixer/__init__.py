@@ -18,6 +18,7 @@ FITTERS = {}
 from . import bootfit
 FITTERS['max-ngmix-boot'] = bootfit.MaxNGMixBootFitter
 FITTERS['metacal-ngmix-boot'] = bootfit.MetacalNGMixBootFitter
+FITTERS['metacal-detrend-ngmix-boot'] = bootfit.MetacalDetrendNGMixFitter
 FITTERS['metacal-simn-ngmix-boot'] = bootfit.MetacalSimnNGMixBootFitter
 FITTERS['metacal-addn-ngmix-boot'] = bootfit.MetacalAddnNGMixBootFitter
 FITTERS['metacal-subn-ngmix-boot'] = bootfit.MetacalSubnNGMixBootFitter
