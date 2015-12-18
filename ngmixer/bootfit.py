@@ -1422,6 +1422,35 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         return data
 
+class MetacalNGMixDetrendFitter(MetacalNGMixBootFitter):
+    def _fit_galaxy(self, model, coadd, guess=None,**kw):
+        super(MetacalNGMixDetrendFitter,self)._fit_galaxy(
+            model,
+            coadd,
+            guess=guess,
+            **kw
+        )
+
+        boot=self.boot
+
+    def _get_metacal_dtype(self, coadd):
+        dt=super(MetacalNGMixDetrendFitter,self)._get_metacal_dtype(coadd)
+
+        ndetrend = len(self['target_noises'])
+
+        for model in self._get_all_models(coadd):
+            front='%s_mcal' % (model)
+            n=Namer(front)
+            dt += [
+                (n('dt_R'),'f8',(ndetrend,2,2)),
+                (n('dt_Rpsf'),'f8',(ndetrend,2)),
+            ]
+
+        self.mcal_flist = [d[0] for d in dt]
+
+        return dt
+
+
 class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
         mb_obs_list = self.boot.mb_obs_list
@@ -1499,16 +1528,20 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
     def _do_postcal(self,
                     model,
                     target_noise=None,
-                    extra_noise=None):
+                    extra_noise=None,
+                    boot=None):
         """
         the basic fitter for this class
         """
 
         print("    doing postcal")
 
-        odict = self._get_postcal_obsdict(self.boot.mb_obs_list)
+        if boot is None:
+            boot=self.boot
 
-        Tguess = self.boot.mb_obs_list[0][0].psf.meta['Tguess']
+        odict = self._get_postcal_obsdict(boot.mb_obs_list)
+
+        Tguess = boot.mb_obs_list[0][0].psf.meta['Tguess']
 
         psf_pars = {}
         for k,v in self['psf_pars'].iteritems():
@@ -1519,19 +1552,19 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
         for key in odict:
             obs = odict[key]
 
-            boot=self._get_bootstrapper(model, obs)
+            tboot=self._get_bootstrapper(model, obs)
             
-            boot.fit_psfs(self['psf_pars']['model'],
-                          Tguess,
-                          ntry=self['psf_pars']['ntry'],
-                          fit_pars=psf_pars)
+            tboot.fit_psfs(self['psf_pars']['model'],
+                           Tguess,
+                           ntry=self['psf_pars']['ntry'],
+                           fit_pars=psf_pars)
 
 
-            self._fit_max(model, boot=boot)
+            self._fit_max(model, boot=tboot)
 
-            boot.set_round_s2n()
-            res=boot.get_max_fitter().get_result()
-            rres=boot.get_round_result()
+            tboot.set_round_s2n()
+            res=tboot.get_max_fitter().get_result()
+            rres=tboot.get_round_result()
             res['s2n_r'] = rres['s2n_r']
             res['T_r'] = rres['T_r']
 
@@ -1635,8 +1668,7 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
     def _get_postcal_dtype(self, coadd):
 
         nband=self['nband']
-        simple_npars=5+nband
-        np=simple_npars
+        np=5+nband
 
         dt=[]
         for model in self._get_all_models(coadd):
@@ -1668,6 +1700,113 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
                 data[f] = DEFVAL
 
         return data
+
+
+class PostcalNGMixSimFitter(PostcalNGMixBootFitter):
+    def _do_postcal(self,
+                    model,
+                    target_noise=None,
+                    extra_noise=None):
+
+        mb_obs_list = boot.mb_obs_list
+        if len(mb_obs_list) > 1 or len(mb_obs_list[0]) > 1:
+            raise NotImplementedError("only a single obs for now")
+
+
+        res=super(PostcalNGMixSimFitter,self._do_postcal(
+            model,
+            target_noise=target_noise,
+            extra_noise=extra_noise
+        )
+
+
+        print("    Calculating Rnoise")
+
+        fitter = self.boot.get_max_fitter()
+        gmix_list = []
+        for band in xrange(self['nband']):
+            gm = fitter.get_gmix(band=band)
+            gmix_list.append(gm)
+
+
+        # for noise added *before* metacal steps
+        mobs_before = ngmix.simobs.simulate_obs(
+            gmix_list,
+            mb_obs_list,
+            add_noise=True,
+            convolve_psf=True
+        )
+        # for noise added *after* metacal steps
+        mobs_after = ngmix.simobs.simulate_obs(
+            gmix_list,
+            mb_obs_list,
+            add_noise=False,
+            convolve_psf=True
+        )
+
+
+        boot_model_before = self._get_bootstrapper(model,mobs_before)
+        boot_model_after = self._get_bootstrapper(model,mobs_after)
+
+        mcal_obs_after = ngmix.metacal.get_all_metacal(
+            mobs_after[0][0],
+            self['metacal_pars']['step'],
+        )
+
+        # now add noise after creating the metacal observations
+        # using the same noise image!
+
+        noise = mobs_before[0][0].noise_image
+        for key in mcal_obs_after:
+            obs=mcal_obs_after[key]
+            obs.image = obs.image + noise
+
+        res_before=self._do_postcal(
+            model,
+            target_noise=target_noise,
+            extra_noise=extra_noise,
+            boot=boot_model_before
+        )
+        res_after=self._do_postcal(
+            model,
+            boot=boot_model_after,
+            target_noise=target_noise,
+            extra_noise=extra_noise,
+            metacal_obs=mcal_obs_after
+        )
+
+        res_before = boot_model_before.get_metacal_max_result()
+        res_after = boot_model_after.get_metacal_max_result()
+
+        gnoise = res_before['mcal_g'] - res_after['mcal_g']
+        Rnoise = res_before['mcal_R'] - res_after['mcal_R']
+        Rpsf_noise = res_before['mcal_Rpsf'] - res_after['mcal_Rpsf']
+
+        res = self.boot.get_max_fitter().get_result()
+        res['mcal_gnoise'] = gnoise
+        res['mcal_Rnoise'] = Rnoise
+        res['mcal_Rpsf_noise'] = Rpsf_noise
+
+
+
+
+
+    def _get_postcal_dtype(self, coadd):
+        dt=super(PostcalNGMixSimFitter,self)._get_postcal_dtype(coadd)
+
+        nband=self['nband']
+        np=5+nband
+
+        for model in self._get_all_models(coadd):
+            front='%s_pcal' % (model)
+            n=Namer(front)
+            dt += [
+                (n('Rnoise'),'f8',(2,2)),
+            ]
+
+        self.pcal_flist += [d[0] for d in dt]
+
+        return dt
 
 
 
