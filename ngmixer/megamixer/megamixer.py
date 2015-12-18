@@ -340,7 +340,7 @@ python -u $cmd &> $lfile
         # remove untarred work dir
         os.system('rm -rf %s' % work_dir)
 
-    def link_coadd_tile(self,coadd_tile):
+    def link_coadd_tile(self,coadd_tile,verify=False,blind=True,clobber=True,skip_errors=False):
         print("linking tile '%s'" % coadd_tile)
         
         # startup concat to get output name
@@ -371,9 +371,20 @@ python -u $cmd &> $lfile
         odir = '/'.join(files['main_output_dir'].split('/')[:-1])
         odir = os.path.join(odir,'output')
         if not os.path.exists(odir):
-            os.path.makedirs(odir)
-        os.system('ln -s %s %s/%s' % (collated_file,odir,bname))
-    
+            os.makedirs(odir)
+
+        cwd = os.getcwd()
+
+        cfile = collated_file.split('/')
+        cfile = os.path.join('..',cfile[-2],cfile[-1])
+        
+        try:
+            os.chdir(odir)
+            os.system('rm -f %s && ln -s %s %s' % (bname,cfile,bname))        
+            os.chdir(cwd)
+        except:
+            print("failed to link tile '%s'" % coadd_tile)
+        
     def get_tmp_dir(self):
         return '`mktemp -d /tmp/XXXXXXXXXX`'
 

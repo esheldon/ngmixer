@@ -215,8 +215,8 @@ class MEDSImageIO(ImageIO):
             if len(q) > 0:
                 assert len(q) == 1
                 assert me_mb_obs_list.meta['id'] ==  self.extra_data['obj_flags']['id'][qnz[q[0]]]
-                coadd_mb_obs_list.meta['obj_flags'] = self.extra_data['obj_flags']['flags'][qnz[q[0]]]
-                me_mb_obs_list.meta['obj_flags'] = self.extra_data['obj_flags']['flags'][qnz[q[0]]]
+                coadd_mb_obs_list.meta['obj_flags'] |= self.extra_data['obj_flags']['flags'][qnz[q[0]]]
+                me_mb_obs_list.meta['obj_flags'] |= self.extra_data['obj_flags']['flags'][qnz[q[0]]]
 
     def _add_nbrs_info(self,coadd_mb_obs_lists,me_mb_obs_lists,mindexes):
         """
@@ -407,6 +407,8 @@ class MEDSImageIO(ImageIO):
             coadd_mb_obs_lists = []
             me_mb_obs_lists = []
             for mindex in mindexes:
+                print('  getting obj w/ id %d' % self.meds_list[0]['id'][mindex])
+                
                 c,me = self._get_multi_band_observations(mindex)
                 
                 # add fof ids here
@@ -508,7 +510,17 @@ class MEDSImageIO(ImageIO):
                 coadd_obs_list.append(obs)
             else:
                 obs_list.append(obs)
-
+                
+        """
+        if ncutout == 0:
+            for o in [coadd_obs_list,obs_list]:
+                flags = IMAGE_FLAGS
+                obs = Observation(numpy.zeros((0,0)))
+                meta = {'flags':flags}
+                obs.update_meta_data(meta)            
+                o.append(obs)
+        """
+        
         if self.conf['reject_outliers'] and len(obs_list) > 0:
             self._reject_outliers(obs_list)
 

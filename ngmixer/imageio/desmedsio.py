@@ -7,7 +7,11 @@ import fitsio
 
 from .medsio import MEDSImageIO
 from .. import nbrsfofs
-from ..util import print_with_verbosity
+from ..util import print_with_verbosity, \
+    interpolate_image, \
+    radec_to_unitvecs_ruv, \
+    radec_to_thetaphi, \
+    thetaphi_to_unitvecs_ruv
 
 import meds
 
@@ -322,7 +326,9 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
     def _set_defaults(self):
         super(Y1DESMEDSImageIO,self)._set_defaults()
         self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
-
+        self.conf['prop_sat_starpix'] = self.conf.get('prop_sat_starpix',False)
+        self.conf['flag_y1_stellarhalo_masked'] = self.conf.get('flag_y1_stellarhalo_masked',False)
+        
     def _load_wcs_data(self):
         """
         Load the WCS transforms for each meds file
@@ -452,31 +458,211 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         print('            box_size - r,c nbr:',self.meds_list[band]['box_size'][nbr_mindex]- rowcol_nbr)
         return cen_obs.get_psf(),J_nbr
 
-# coordinates
-# ra = -u
-# ra = -phi
-# v = dec
-# theta = 90 - dec
+    def _interpolate_maskbits(self,iobj,m1,icutout1,m2,icutout2):
+        rowcen1 = m1['cutout_row'][iobj,icutout1]
+        colcen1 = m1['cutout_col'][iobj,icutout1]
+        jacob1 = m1.get_jacobian_matrix(iobj,icutout1)
+        
+        rowcen2 = m2['cutout_row'][iobj,icutout2]
+        colcen2 = m2['cutout_col'][iobj,icutout2]
+        jacob2 = m2.get_jacobian_matrix(iobj,icutout2)
+        
+        im1 = m1.get_cutout(iobj,icutout1,type='bmask')
+        
+        msk = numpy.array([2048+1024+512+256+128+16+8+1],dtype='u4')
+        
+        q = numpy.where( ((im1&2 != 0) | (im1&4 != 0)) 
+                         & 
+                         (im1&32 != 0) 
+                         &
+                         (im1&msk == 0))
+        im1[:,:] = 0
+        im1[q] = 1
+        
+        assert m1['box_size'][iobj] == m2['box_size'][iobj]
+        assert m1['id'][iobj] == m2['id'][iobj]
 
-# unit vector directions
-# u = -ra on sphere = +phi on sphere
-# v = dec on sphere = -theta on sphere
+        return interpolate_image(rowcen1, colcen1, jacob1, im1, 
+                                 rowcen2, colcen2, jacob2)[0]
+    
+    def _get_extra_bitmasks(self,coadd_mb_obs_list,mb_obs_list):        
+        marr = self.meds_list
+        mindex = mb_obs_list.meta['meds_index']
+        
+        bmasks = []
+        for bandt,mt in enumerate(marr):
+            bmask = numpy.zeros((mt['box_size'][mindex],mt['box_size'][mindex])).astype('i4')
+            
+            # do the coadd
+            if len(coadd_mb_obs_list[bandt]) > 0 and coadd_mb_obs_list[bandt][0].meta['flags'] == 0:
+                bmask |= mt.get_cutout(mindex,0,type='bmask')
+            
+            # do each band
+            for band,obs_list in enumerate(mb_obs_list):
+                for obs in obs_list:
+                    if obs.meta['flags'] == 0:                        
+                        bmaski = self._interpolate_maskbits(mindex,
+                                                            marr[band],
+                                                            obs.meta['icut'],
+                                                            mt,
+                                                            0)
+                        bmask |= bmaski
+    
+            bmasks.append(bmask)
+            
+        return bmasks
 
-def radec_to_unitvecs_ruv(ra,dec):
-    theta,phi = radec_to_thetaphi(ra,dec)
-    return thetaphi_to_unitvecs_ruv(theta,phi)
+    def _expand_mask(self,bmask,rounds=1):
+        cbmask = bmask.copy()
+        
+        qx_prev,qy_prev = numpy.where(cbmask != 0)
+        
+        for r in xrange(rounds):
+            qx = []
+            qy = []
+            for ix,iy in zip(qx_prev,qy_prev):
+                for dx in [-1,0,1]:
+                    iix = ix + dx
+                    if iix >= 0 and iix < bmask.shape[0]:
+                        for dy in [-1,0,1]:
+                            iiy = iy + dy
+                            if iiy >= 0 and iiy < bmask.shape[1]:
+                                cbmask[iix,iiy] = 1
+                                qx.append(iix)
+                                qy.append(iiy)
+                                
+            qx_prev = numpy.array(qx)
+            qy_prev = numpy.array(qy)
+                            
+        return cbmask
 
-def radec_to_thetaphi(ra,dec):
-    return (90.0-dec)/180.0*numpy.pi,-1.0*ra/180.0*numpy.pi
+    def _prop_extra_bitmasks(self, bmasks, mb_obs_list):
+        mindex = mb_obs_list.meta['meds_index']
+            
+        # interp to each image
+        for band,obs_list in enumerate(mb_obs_list):
+            m = self.meds_list[band]
+            bmask = bmasks[band]
+            
+            for obs in obs_list:
+                if obs.meta['flags'] == 0:
+                    # interp
+                    icut = obs.meta['icut']
+                    
+                    rowcen1 = m['cutout_row'][mindex,0]
+                    colcen1 = m['cutout_col'][mindex,0]
+                    jacob1 = m.get_jacobian_matrix(mindex,0)
+                    
+                    rowcen2 = m['cutout_row'][mindex,icut]
+                    colcen2 = m['cutout_col'][mindex,icut]
+                    jacob2 = m.get_jacobian_matrix(mindex,icut)
+                    
+                    bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
+                                               rowcen2, colcen2, jacob2)[0]
+                    
+                    """
+                    if band == 0 and mb_obs_list.meta['id'] == 3076597980:
+                        import matplotlib.pyplot as plt
 
-def thetaphi_to_unitvecs_ruv(theta,phi):
-    sint = numpy.sin(theta)
-    cost = numpy.cos(theta)
-    sinp = numpy.sin(phi)
-    cosp = numpy.cos(phi)
+                        fig,axs = plt.subplots(1,3)
+                        axs[0].imshow(bmaski)
+                        axs[1].imshow(self._expand_mask(bmaski,rounds=1))
+                        axs[2].imshow(self._expand_mask(bmaski,rounds=2))
+                        
+                        import ipdb
+                        ipdb.set_trace()
+                    """
+                    
+                    bmaski = self._expand_mask(bmaski,rounds=2)
+                    
+                    # now set weights to zero
+                    q = numpy.where((bmaski != 0) & (obs.seg == 0))
+                    if len(q[0]) > 0:
+                        print('    masked %d pixels due to saturation in any band' % q[0].size)
+                        if hasattr(obs,'weight_raw'):
+                            obs.weight_raw[q] = 0.0
+                            
+                        if hasattr(obs,'weight_us'):
+                            obs.weight_us[q] = 0.0
+                            
+                        if hasattr(obs,'weight'):
+                            obs.weight[q] = 0.0
+                            
+                        if hasattr(obs,'weight_orig'):
+                            obs.weight_orig[q] = 0.0        
 
-    rhat = numpy.array([sint*cosp,sint*sinp,cost])
-    that = numpy.array([cost*cosp,cost*sinp,-1.0*sint])
-    phat = numpy.array([-1.0*sinp,cosp,0.0])
+    def _flag_y1_stellarhalo_masked_one(self,mb_obs_list):
+        mindex = mb_obs_list.meta['meds_index']
+        seg_number = self.meds_list[0]['number'][mindex]
+        
+        assert mb_obs_list.meta['id'] == self.meds_list[0]['id'][mindex], \
+            "Problem getting meds index! check value of mb_obs_list.meta['meds_index']"
+        
+        flags = 0
+        for band,obs_list in enumerate(mb_obs_list):
+            for obs in obs_list:
+                if obs.meta['flags'] == 0:
 
-    return rhat,phat,-1.0*that
+                    icut = obs.meta['icut']
+                    bmask = self.meds_list[band].get_cutout(mindex,icut,type='bmask')
+                    
+                    q = numpy.where((bmask&32 != 0) & (obs.seg == seg_number))
+                    
+                    # debugging code - leave for now
+                    """
+                    if numpy.any(bmask&32 != 0) and q[0].size > 0:
+                        import matplotlib.pyplot as plt
+                        
+                        qq = numpy.where(bmask&32 != 0)
+                        pim = numpy.zeros_like(bmask)
+                        pim[qq] = 1
+                        
+                        pseg = obs.seg.copy()
+                        pseg = pseg.astype('f8')
+                        useg = numpy.sort(numpy.unique(obs.seg))
+                        nuseg = float(len(useg))
+                        for i,sval in enumerate(useg):
+                            qq = numpy.where(obs.seg == sval)
+                            if qq[0].size > 0:
+                                pseg[qq] = float(i)/nuseg
+                                
+                        fig,axs = plt.subplots(1,2)
+                        axs[0].imshow(pim)                                                
+                        axs[1].imshow(pseg)
+                        
+                        import ipdb
+                        ipdb.set_trace()
+                    """
+                    
+                    if q[0].size > 0:                        
+                        flags = 1
+                        return flags
+                    
+        return flags
+    
+    def _flag_y1_stellarhalo_masked(self,coadd_mb_obs_list,mb_obs_list):
+        flags = 0
+        flags |= self._flag_y1_stellarhalo_masked_one(coadd_mb_obs_list)
+        if flags == 0:
+            flags |= self._flag_y1_stellarhalo_masked_one(mb_obs_list)
+            
+        return flags
+
+    def _get_multi_band_observations(self, mindex):
+        coadd_mb_obs_list, mb_obs_list = super(Y1DESMEDSImageIO, self)._get_multi_band_observations(mindex)
+        
+        # mask extra pixels in saturated stars
+        if self.conf['prop_sat_starpix']:
+            # get total OR'ed bit mask
+            bmasks = self._get_extra_bitmasks(coadd_mb_obs_list,mb_obs_list)
+            self._prop_extra_bitmasks(bmasks,mb_obs_list)
+
+        # flag things where seg map touches a stellar halo as defined by DESDM
+        if self.conf['flag_y1_stellarhalo_masked']:            
+            flags = self._flag_y1_stellarhalo_masked(coadd_mb_obs_list,mb_obs_list)
+            if flags != 0:
+                print('    flagged object due to seg map touching masked stellar halo')
+                coadd_mb_obs_list.meta['obj_flags'] |= flags
+                mb_obs_list.meta['obj_flags'] |= flags
+
+        return coadd_mb_obs_list, mb_obs_list
