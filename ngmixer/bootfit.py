@@ -90,10 +90,57 @@ class NGMixBootFitter(BaseFitter):
         new_mb_obs_list.update_meta_data({'old_mb_obs_list':mb_obs_list})
         return new_mb_obs_list
 
+    def _add_extra_sim_noise(self, mb_obs_list):
+        from numpy.random import normal
+
+        target_noise=self['target_noise']
+        target_var = target_noise**2
+        target_ivar = 1.0/target_var
+
+        print("    target noise:",target_noise)
+
+        for obslist in mb_obs_list:
+            for obs in obslist:
+
+                obs.image_orig=obs.image.copy()
+                obs.weight_orig=obs.weight.copy()
+
+                wt=obs.weight
+                w=numpy.where(wt > 0)
+                if w[0].size > 0:
+
+                    im = obs.image
+
+                    extra_var_values = numpy.zeros(im.shape)
+                    orig_var  = numpy.zeros(im.shape)
+                    orig_var[w] = 1.0/wt[w]
+
+                    wbad=numpy.where(orig_var > target_var)
+                    if wbad[0].size > 0:
+                        raise ValueError("attempting to set target var "
+                                         "smaller than existing var")
+
+                    # is zero where weight <= 0
+                    extra_var_values[w] = target_var - orig_var[w]
+                    extra_noise_values = numpy.sqrt(extra_var_values)
+
+                    noise_image = normal(loc=0.0, scale=1.0, size=im.shape)
+                    noise_image *= extra_noise_values
+                    im += noise_image
+                
+                    wt[w] = target_ivar
+
+                    obs.image = im
+                    obs.weight = wt
+
+
     def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True,nbrs_fit_data=None):
         """
         fit the obs list
         """
+
+        if 'target_noise' in self:
+            self._add_extra_sim_noise(mb_obs_list)
 
         # only fit stuff that is not flagged
         new_mb_obs_list = self._get_good_mb_obs_list(mb_obs_list)
@@ -885,7 +932,9 @@ class NGMixBootFitter(BaseFitter):
         npdict = {'em1':6,
                   'em2':6*2,
                   'em3':6*3,
-                  'turb':6,
+                  'coellip2':6*2, # this is the "full pars" count, not that used in fit
+                  'coellip3':6*3,
+                  'turb':6*3,
                   'gauss':6}
         model = self['psf_pars']['model'].lower()
         assert model in npdict,"psf model %s not allowed in NGMixBootFitter" % model
@@ -1275,41 +1324,14 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         if self['nrand'] is None:
             self['nrand']=1
 
-    def _add_extra_sim_noise(self, mb_obs_list):
-        extra_sim_noise = self['extra_sim_noise']
-        print("    adding extra sim noise:",extra_sim_noise)
-
-        boot=self.boot
-
-        for obslist in mb_obs_list:
-            for obs in obslist:
-
-                obs.image_orig=obs.image
-                obs.weight_orig=obs.weight
-
-                noise_image = boot._get_noise_image(obs.image.shape,
-                                                    extra_sim_noise)
-                new_weight = boot._get_degraded_weight_image(obs,
-                                                             extra_sim_noise)
-                obs.image = obs.image + noise_image
-                obs.weight = new_weight
-
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
         mb_obs_list = self.boot.mb_obs_list
-
-        if 'extra_sim_noise' in self:
-            self._add_extra_sim_noise(mb_obs_list)
 
         super(MetacalNGMixBootFitter,self)._fit_galaxy(model,
                                                        coadd,
                                                        guess=guess,
                                                        **kwargs)
-        target_noise=self.get('target_noise',None)
-        extra_noise=self.get('extra_noise',None)
-        self._do_metacal(model,
-                         self.boot,
-                         target_noise=target_noise,
-                         extra_noise=extra_noise)
+        self._do_metacal(model, self.boot)
 
         metacal_res = self.boot.get_metacal_max_result()
 
@@ -1319,8 +1341,6 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
     def _do_metacal(self,
                     model,
                     boot,
-                    target_noise=None,
-                    extra_noise=None,
                     metacal_obs=None):
         """
         the basic fitter for this class
@@ -1346,8 +1366,6 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 psf_fit_pars=psf_fit_pars,
                 prior=prior,
                 ntry=max_pars['ntry'],
-                extra_noise=extra_noise,
-                target_noise=target_noise,
                 metacal_pars=self['metacal_pars'],
                 nrand=self['nrand'],
                 metacal_obs=metacal_obs
@@ -1601,18 +1619,11 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
         mb_obs_list = self.boot.mb_obs_list
 
-        if 'extra_sim_noise' in self:
-            self._add_extra_sim_noise(mb_obs_list)
-
         super(MetacalNGMixBootFitter,self)._fit_galaxy(model,
                                                        coadd,
                                                        guess=guess,
                                                        **kwargs)
-        target_noise=self.get('target_noise',None)
-        extra_noise=self.get('extra_noise',None)
-        postcal_res=self._do_postcal(model,
-                                     target_noise=target_noise,
-                                     extra_noise=extra_noise)
+        postcal_res=self._do_postcal(model)
 
         res=self.gal_fitter.get_result()
         res.update(postcal_res)
@@ -1673,8 +1684,6 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
 
     def _do_postcal(self,
                     model,
-                    target_noise=None,
-                    extra_noise=None,
                     boot=None):
         """
         the basic fitter for this class
@@ -1848,21 +1857,14 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
 
 
 class PostcalNGMixSimFitter(PostcalNGMixBootFitter):
-    def _do_postcal(self,
-                    model,
-                    target_noise=None,
-                    extra_noise=None):
+    def _do_postcal(self, model):
 
         mb_obs_list = boot.mb_obs_list
         if len(mb_obs_list) > 1 or len(mb_obs_list[0]) > 1:
             raise NotImplementedError("only a single obs for now")
 
 
-        res=super(PostcalNGMixSimFitter,self)._do_postcal(
-            model,
-            target_noise=target_noise,
-            extra_noise=extra_noise,
-        )
+        res=super(PostcalNGMixSimFitter,self)._do_postcal(model)
 
 
         print("    Calculating Rnoise")
@@ -1908,15 +1910,11 @@ class PostcalNGMixSimFitter(PostcalNGMixBootFitter):
 
         res_before=self._do_postcal(
             model,
-            target_noise=target_noise,
-            extra_noise=extra_noise,
             boot=boot_model_before
         )
         res_after=self._do_postcal(
             model,
             boot=boot_model_after,
-            target_noise=target_noise,
-            extra_noise=extra_noise,
             metacal_obs=mcal_obs_after
         )
 
@@ -2047,8 +2045,6 @@ class MetacalSubnNGMixBootFitter(MetacalNGMixBootFitter):
 
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
         mb_obs_list = self.boot.mb_obs_list
-        if 'extra_sim_noise' in self:
-            self._add_extra_sim_noise(mb_obs_list)
 
         super(MetacalNGMixBootFitter,self)._fit_galaxy(model,
                                                        coadd,
@@ -2118,19 +2114,13 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
             obs=mcal_obs_after[key]
             obs.image = obs.image + noise
 
-        target_noise=self.get('target_noise',None)
-        extra_noise=self.get('extra_noise',None)
         self._do_metacal(
             model,
             boot_model_before,
-            target_noise=target_noise,
-            extra_noise=extra_noise,
         )
         self._do_metacal(
             model,
             boot_model_after,
-            target_noise=target_noise,
-            extra_noise=extra_noise,
             metacal_obs=mcal_obs_after
         )
 
@@ -2261,8 +2251,6 @@ class MetacalRegaussBootFitter(MaxNGMixBootFitter):
         boot=get_bootstrapper(mb_obs_list, find_cen=False, **self)
         self.boot=boot
 
-        target_noise=self.get('target_noise',None)
-
         res={}
         ppars=self['psf_pars']
         rpars=self['regauss_pars']
@@ -2274,7 +2262,6 @@ class MetacalRegaussBootFitter(MaxNGMixBootFitter):
                 psf_ntry=ppars['ntry'],
                 ntry=rpars['ntry'],
                 metacal_pars=self['metacal_pars'],
-                target_noise=target_noise,
             )
             mres=boot.get_metacal_regauss_result()
             res.update(mres)
