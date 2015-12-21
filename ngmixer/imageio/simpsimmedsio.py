@@ -43,9 +43,8 @@ class SimpSimMEDSImageIO(MEDSImageIO):
         psf_im_field=self.conf['psf_im_field']
         im = self.psf_data[psf_im_field][ind_psf].copy()
         im /= im.sum()
-        cen = numpy.zeros(2)
-        cen[0] = meds['cutout_row'][mindex,icut]
-        cen[1] = meds['cutout_col'][mindex,icut]
+
+        cen = ( numpy.array(im.shape) - 1.0)/2.0
         sigma_pix = 2.5
 
         return im, cen, sigma_pix, self.psf_file
