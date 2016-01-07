@@ -31,7 +31,7 @@ class BaseFitter(dict):
         only steups that would be used for *any* fitter go here
         """
         pass
-    
+
     def get_models_for_checking(self):
         """
         return a list of model pars for checking for convergence in mof

@@ -207,7 +207,7 @@ class NGMixer(dict):
         flags = 0
 
         if self['fit_coadd_galaxy']:
-            if coadd_obs_list.meta['obj_flags'] != 0:
+            if coadd_mb_obs_list.meta['obj_flags'] != 0:
                 flags |= BAD_OBJ
                 print('    skipping bad object')
             flags |= self._obj_check(coadd_mb_obs_list)
@@ -494,7 +494,10 @@ class NGMixer(dict):
         self.checkpoint_data = None
 
         if self.output_file is not None:
-            self.checkpoint_file = self.output_file.replace('.fits','-checkpoint.fits')
+            if self.output_file[-5:] == '.fits':
+                self.checkpoint_file = self.output_file.replace('.fits','-checkpoint.fits')
+            else:
+                self.checkpoint_file = self.output_file.replace('.fit','-checkpoint.fits')
             if os.path.exists(self.checkpoint_file):
                 self.checkpoint_data={}
                 print('reading checkpoint data: %s' % self.checkpoint_file)

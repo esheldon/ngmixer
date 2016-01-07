@@ -63,9 +63,20 @@ class NGMixBootFitter(BaseFitter):
 
         # do we normalize the psf to unity when doing the PSF mags?
         self['normalize_psf'] = self.get('normalize_psf',True)
-        
+
         # how to mask unmodeled nbrs
         self['unmodeled_nbrs_masking_type'] = self.get('model_nrbs_unmodmask','nbrs-seg')
+
+        # whether to use the coadd_ prefix for names when no me fit was done
+        self['use_coadd_prefix'] = self.get('use_coadd_prefix',True)
+
+    def _get_namer(self, model, coadd):
+        if coadd and (self['fit_me_galaxy'] or self['use_coadd_prefix']):
+            n = Namer('coadd_%s' % model)
+        else:
+            n = Namer(model)
+
+        return n
 
     def get_models_for_checking(self):
         models = [modl for modl in self['fit_models']]
@@ -185,11 +196,7 @@ class NGMixBootFitter(BaseFitter):
         return fit_flags
 
     def _guess_and_run_boot(self,model,new_mb_obs_list,coadd,nbrs_fit_data=None):
-        if coadd:
-            n = Namer('coadd_%s' % model)
-        else:
-            n = Namer(model)
-            
+        n=self._get_namer(model, coadd)
 
         guess = None
         guess_errs = None
@@ -259,10 +266,8 @@ class NGMixBootFitter(BaseFitter):
         """
         render a single image of model with pars_tag in fit_data and psf_gmix w/ jac
         """
-        if coadd:
-            n = Namer('coadd_%s' % model)
-        else:
-            n = Namer(model)
+        n = self._get_namer(model, coadd)
+
         pars_obj = fit_data[pars_tag][0].copy()
         band_pars_obj = numpy.zeros(6,dtype='f8')
         band_pars_obj[0:5] = pars_obj[0:5]
@@ -313,10 +318,8 @@ class NGMixBootFitter(BaseFitter):
         if len(mb_obs_list.meta['nbrs_inds']) == 0:
             return
 
-        if coadd:
-            n = Namer('coadd_%s' % model)
-        else:
-            n = Namer(model)
+        n=self._get_namer(model, coadd)
+
         pars_name = 'max_pars'
         if n(pars_name) not in nbrs_fit_data.dtype.names:
             pars_name = 'pars'
@@ -551,10 +554,7 @@ class NGMixBootFitter(BaseFitter):
     def _do_psf_stats(self,mb_obs_list,coadd):
         print('    doing PSF stats')
 
-        if coadd:
-            n = Namer('coadd')
-        else:
-            n = Namer('')
+        n=self._get_namer('', coadd)
 
         Tsum = 0.0
         g1sum = 0.0
@@ -601,10 +601,7 @@ class NGMixBootFitter(BaseFitter):
             nim[band] = len(mb_obs_list[band])
             nim_used[band] = len(new_mb_obs_list[band])
 
-        if coadd:
-            n = Namer("coadd")
-        else:
-            n = Namer("")
+        n=self._get_namer('', coadd)
 
         self.data[n('nimage_use')][0,:] = nim_used
 
@@ -635,10 +632,7 @@ class NGMixBootFitter(BaseFitter):
         boot=self._get_bootstrapper(model,mb_obs_list)
         self.boot=boot
 
-        if coadd:
-            n = Namer('coadd_psf')
-        else:
-            n = Namer('psf')
+        n=self._get_namer('psf', coadd)
 
         try:
             self._fit_psfs(coadd)
@@ -671,10 +665,7 @@ class NGMixBootFitter(BaseFitter):
 
         res=self.boot.get_psf_flux_result()
 
-        if coadd:
-            n = Namer("coadd_psf")
-        else:
-            n = Namer("psf")
+        n=self._get_namer('psf', coadd)
 
         flagsall=0
         for band in xrange(self['nband']):
@@ -867,10 +858,8 @@ class NGMixBootFitter(BaseFitter):
 
         rres=self.boot.get_round_result()
 
-        if coadd:
-            n=Namer('coadd_%s' % model)
-        else:
-            n=Namer(model)
+        n=self._get_namer(model, coadd)
+
         data=self.data
 
         data[n('flags')][dindex] = res['flags']
@@ -993,7 +982,8 @@ class NGMixBootFitter(BaseFitter):
         self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
 
         models=[]
-        if coadd:
+        #if coadd:
+        if coadd and (self['fit_me_galaxy'] or self['use_coadd_prefix']):
             models = models + ['coadd_%s' % model for model in self['fit_models']]
         else:
             models = models + self['fit_models']
@@ -1007,19 +997,13 @@ class NGMixBootFitter(BaseFitter):
         bshape=(nband,)
         simple_npars=5+nband
 
-        if coadd:
-            n = Namer('coadd_psf')
-        else:
-            n = Namer('psf')
+        n=self._get_namer('psf', coadd)
 
         dt += [(n('flags'),   'i4',bshape),
                (n('flux'),    'f8',bshape),
                (n('flux_err'),'f8',bshape)]
 
-        if coadd:
-            n = Namer('coadd')
-        else:
-            n = Namer('')
+        n=self._get_namer('', coadd)
 
         dt += [(n('nimage_use'),'i4',bshape)]
 
@@ -1077,19 +1061,13 @@ class NGMixBootFitter(BaseFitter):
         dt = self._get_fit_data_dtype(coadd=coadd)
         data = numpy.zeros(num,dtype=dt)
 
-        if coadd:
-            n = Namer('coadd_psf')
-        else:
-            n = Namer('psf')
+        n=self._get_namer('psf', coadd)
 
         data[n('flags')] = NO_ATTEMPT
         data[n('flux')] = DEFVAL
         data[n('flux_err')] = DEFVAL
 
-        if coadd:
-            n = Namer('coadd')
-        else:
-            n = Namer('')
+        n=self._get_namer('', coadd)
 
         data[n('mask_frac')] = DEFVAL
         data[n('psfrec_T')] = DEFVAL
@@ -1287,10 +1265,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         dindex=0
         res=self.gal_fitter.get_result()
 
-        if coadd:
-            n=Namer('coadd_%s' % model)
-        else:
-            n=Namer(model)
+        n = self._get_namer(model, coadd)
 
         if res['flags'] == 0:
             for f in ['efficiency','neff']:
@@ -1391,10 +1366,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         dindex=0
         res=self.gal_fitter.get_result()
 
-        if coadd:
-            n=Namer('coadd_%s_mcal' % model)
-        else:
-            n=Namer('%s_mcal' % model)
+        tmodel='%s_mcal' % model
+        n = self._get_namer(tmodel, coadd)
 
         if res['flags'] == 0:
 
@@ -1588,10 +1561,8 @@ class MetacalDetrendNGMixFitter(MetacalNGMixBootFitter):
         res=self.gal_fitter.get_result()
 
         if res['flags'] == 0:
-            if coadd:
-                n=Namer('coadd_%s_mcal' % model)
-            else:
-                n=Namer('%s_mcal' % model)
+            tmodel = '%s_mcal' % model
+            n = self._get_namer(tmodel, coadd)
 
             d=self.data
 
@@ -1814,10 +1785,8 @@ class PostcalNGMixBootFitter(MetacalNGMixBootFitter):
         dindex=0
         res=self.gal_fitter.get_result()
 
-        if coadd:
-            n=Namer('coadd_%s_pcal' % model)
-        else:
-            n=Namer('%s_pcal' % model)
+        tmodel='%s_pcal' % model
+        n = self._get_namer(tmodel, coadd)
 
         if res['flags'] == 0:
 
@@ -2149,7 +2118,8 @@ class MetacalSimnNGMixBootFitter(MetacalNGMixBootFitter):
 
         dt_extra=[]
         for model in self._get_all_models(coadd):
-            n=Namer('%s_mcal' % (model))
+            tmodel='%s_pcal' % model
+            n = self._get_namer(tmodel, coadd)
             dt_extra += [
                 (n('gnoise'), 'f8', 2),
                 (n('Rnoise'), 'f8', (2,2)),
