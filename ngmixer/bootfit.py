@@ -1500,10 +1500,13 @@ class MetacalDetrendNGMixFitter(MetacalNGMixBootFitter):
         #
 
         Rnoise_types=['1p','1m','2p','2m']
-        Rnoise_types=None
-        print("    doing detrend noise")
+        #Rnoise_types=None
         new_results=[]
-        for i, dtnoise in enumerate(self['detrend_noises']):
+
+        detrend_noises = self['target_noise']*numpy.array(self['detrend_factors'])
+        print("    doing detrend noise")
+
+        for i, dtnoise in enumerate(detrend_noises):
             extra_noise = numpy.sqrt(dtnoise**2 - base_noise**2)
 
             #print("    doing detrend noise: %.3f "
@@ -1578,7 +1581,7 @@ class MetacalDetrendNGMixFitter(MetacalNGMixBootFitter):
     def _get_metacal_dtype(self, coadd):
         dt=super(MetacalDetrendNGMixFitter,self)._get_metacal_dtype(coadd)
 
-        ndetrend = len(self['detrend_noises'])
+        ndetrend = len(self['detrend_factors'])
 
         for model in self._get_all_models(coadd):
             front='%s_mcal' % (model)
