@@ -1527,6 +1527,7 @@ class MetacalDetrendNGMixFitter(MetacalNGMixBootFitter):
         #
 
         Rnoise_types=['1p','1m','2p','2m']
+        Rnoise_types=None
         print("    doing detrend noise")
         new_results=[]
         for i, dtnoise in enumerate(self['detrend_noises']):
@@ -1566,9 +1567,11 @@ class MetacalDetrendNGMixFitter(MetacalNGMixBootFitter):
             res_after = boot.get_metacal_max_result()
 
             Rnoise = res_before['mcal_R']    - res_after['mcal_R']
+            #Rnoise_psf = res_before['mcal_Rpsf']    - res_after['mcal_Rpsf']
 
             new_res={
                 'mcal_Rnoise':Rnoise,
+                #'mcal_Rnoise_psf':Rnoise_psf,
             }
             new_results.append(new_res)
 
@@ -1597,6 +1600,10 @@ class MetacalDetrendNGMixFitter(MetacalNGMixBootFitter):
                 f=n('dt_Rnoise')
                 d[f][dindex,idt,:,:] = dtres['mcal_Rnoise']
 
+                #f=n('dt_Rnoise_psf')
+                #d[f][dindex,idt,:,:] = dtres['mcal_Rnoise_psf']
+
+
     def _get_metacal_dtype(self, coadd):
         dt=super(MetacalDetrendNGMixFitter,self)._get_metacal_dtype(coadd)
 
@@ -1607,6 +1614,7 @@ class MetacalDetrendNGMixFitter(MetacalNGMixBootFitter):
             n=Namer(front)
             dt += [
                 (n('dt_Rnoise'),'f8',(ndetrend,2,2)),
+                #(n('dt_Rnoise_psf'),'f8',(ndetrend,2)),
             ]
 
         # not adding these to mcal_flist
