@@ -207,7 +207,7 @@ class NGMixer(dict):
         flags = 0
 
         if self['fit_coadd_galaxy']:
-            if coadd_obs_list.meta['obj_flags'] != 0:
+            if coadd_mb_obs_list.meta['obj_flags'] != 0:
                 flags |= BAD_OBJ
                 print('    skipping bad object')
             flags |= self._obj_check(coadd_mb_obs_list)
