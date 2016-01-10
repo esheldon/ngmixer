@@ -58,6 +58,8 @@ class MEDSImageIO(ImageIO):
         self.iband = range(len(self.meds_list))
         self.conf['nband'] = len(self.meds_list)
 
+        self.conf['max_cutouts'] = self.conf.get('max_cutouts',None)
+
         # indexing of fofs
         self._set_and_check_index_lookups()
 
@@ -447,7 +449,11 @@ class MEDSImageIO(ImageIO):
         meta_row = self._get_meta_row()
         meta_row['id'][0] = self.meds_list[0]['id'][mindex]
         meta_row['number'][0] = self.meds_list[0]['number'][mindex]
-        meta_row['nimage_tot'][0,:] = numpy.array([self.meds_list[b]['ncutout'][mindex]-1 for b in xrange(self.conf['nband'])],dtype='i4')
+
+        # to account for max_cutouts limit, we count the actual number
+        #meta_row['nimage_tot'][0,:] = numpy.array([self.meds_list[b]['ncutout'][mindex]-1 for b in xrange(self.conf['nband'])],dtype='i4')
+        meta_row['nimage_tot'][0,:] = numpy.array([len(mb_obs_list[b]) for b in xrange(self.conf['nband'])],dtype='i4')
+
         meta = {'meta_data':meta_row,'meds_index':mindex,'id':self.meds_list[0]['id'][mindex],'obj_flags':0}
 
         coadd_mb_obs_list.update_meta_data(meta)
@@ -474,6 +480,13 @@ class MEDSImageIO(ImageIO):
         return numpy.zeros(ncutout, dtype='i8')
         #return numpy.zeros(self.conf['nband'])
 
+    def _should_use_obs(self, band, mindex, icut):
+        max_cutouts=self.conf['max_cutouts']
+        if (max_cutouts is not None and icut > max_cutouts):
+            return False
+        else:
+            return True
+
     def _get_band_observations(self, band, mindex):
         """
         Get an ObsList for the coadd observations in each band
@@ -491,6 +504,10 @@ class MEDSImageIO(ImageIO):
         obs_list       = ObsList()
 
         for icut in xrange(ncutout):
+
+            if not self._should_use_obs(band, mindex, icut):
+                continue
+
             iflags = image_flags[icut]
             if iflags != 0:
                 flags = IMAGE_FLAGS
@@ -510,17 +527,7 @@ class MEDSImageIO(ImageIO):
                 coadd_obs_list.append(obs)
             else:
                 obs_list.append(obs)
-                
-        """
-        if ncutout == 0:
-            for o in [coadd_obs_list,obs_list]:
-                flags = IMAGE_FLAGS
-                obs = Observation(numpy.zeros((0,0)))
-                meta = {'flags':flags}
-                obs.update_meta_data(meta)            
-                o.append(obs)
-        """
-        
+
         if self.conf['reject_outliers'] and len(obs_list) > 0:
             self._reject_outliers(obs_list)
 

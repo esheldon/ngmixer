@@ -20,6 +20,42 @@ IMAGE_FLAGS_SET=2**0
 
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
+
+    def __init__(self, *args, **kw):
+        super(SVDESMEDSImageIO,self).__init__(*args, **kw)
+
+        self._load_image_metadata()
+
+    def _load_image_metadata(self):
+
+        self._image_metadata={}
+        self.conf['tilings'] = self.conf.get('tilings',None)
+        if self.conf['tilings'] is not None:
+            print("    getting image tiling")
+            desdata=os.environ['DESDATA']
+            meds_desdata=self.meds_list[0]._meta['DESDATA'][0]
+
+
+            for band in self.iband:
+
+                bmeta={}
+                ii=self.meds_list[band].get_image_info()
+                meds_meta=self.meds_list[band].get_meta()
+                ext=meds_meta['se_hdu'][0]
+
+                band_meta=[]
+                for i in xrange(ii.size):
+                    path=ii['image_path'][i]
+                    path=path.replace(meds_desdata,desdata)
+
+                    with fitsio.FITS(path) as fits:
+                        h=fits.read_header(ext=ext)
+                        tiling=h['tiling']
+
+                        band_meta.append( {'tiling':tiling} )
+                self._image_metadata[band] = band_meta
+
+
     def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
         assert False,'        FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1)
         return None,None
@@ -94,6 +130,24 @@ class SVDESMEDSImageIO(MEDSImageIO):
         coadd_mb_obs_list.meta['meta_data']['coadd_run'] = run
         mb_obs_list.meta['meta_data']['coadd_run'] = run
         return coadd_mb_obs_list, mb_obs_list
+
+    def _should_use_obs(self, band, mindex, icut):
+
+        use=super(SVDESMEDSImageIO,self)._should_use_obs(band, icut)
+        if use:
+
+            tilings=self.conf.get('tilings',None)
+
+            if tilings is not None:
+                meds=self.meds_list[band]
+                file_id=meds['file_id'][mindex, icut]
+                tiling = self._image_metadata[band][file_id]
+                if tiling not in tilings:
+                    print("        image tiling:",tiling,
+                          "not in requested tilings",tilings)
+                    use=False
+
+        return use
 
     def _get_band_observations(self, band, mindex):
         coadd_obs_list, obs_list = super(SVDESMEDSImageIO, self)._get_band_observations(band,mindex)
