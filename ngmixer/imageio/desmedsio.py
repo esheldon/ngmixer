@@ -27,32 +27,47 @@ class SVDESMEDSImageIO(MEDSImageIO):
         self._load_image_metadata()
 
     def _load_image_metadata(self):
+        """
+        tiling was not saved an any existing DES MEDS files,
+        so extract it if needed
+
+        Other missing metadata can also be checked for here
+        and loaded.  We should cache this
+        """
+        get_extra_meta=False
 
         self._image_metadata={}
         self.conf['tilings'] = self.conf.get('tilings',None)
+
         if self.conf['tilings'] is not None:
-            print("    getting image tiling")
+            get_extra_meta=True
+
+        if get_extra_meta:
+            print("    getting extra image metadata")
             desdata=os.environ['DESDATA']
             meds_desdata=self.meds_list[0]._meta['DESDATA'][0]
-
 
             for band in self.iband:
 
                 bmeta={}
                 ii=self.meds_list[band].get_image_info()
                 meds_meta=self.meds_list[band].get_meta()
-                ext=meds_meta['se_hdu'][0]
+                se_ext=meds_meta['se_hdu'][0]-1
+                coadd_ext=meds_meta['coadd_hdu'][0]-1
 
                 band_meta=[]
                 for i in xrange(ii.size):
                     path=ii['image_path'][i]
                     path=path.replace(meds_desdata,desdata)
+                    print("    %d/%d  %s" % (i+1,ii.size,path))
 
-                    with fitsio.FITS(path) as fits:
-                        h=fits.read_header(ext=ext)
-                        tiling=h['tiling']
+                    if i==0:
+                        ext=coadd_ext
+                    else:
+                        ext=se_ext
+                    h=fitsio.read_header(path, ext=ext)
 
-                        band_meta.append( {'tiling':tiling} )
+                    band_meta.append(h)
                 self._image_metadata[band] = band_meta
 
 
@@ -133,18 +148,18 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
     def _should_use_obs(self, band, mindex, icut):
 
-        use=super(SVDESMEDSImageIO,self)._should_use_obs(band, icut)
-        if use:
+        use=super(SVDESMEDSImageIO,self)._should_use_obs(band, mindex, icut)
+        if use and icut > 0:
 
             tilings=self.conf.get('tilings',None)
 
             if tilings is not None:
                 meds=self.meds_list[band]
                 file_id=meds['file_id'][mindex, icut]
-                tiling = self._image_metadata[band][file_id]
+                tiling = self._image_metadata[band][file_id]['tiling']
                 if tiling not in tilings:
-                    print("        image tiling:",tiling,
-                          "not in requested tilings",tilings)
+                    #print("        image tiling:",tiling,
+                    #      "not in requested tilings",tilings)
                     use=False
 
         return use
