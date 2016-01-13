@@ -462,17 +462,19 @@ class MEDSImageIO(ImageIO):
         return coadd_mb_obs_list, mb_obs_list
 
     def _reject_outliers(self, obs_list):
-        imlist=[]
-        wtlist=[]
-        for obs in obs_list:
-            if obs.meta['flags'] == 0:
-                imlist.append(obs.image)
-                wtlist.append(obs.weight)
+        for attr in ['weight','weight_raw','weight_us','weight_orig']:
+            imlist=[]
+            wtlist = []
+            for obs in obs_list:
+                if obs.meta['flags'] == 0 and hasattr(obs,attr) and getattr(obs,attr) is not None:
+                    imlist.append(obs.image)
+                    wtlist.append(getattr(obs,attr))
 
-        # weight map is modified
-        nreject=meds.reject_outliers(imlist,wtlist)
-        if nreject > 0:
-            print('    rejected: %d' % nreject)
+            # weight map is modified
+            if len(wtlist) > 0:
+                nreject=meds.reject_outliers(imlist,wtlist)
+                if nreject > 0:
+                    print('    rejected pixels using %s: %d' % (attr,nreject))
 
     def _get_image_flags(self, band, mindex):
         meds=self.meds_list[band]
