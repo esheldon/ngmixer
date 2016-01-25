@@ -2,6 +2,7 @@ from __future__ import print_function
 import time
 import numpy
 import os
+import scipy.stats
 
 from copy import deepcopy
 
@@ -69,6 +70,9 @@ class NGMixBootFitter(BaseFitter):
 
         # whether to use the coadd_ prefix for names when no me fit was done
         self['use_coadd_prefix'] = self.get('use_coadd_prefix',True)
+
+        # add in estimate for intrinsic profile variance 
+        self['intr_prof_var_fac'] = self.get('intr_prof_var_fac',0.0)
 
     def _get_namer(self, model, coadd):
         if coadd and (self['fit_me_galaxy'] or self['use_coadd_prefix']):
@@ -367,6 +371,11 @@ class NGMixBootFitter(BaseFitter):
                     
                     cenim = obs.image_orig.copy()
                     sub_nbrs_from_cenim = True
+
+                if self['intr_prof_var_fac'] > 0.0:
+                    varim = numpy.zeros_like(cenim)  
+                    if not sub_nbrs_from_cenim:
+                        varim += self['intr_prof_var_fac']*cenim*cenim
                     
                 # now do nbrs
                 nbrsim = numpy.zeros_like(cenim)
@@ -382,14 +391,19 @@ class NGMixBootFitter(BaseFitter):
 
                         print('        rendered nbr: %d' % (nbrs_ind+1))                        
                         nbrs_psf_gmix = nbrs_psf.get_gmix()
-                        nbrsim += self._render_single(model,
-                                                      band,
-                                                      obs,
-                                                      pars_tag,
-                                                      nbrs_fit_data[nbrs_ind:nbrs_ind+1],
-                                                      nbrs_psf_gmix,
-                                                      nbrs_jac,
-                                                      coadd)
+                        curr_nbrsim = self._render_single(model,
+                                                          band,
+                                                          obs,
+                                                          pars_tag,
+                                                          nbrs_fit_data[nbrs_ind:nbrs_ind+1],
+                                                          nbrs_psf_gmix,
+                                                          nbrs_jac,
+                                                          coadd)
+                        nbrsim += curr_nbrsim
+                        
+                        if self['intr_prof_var_fac'] > 0.0:
+                            varim += self['intr_prof_var_fac']*curr_nbrsim*curr_nbrsim
+
                     else:
                         print('        masked nbr: %d' % (nbrs_ind+1))
                         
@@ -437,6 +451,12 @@ class NGMixBootFitter(BaseFitter):
                 q = numpy.where(masked_pix == 1.0)
                 if q[0].size > 0:
                     new_weight[q] = 0.0
+
+                if self['intr_prof_var_fac'] > 0.0:
+                    qnz = numpy.where(new_weight != 0.0)
+                    if qnz[0].size > 0:
+                        new_weight[qnz] = 1.0/(1.0/new_weight[qnz] + varim[qnz])
+
                 obs.weight = new_weight
                     
                 if self['make_plots']:
@@ -913,9 +933,14 @@ class NGMixBootFitter(BaseFitter):
 
         mres=self.boot.get_max_fitter().get_result()
         if 's2n_w' in mres:
-            rres=self.boot.get_round_result()
-            tup=(mres['s2n_w'],rres['s2n_r'],mres['chi2per'])
-            print("    s2n: %.1f s2n_r: %.1f chi2per: %.3f" % tup)
+            rres=self.boot.get_round_result()            
+            tup=(mres['s2n_w'],
+                 rres['s2n_r'],
+                 mres['chi2per'],
+                 mres['chi2per']*mres['dof'],
+                 mres['dof'],
+                 scipy.stats.chi2.sf(mres['chi2per']*mres['dof'],mres['dof']))
+            print("    s2n: %.1f s2n_r: %.1f chi2per: %.3f (chi2: %.3g dof: %.3g pval: %0.3g)" % tup)
 
     def get_num_pars_psf(self):
         npdict = {'em1':6,
