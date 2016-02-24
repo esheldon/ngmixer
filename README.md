@@ -23,14 +23,14 @@ Getting Started
 
 You will need to make sure you have an appropriate MEDS I/O class. The ones for DES are in 
 imageio/desmedsio.py. The Y1 class should work out-of-the box (called Y1DESMEDSImageIO). When 
-you implement a new one, you have to register it in the __init__.py in the imageio sub-package.
+you implement a new one, you have to register it in the `__init__.py` in the imageio sub-package.
 
 WARNING: We have not updated the image flags for Y1. See code here https://github.com/esheldon/ngmixer/blob/master/ngmixer/imageio/desmedsio.py#L334. This needs to be done.
 
 #### Setup the Fitter
 
 Similar to above, you need to have an appropriate fitter. The ngmix ones we have so far are in bootfit.py. 
-You have some metacal fitters there already. Any new fitter has to be registered in the main package __init__.py.
+You have some metacal fitters there already. Any new fitter has to be registered in the main package `__init__.py`.
 
 #### Running
 
