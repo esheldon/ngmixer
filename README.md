@@ -4,17 +4,17 @@ code to run ngmix on data
 Structure of Repo
 -----------------
 
-imageio	- sub-package to read images/MEDS
-megamixer - sub-package to setup runs
-fitting.py - base class for implementing fitters
-bootfit.py - child fitter class for ngmix bootstrappers
-ngmixing.py - base class for running fitter over data (uses fitters and imageio classes)
-mofngmixing.py - MOF for running fitter over data
-nbrsfofs.py - support utils for constructing FoFs for MOF
-priors.py - code to deal with ngmix priors (doesn't really belong here, but it had to go somewhere)
-util.py - utils of various kinds
-defaults.py	- default flags. etc.
-files.py - I/O utils
+* imageio	- sub-package to read images/MEDS
+* megamixer - sub-package to setup runs
+* fitting.py - base class for implementing fitters
+* bootfit.py - child fitter class for ngmix bootstrappers
+* ngmixing.py - base class for running fitter over data (uses fitters and imageio classes)
+* mofngmixing.py - MOF for running fitter over data
+* nbrsfofs.py - support utils for constructing FoFs for MOF
+* priors.py - code to deal with ngmix priors (doesn't really belong here, but it had to go somewhere)
+* util.py - utils of various kinds
+* defaults.py	- default flags. etc.
+* files.py - I/O utils
 
 Getting Started
 ---------------
