@@ -30,12 +30,12 @@ WARNING: We have not updated the image flags for Y1. See code here https://githu
 #### Setup the Fitter
 
 Similar to above, you need to have an appropriate fitter. The ngmix ones we have so far are in bootfit.py. 
-You have some metacal fitters there already. Any new fitter has to be registered in the main package `__init__.py`.
+There are some max-like and metacal fitters there already. Any new fitter has to be registered in the main package `__init__.py`.
 
 #### Running
 
 Once you have a fitter and an imageio class, you can run the code. You will need any configs etc. 
-setup properly. Start with the MOF Y1 configs (`ngmix-y1-014.yaml` in @esheldon/ngmix-y1-configs) 
+setup properly. Start with the MOF Y1 configs (`ngmix-y1-014.yaml` in `esheldon/ngmix-y1-configs`) 
 and make sure to set the following:
 
 ```yaml
