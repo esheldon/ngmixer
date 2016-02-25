@@ -87,6 +87,10 @@ configs are written for each of the ~300 chunks. The megamixer can then submit t
 output when the jobs are done. It can also do things like tar up the log files to archive runs and collect the final 
 outputs into a series of flat files. 
 
+In order to parallelize the run, the megamixer uses the `--fof-range` input option to `ngmixit` to specify ranges of 
+objects in each file to fit. If you are not doing a MOF run, this parameter defaults to one object per FoF 
+(i.e., it makes dummy FoFs). Unfortunately, this whole scheme currently requires that MEDS files be input into the code. 
+Fixing this dependence def needs to happen, but has not yet.
 
 To call it, use the command line util `megamixit`. For this you will need a run config (see the Y1 one here 
 https://github.com/esheldon/ngmix-y1-config/blob/master/run_config/run-y1-014.yaml). You can ignore the 
