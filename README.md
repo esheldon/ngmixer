@@ -21,21 +21,34 @@ Getting Started
 
 #### Setup the I/O
 
-You will need to make sure you have an appropriate MEDS I/O class. The ones for DES are in 
-imageio/desmedsio.py. The Y1 class should work out-of-the box (called Y1DESMEDSImageIO). When 
-you implement a new one, you have to register it in the `__init__.py` in the imageio sub-package.
+You will need to make sure you have an appropriate MEDS I/O class. 
 
-WARNING: We have not updated the image flags for Y1. See code here https://github.com/esheldon/ngmixer/blob/master/ngmixer/imageio/desmedsio.py#L334. This needs to be done.
+The doc string for the base class `ImageIO` indicates how to write a child class that implements the 
+proper interface. In general, the `ImageIO` classes are iterators that yield a list of things to fit.
+
+For DES MEDS files, interfaces have already been written. These are in `imageio/desmedsio.py`. The Y1 class 
+should work out-of-the box (called Y1DESMEDSImageIO). 
+
+WARNING: We have not updated the image flags for Y1. See code here 
+https://github.com/esheldon/ngmixer/blob/master/ngmixer/imageio/desmedsio.py#L334. This needs to be done.
+
+Whenever you implement a new interface, you have to register it in the `__init__.py` in the imageio sub-package.
 
 #### Setup the Fitter
 
-Similar to above, you need to have an appropriate fitter. The ngmix ones we have so far are in bootfit.py. 
-There are some max-like and metacal fitters there already. Any new fitter has to be registered in the main package `__init__.py`.
+Similar to the `ImageIO` classes above, you need to have an appropriate fitter. 
+
+The doc strings on all of the methods of `BaseFitter` in `fitting.py` describe what needs to be implemented. 
+
+The ngmix fitters are in `bootfit.py`. There are some max-like and metacal fitters there 
+already. Any new fitter has to be registered in the main package `__init__.py`.
 
 #### Running
 
 Once you have a fitter and an imageio class, you can run the code. You will need any configs etc. 
-setup properly. Start with the MOF Y1 configs (`ngmix-y1-014.yaml` in `esheldon/ngmix-y1-configs`) 
+setup properly. 
+
+For ngmix, start with the MOF Y1 configs (`ngmix-y1-014.yaml` in the package `esheldon/ngmix-y1-configs`) 
 and make sure to set the following:
 
 ```yaml
@@ -63,16 +76,21 @@ region: "cweight-nearest"
 
 This turns off all of the MOF magic.
 
-Then you can directly call `ngmixit` (which gets installed when the repo is installed.) This bit 
-of code is just like the old script from gmix_meds. (See here https://github.com/esheldon/ngmixer/blob/master/bin/ngmixit).
+Then you can directly call `ngmixit` (which gets installed when the repo is installed.) This bit of code is 
+just like the old script from gmix_meds. (See here https://github.com/esheldon/ngmixer/blob/master/bin/ngmixit).
 
 #### Big Runs
 
-For large runs, it makes sense to use the megamixer, but is not needed. The megamixer 
-has both the old concat code that postprocessed runs and it sets up the jobs. To call it, 
-use the command line util `megamixit`. For this you will need a run config (see the Y1 one here 
+For large runs, it makes sense to use the megamixer, but is not needed. The megamixer parallelizes the run by dividing 
+each input file to `ngmixit` into a bunch of smaller chunks (typically ~300 per coadd tile in DES). Job scripts and 
+configs are written for each of the ~300 chunks. The megamixer can then submit these jobs to the queue and recombine the 
+output when the jobs are done. It can also do things like tar up the log files to archive runs and collect the final 
+outputs into a series of flat files. 
+
+
+To call it, use the command line util `megamixit`. For this you will need a run config (see the Y1 one here 
 https://github.com/esheldon/ngmix-y1-config/blob/master/run_config/run-y1-014.yaml). You can ignore the 
-`nbrs_version` tag. By default, if you set the `run` field in the run config to `y1-014` 
+`nbrs_version` tag, unless you are doing MOF. By default, if you set the `run` field in the run config to `y1-014` 
 the code expects an ngmix config called `ngmix-y1-014.yaml`. You can set this by hand by 
 setting the `ngmix_config` field in the run config.
 
@@ -94,9 +112,9 @@ megamixit \
 ```
 
 The extra-cmds options puts any commands in the file it points to into the job scripts. 
-Always give a seed. You then specify a run config and finally a list of tiles. The ${1} 
-above is the command. To do a run you feed it three commands (assuming you have put the 
-above code into a script called megamix.sh)
+Always give a seed so that things can be rerun in exactly the same way. You then specify 
+a run config and finally a list of tiles. The `${1}` above is the command. To do a run you 
+feed it (at least) four commands (assuming you have put the above code into a script called `megamix.sh`)
 
 ```
 ./megamix.sh setup   # builds all jobs and configs on disk
@@ -104,22 +122,22 @@ above code into a script called megamix.sh)
 ./megamix.sh collate # when all jobs are done run this to recombine the files to single outputs per tile
 ./megamix.sh link    # links all outputs to ${run}/output
 ```
+
 Implementing a new megamixer is not that hard at all. See the base class here
 
 https://github.com/esheldon/ngmixer/blob/master/ngmixer/megamixer/megamixer.py
 
-You need to supply implementations of write_job_script and run_chunk. A default 
-implementation is in the file above. Note that the jobs get run in the directory 
-given by `dr = self.get_chunk_output_dir(files,chunk,rng)`. Finally register the new megamixer here
+You need to supply implementations of `write_job_script` and `run_chunk`. A default 
+implementation is in the file above. Note that the jobs must be run in the directory 
+given by `dr = self.get_chunk_output_dir(files,chunk,rng)`. The megamixer uses relative paths so that the whole set 
+of chunks can be relocated. Finally register the new megamixer here (https://github.com/esheldon/ngmixer/blob/master/bin/megamixit#L66).
 
-https://github.com/esheldon/ngmixer/blob/master/bin/megamixit#L66
-
-The SLAC one is here
+The SLAC megamixer, which is a good example, is here
 
 https://github.com/esheldon/ngmixer/blob/master/ngmixer/megamixer/slacmegamixer.py
 
-Be sure to process the extra_commands option. I use this to supply a path to the 
-activate function on virtualenvs I build for each version. So my extra_cmds.txt looks like
+Be sure to process the extra_commands option. One can use this to supply a path to the 
+activate function on, e.g., virtualenvs. For example, an `extra_cmds.txt` might look like
 
 ```bash
 source /nfs/slac/des/fs1/g/sims/beckermr/DES/y1_ngmix/tb_y1a1_v01c/work011/bin/activate
