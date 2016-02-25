@@ -142,3 +142,87 @@ activate function on, e.g., virtualenvs. For example, an `extra_cmds.txt` might 
 ```bash
 source /nfs/slac/des/fs1/g/sims/beckermr/DES/y1_ngmix/tb_y1a1_v01c/work011/bin/activate
 ```
+
+#### Multi-object Fitting
+
+The multi-object fitting (MOF) built into ngmixer is contained in the file `mofngmixing.py` and is iterative. For each 
+object on each iteration, its nbrs are subtracted and the object is refit. The `ImageIO` class is responsible for 
+yeilding all objects which need to be fit together as an entire group. The fitting class is responsible for actually 
+rendering the nrbs, removing them and then fitting the central. 
+
+Thus for the multi-object fitting (MOF), an extra, pre-processing step has to be taken where lists of nbrs for 
+each object are built. Plus other things need to be changed in the `ImageIO` and fitting classes to support the 
+propagation of the nbrs information and fit parameters. 
+
+##### Build the Nbrs Lists and FoFs
+
+You need to make the nbrs files for each coadd tile. This file is built off of the MEDS files made for each coadd tile 
+and is used to decide which objects have nbrs to be fit and which ones do not. 
+
+The code which builds the nbrs files is located in `nbrsfofs.py`. The code works by first constructing for each a object 
+(i.e., the central object) a list of nbrs which 'overlap' with the central. For the MEDS files, it is assumed that the 
+stamp sizes themsselves indicate the extent of each object and so the overlaps are built by intersecting the stamps with 
+some buffer. Once each object has a list of nbr objects, a FoF group of objects is built by linking objects if either is 
+in the nbrs list of the other. Finally, the fits of the objects are done by fitting all things in a FoF together and 
+parallelizing the entire run over the set of FoFs. (For the DES, including isolated objects as FoFs of size one, 
+typically only 40% of the FoFs have two or more objects.)
+
+The command line utility for doing these steps is `ngmixer-meds-make-nbrs-data`. It needs a config file similar to 
+the one here https://github.com/esheldon/ngmix-y1-config/blob/master/nbrs_config/nbrs001.yaml. See the help menu of 
+`ngmixer-meds-make-nbrs-data` for how to run it. Two nbrs files get written for each coadd tile in the `$DESDATA` 
+area and are for example 
+
+```
+${DESDATA}/EXTRA/meds/${meds_version}/nbrs-data/${nbrs_version}/${coadd_runn}/\
+    ${tile}-meds-${meds_version}-nbrslist-${nbrs_version}.fits
+
+${DESDATA}/EXTRA/meds/${meds_version}/nbrs-data/${nbrs_version}/${coadd_runn}/\
+    ${tile}-meds-${meds_version}-nbrsfofs-${nbrs_version}.fits
+```
+These are for the Y1 pipeline. The Y2+ pipeline may be different. The first file above is the list of nbrs and the second file above is the list of FoF membership constructed from the nbrs. 
+
+##### Add the Nbrs Metadata in the ImageIO class
+
+The `ImageIO` inerface used for reading the image data has to be aware of the nbrs files made above and process them so 
+that they include the needed information in the `meta_data` attached to the images in order to run the fits. All of this 
+is basically already done, but see the doc string on the base `ImageIO` class (mentioned above) in order to see what 
+needs to be added. 
+
+##### Make the Fitter Aware of the Nbrs
+
+Any fitting class with the MOF is responsible for rendering the nbrs for each central and subtracting them out of the 
+centrals stamps. For ngmix-based MOF, this has already been done. If you are using another fitter, you will have to 
+code this up yourself. 
+
+##### Run the Code
+
+Once the two files above have been built, the code can be run. For the MOF the two files above have to be specified to 
+`ngmixit` with the  `--nbrs-file` (for the `nbrslist`) and the `--fof-file` (for the `nbrsfofs`). If you are using the 
+`megamixer`, then this all gets done for you. You will also need to set the following in the fitting config fed to 
+`ngmixit` (assuming you are using ngmix).
+
+```yaml
+read_wcs: True
+read_me_wcs: False
+
+model_nbrs: True
+model_nbrs_method: 'subtract'
+mof:
+    maxabs_conv:  [1.0e-3,1.0e-3,1.0e-6,1.0e-6,1.0e-6,1.0e-6,1.0e-6,1.0e-6,1.0e-6]
+    maxfrac_conv: [1.0e-6,1.0e-6,1.0e-6,1.0e-6,1.0e-6,1.0e-3,1.0e-3,1.0e-3,1.0e-3]
+    maxerr_conv: 0.5
+    max_itr: 15
+    min_itr: 10
+    min_useg_itr: 1
+    write_convergence_data: False
+    convergence_model: 'cm'
+
+prop_sat_starpix: True
+flag_y1_stellarhalo_masked: True
+intr_prof_var_fac: 0.0
+
+region: "mof"
+```
+
+This config setting is for Y1. The `prop_sat_starpix` and `flag_y1_stellarhalo_masked` options may 
+not apply to future data releases. 
