@@ -183,23 +183,23 @@ These are for the Y1 pipeline. The Y2+ pipeline may be different. The first file
 
 ##### Add the Nbrs Metadata in the ImageIO class
 
-The `ImageIO` inerface used for reading the image data has to be aware of the nbrs files made above and process them so 
-that they include the needed information in the `meta_data` attached to the images in order to run the fits. All of this 
-is basically already done, but see the doc string on the base `ImageIO` class (mentioned above) in order to see what 
-needs to be added. 
+The `ImageIO` interface used for reading the image data has to be aware of the nbrs files made above and process them so 
+that they include the needed information in the `meta_data` attached to the images in order to run the MOF fits. All of 
+this is already done for MEDS files. See the doc string on the base `ImageIO` class (mentioned above) in order to see 
+what needs to be added if you implement a new interface.
 
 ##### Make the Fitter Aware of the Nbrs
 
 Any fitting class with the MOF is responsible for rendering the nbrs for each central and subtracting them out of the 
 centrals stamps. For ngmix-based MOF, this has already been done. If you are using another fitter, you will have to 
-code this up yourself. 
+code this up yourself. Again see the base fitter docs for how to do this. 
 
 ##### Run the Code
 
 Once the two files above have been built, the code can be run. For the MOF the two files above have to be specified to 
 `ngmixit` with the  `--nbrs-file` (for the `nbrslist`) and the `--fof-file` (for the `nbrsfofs`). If you are using the 
 `megamixer`, then this all gets done for you. You will also need to set the following in the fitting config fed to 
-`ngmixit` (assuming you are using ngmix).
+`ngmixit` (assuming you are using ngmix)
 
 ```yaml
 read_wcs: True
