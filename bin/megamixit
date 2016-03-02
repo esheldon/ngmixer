@@ -53,6 +53,7 @@ parser.add_option("--seed", default=None,type=int,
 
 from ngmixer.megamixer import NGMegaMixer
 from ngmixer.megamixer import SLACNGMegaMixer
+from ngmixer.megamixer import CakeNGMegaMixer
 import ngmixer
 
 if __name__ == '__main__':
@@ -67,6 +68,8 @@ if __name__ == '__main__':
         MMixer = NGMegaMixer
     elif options.system == 'slac':
         MMixer = SLACNGMegaMixer
+    elif options.system == 'cake':
+        MMixer = CakeNGMegaMixer
     else:
         raise ValueError("system %s not supported!" % options.system)
 
