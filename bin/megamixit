@@ -135,5 +135,9 @@ if __name__ == '__main__':
                                  blind=not options.noblind,
                                  clobber=options.clobber,
                                  skip_errors=options.skip_errors)            
+        elif cmd == 'setup_nbrs':
+            ngmm.setup_nbrs_coadd_tile(coadd_run)
+        elif cmd == 'run_nbrs':
+            ngmm.run_nbrs_coadd_tile(coadd_run)
         else:
             raise ValueError("cmd %s not valid!" % cmd)
