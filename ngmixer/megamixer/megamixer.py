@@ -116,22 +116,24 @@ class BaseNGMegaMixer(dict):
         return ngmix_conf
 
     def _get_nbrs_config(self):
-        assert 'nbrs_config' in self,"nbrs_config must be given to build nbrs files!"
-        if not os.path.exists(self['ngmix_config']):
-            assert 'NGMIXER_CONFIG_DIR' in os.environ,"Env var NGMIXER_CONFIG_DIR must be given is nbrs config path not given in run config!"
+        assert 'nbrs_config' in self or 'nbrs_version' in self,"nbrs_config or nbrs_version must be given to build nbrs files!"
+        if 'nbrs_version' in self and 'NGMIXER_CONFIG_DIR' in os.environ:
             conf = os.path.join(os.environ['NGMIXER_CONFIG_DIR'],
-                                      'nbrs_config',
-                                      'nbrs-'+self['nbrs_config']+'.yaml')
+                                'nbrs_config',
+                                'nbrs-'+self['nbrs_version']+'.yaml')
             conf = os.path.expandvars(conf)
             conf = conf.replace(os.environ['NGMIXER_CONFIG_DIR'],'${NGMIXER_CONFIG_DIR}')
-        else:
+        elif 'nbrs_config' in self:
             conf = self['ngmix_config']
-            
+        else:
+            conf = 'nbrs-'+self['nbrs_version']+'.yaml'
+
         return conf
 
     def setup_nbrs_coadd_tile(self,coadd_tile):
         print("setting up nbrs for tile '%s'" % coadd_tile)
         files = self.get_files(coadd_tile)
+        self.make_output_dirs(files,[])
         os.system('cp %s %s' % (files['nbrs_config'],os.path.join(files['work_output_dir'],'.')))
         self.write_nbrs_script(files)
         self.write_nbrs_job_script(files)
@@ -141,11 +143,11 @@ class BaseNGMegaMixer(dict):
 config={nbrs_config}
 obase={base_name}
 lfile=$obase".log"
-meds_tile={tile}
+meds_file={tile}
 
 # call with -u to avoid buffering
 cmd="`which {cmd}` \
-    ${config} ${meds_tile}
+ $config $meds_file"
 
 echo $cmd
 python -u $cmd &> $lfile
@@ -534,6 +536,6 @@ class NGMegaMixer(BaseNGMegaMixer):
 
         os.system('chmod 755 %s' % fname)
 
-    def run_nbrs(self,files,chunk,rng):
+    def run_nbrs(self,files):
         dr = files['work_output_dir']
         os.system('cd %s && ./jobnbrs.sh && cd -' % dr)
