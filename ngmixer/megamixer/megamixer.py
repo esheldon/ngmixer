@@ -100,6 +100,8 @@ class BaseNGMegaMixer(dict):
             
         files['work_output_dir'] = os.path.join(files['main_output_dir'],
                                                 'work')
+
+        files['run_output_dir'] = os.path.join(odir,self['run'])
             
     def _get_ngmix_config(self):
         if 'NGMIXER_CONFIG_DIR' in os.environ:
