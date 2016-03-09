@@ -120,6 +120,7 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
                      "    cmd = line.strip()\n"
                      "    if loc == chunk:\n"
                      "        break\n"
+                     "    loc += 1\n"
                      "\n"
                      "os.system(cmd)\n"
                      "\n")
