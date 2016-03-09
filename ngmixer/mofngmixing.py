@@ -286,7 +286,7 @@ class MOFNGMixer(NGMixer):
 
                 num += 1
                 ti = time.time()
-                self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None)
+                self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None,make_epoch_data=True)
                 ti = time.time()-ti
                 print('    time: %f' % ti)
 
@@ -333,7 +333,7 @@ class MOFNGMixer(NGMixer):
 
                         num += 1
                         ti = time.time()
-                        self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=self.curr_data)
+                        self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=self.curr_data,make_epoch_data=False)
                         ti = time.time()-ti
                         print('    time: %f' % ti)
 

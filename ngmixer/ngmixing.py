@@ -273,7 +273,7 @@ class NGMixer(dict):
 
         return flags
 
-    def fit_obj(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None):
+    def fit_obj(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None,make_epoch_data=True):
         """
         fit a single object
         """
@@ -284,7 +284,7 @@ class NGMixer(dict):
         flags = self._check_basic_things(coadd_mb_obs_list,mb_obs_list)
 
         if flags == 0:
-            fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data)
+            fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data,make_epoch_data=make_epoch_data)
             flags |= fit_flags
 
         # add in data
@@ -314,7 +314,7 @@ class NGMixer(dict):
 
                     self.epoch_data.extend(list(ed))
 
-    def fit_all_obs_lists(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None):
+    def fit_all_obs_lists(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None,make_epoch_data=True):
         """
         fit all obs lists
         """
@@ -324,10 +324,11 @@ class NGMixer(dict):
         if self['fit_me_galaxy']:
             print('    fitting me galaxy')
             try:
-                me_fit_flags = self.fitter(mb_obs_list,coadd=False,nbrs_fit_data=nbrs_fit_data)
+                me_fit_flags = self.fitter(mb_obs_list,coadd=False,nbrs_fit_data=nbrs_fit_data,make_epoch_data=make_epoch_data)
 
                 # fill in epoch data
-                self._fill_epoch_data(mb_obs_list)
+                if make_epoch_data:
+                    self._fill_epoch_data(mb_obs_list)
 
                 # fill in fit data
                 for tag in mb_obs_list.meta['fit_data'].dtype.names:
@@ -344,10 +345,11 @@ class NGMixer(dict):
         if self['fit_coadd_galaxy']:
             print('    fitting coadd galaxy')
             try:
-                coadd_fit_flags = self.fitter(coadd_mb_obs_list,coadd=True,nbrs_fit_data=nbrs_fit_data)
+                coadd_fit_flags = self.fitter(coadd_mb_obs_list,coadd=True,nbrs_fit_data=nbrs_fit_data,make_epoch_data=make_epoch_data)
 
                 # fill in epoch data
-                self._fill_epoch_data(coadd_mb_obs_list)
+                if make_epoch_data:
+                    self._fill_epoch_data(coadd_mb_obs_list)
 
                 # fill in fit data
                 for tag in coadd_mb_obs_list.meta['fit_data'].dtype.names:
