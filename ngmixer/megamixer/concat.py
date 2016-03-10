@@ -52,6 +52,12 @@ class Concat(object):
         """
         return epoch_data0
 
+    def pick_nbrs_fields(self,nbrs_data0):
+        """
+        modify and/or add fields to the nbrs data array
+        """
+        return nbrs_data0
+
     def make_collated_dir(self):
         """
         set collated file output dir
@@ -81,14 +87,22 @@ class Concat(object):
             with fitsio.FITS(fname) as fobj:
                 data0 = fobj['model_fits'][:]
                 epoch_data0 = fobj['epoch_data'][:]
+                if 'nbrs_data' in fobj:
+                    nbrs_data0 = fobj['nbrs_data'][:]
+                else:
+                    nbrs_data0 = None
                 meta = fobj['meta_data'][:]
         except IOError as err:
             raise ConcatError(str(err))
 
         data = self.pick_fields(data0,meta)
         epoch_data = self.pick_epoch_fields(epoch_data0)
+        if nbrs_data0 is not None:
+            nbrs_data = self.pick_nbrs_fields(nbrs_data0)
+        else:
+            nbrs_data = None
 
-        return data, epoch_data, meta
+        return data, epoch_data, nbrs_data, meta
 
     def verify(self):
         """
@@ -103,7 +117,7 @@ class Concat(object):
             print('\t%d/%d %s' %(i+1,nchunk,fname))
             sys.stdout.flush()
             try:
-                data, epoch_data, meta = self.read_chunk(fname)
+                data, epoch_data, nbrs_data, meta = self.read_chunk(fname)
                 dlist.extend(list(data))
             except ConcatError as err:
                 print("error found: %s" % str(err))
@@ -127,16 +141,21 @@ class Concat(object):
 
         dlist=[]
         elist=[]
-
+        nlist=[]
+        ndtype = None
+        
         nchunk=len(self.chunk_file_list)
         for i,fname in enumerate(self.chunk_file_list):
 
             print('\t%d/%d %s' %(i+1,nchunk,fname))
             sys.stdout.flush()
             try:
-                data, epoch_data, meta = self.read_chunk(fname)
+                data, epoch_data, nbrs_data, meta = self.read_chunk(fname)
                 dlist.extend(list(data))
                 elist.extend(list(epoch_data))
+                if nbrs_data is not None:
+                    nlist.extend(list(nbrs_data))
+                    ndtype = nbrs_data.dtype.descr
             except ConcatError as err:
                 if not self.skip_errors:
                     raise err
@@ -144,14 +163,18 @@ class Concat(object):
 
         data = numpy.array(dlist,dtype=data.dtype.descr)
         epoch_data = numpy.array(elist,dtype=epoch_data.dtype.descr)
+        if len(nlist) > 0:
+            nbrs_data = numpy.array(nlist,dtype=ndtype)
+        else:
+            nbrs_data = None
 
         if not numpy.array_equal(numpy.sort(numpy.unique(data['number'])),numpy.sort(data['number'])):
             print("object 'number' field is not unique!")
 
         # note using meta from last file
-        self._write_data(data, epoch_data, meta)
+        self._write_data(data, epoch_data, nbrs_data, meta)
 
-    def _write_data(self, data, epoch_data, meta):
+    def _write_data(self, data, epoch_data, nbrs_data, meta):
         """
         write the data, first to a local file then staging out
         the the final location
@@ -160,6 +183,8 @@ class Concat(object):
             with fitsio.FITS(sf.path,'rw',clobber=True) as fits:
                 fits.write(data,extname="model_fits")
                 fits.write(epoch_data,extname='epoch_data')
+                if nbrs_data is not None:
+                    fits.write(nbrs_data,extname='nbrs_data')
                 fits.write(meta,extname="meta_data")
 
         print('output is in:',self.collated_file)
