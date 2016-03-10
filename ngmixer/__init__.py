@@ -8,6 +8,8 @@ from . import defaults
 from . import bootfit
 from . import mofngmixing
 from . import megamixer
+from . import render_ngmix_nbrs
+from .render_ngmix_nbrs import RenderNGmixNbrs
 
 #######################################################
 # setup fitter dict
@@ -24,5 +26,4 @@ FITTERS['metacal-addn-ngmix-boot'] = bootfit.MetacalAddnNGMixBootFitter
 FITTERS['metacal-subn-ngmix-boot'] = bootfit.MetacalSubnNGMixBootFitter
 FITTERS['metacal-regauss-boot'] = bootfit.MetacalRegaussBootFitter
 FITTERS['isamp-ngmix-boot'] = bootfit.ISampNGMixBootFitter
-
 FITTERS['pcal-ngmix-boot'] = bootfit.PostcalNGMixBootFitter

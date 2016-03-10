@@ -310,8 +310,10 @@ class NGMixer(dict):
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
                 if 'fit_data' in obs.meta and obs.meta['fit_data'] is not None \
-                   and 'meta_data' in obs.meta:
+                   and 'meta_data' in obs.meta and obs.meta['flags'] == 0:
+                    
                     ed = self._make_epoch_struct()
+                    
                     for tag in self.default_epoch_data.dtype.names:
                         ed[tag] = self.default_epoch_data[tag]
 
@@ -327,10 +329,12 @@ class NGMixer(dict):
         # fill in nbrs data
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
-                if 'nbrs_data' in obs.meta and obs.meta['fit_data'] is not None \
-                        and 'meta_data' in obs.meta:
+                if 'nbrs_data' in obs.meta and obs.meta['nbrs_data'] is not None \
+                        and 'fit_data' in obs.meta and obs.meta['fit_data'] is not None \
+                        and 'meta_data' in obs.meta and obs.meta['flags'] == 0:
                     
                     ed = self._make_nbrs_struct(len(obs.meta['nbrs_data']))                    
+                    
                     for tag in self.default_nbrs_data.dtype.names:
                         ed[tag] = self.default_nbrs_data[tag][0]
 

@@ -9,7 +9,8 @@ from copy import deepcopy
 # local imports
 from .defaults import DEFVAL, NO_ATTEMPT, \
     PSF_FIT_FAILURE, GAL_FIT_FAILURE, \
-    LOW_PSF_FLUX, PSF_FLUX_FIT_FAILURE
+    LOW_PSF_FLUX, PSF_FLUX_FIT_FAILURE, \
+    NBR_HAS_NO_PSF_FIT
 from .fitting import BaseFitter
 from .util import Namer, print_pars
 
@@ -274,25 +275,58 @@ class NGMixBootFitter(BaseFitter):
         
     def _fill_nbrs_data(self,mb_obs_list):
         nd = len(mb_obs_list.meta['nbrs_ids'])
+        
+        # if no nbrs, return
+        if nd == 0:
+            return
+        
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
-                od = self.get_default_nbrs_data(nd)
-                for i in xrange(nd):
-                    od['nbr_id'][i] = mb_obs_list.meta['nbrs_ids'][i]
-                    od['nbr_flags'][i] = obs.meta['nbrs_flags'][i]
-                    od['nbr_jac_row0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[0][0]
-                    od['nbr_jac_col0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[1][0]
+                # if we use this obs, grab nbrs
+                if obs.meta['flags'] == 0:
+                    od = self.get_default_nbrs_data(nd+1)                
                     
-                    od['nbr_jac_dudrow'][i] = obs.meta['nbrs_jacs'][i].get_dudrow()
-                    od['nbr_jac_dudcol'][i] = obs.meta['nbrs_jacs'][i].get_dudcol()
-
-                    od['nbr_jac_dvdrow'][i] = obs.meta['nbrs_jacs'][i].get_dvdrow()
-                    od['nbr_jac_dvdcol'][i] = obs.meta['nbrs_jacs'][i].get_dvdcol()
+                    # do nbrs
+                    for i in xrange(nd):
+                        od['nbr_id'][i] = mb_obs_list.meta['nbrs_ids'][i]
+                        od['nbr_flags'][i] = obs.meta['nbrs_flags'][i]
                     
-                    if obs.meta['nbrs_psfs'][i].has_gmix():
-                        od['nbr_psf_fit_pars'][i,:] = obs.meta['nbrs_psfs'][i].get_gmix().get_full_pars()
+                        if od['nbrs_flags'][i] == 0 and obs.meta['nbrs_psfs'][i].has_gmix():
+                            od['nbr_jac_row0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[0][0]
+                            od['nbr_jac_col0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[1][0]
+                            
+                            od['nbr_jac_dudrow'][i] = obs.meta['nbrs_jacs'][i].get_dudrow()
+                            od['nbr_jac_dudcol'][i] = obs.meta['nbrs_jacs'][i].get_dudcol()
+                            
+                            od['nbr_jac_dvdrow'][i] = obs.meta['nbrs_jacs'][i].get_dvdrow()
+                            od['nbr_jac_dvdcol'][i] = obs.meta['nbrs_jacs'][i].get_dvdcol()
+                            
+                            od['nbr_psf_fit_pars'][i,:] = obs.meta['nbrs_psfs'][i].get_gmix().get_full_pars()
+                        else:
+                            od['nbrs_flags'][i] |= NBR_HAS_NO_PSF_FIT
                         
-                obs.update_meta_data({'nbrs_data':od})
+                    # add in cen as "nbr" of self
+                    i = nd
+                    od['nbr_id'][i] = mb_obs_list.meta['id']
+                    
+                    jac = obs.get_jacobian()
+                    od['nbr_jac_row0'][i] = jac.get_cen()[0][0]
+                    od['nbr_jac_col0'][i] = jac.get_cen()[1][0]                    
+                    od['nbr_jac_dudrow'][i] = jac.get_dudrow()
+                    od['nbr_jac_dudcol'][i] = jac.get_dudcol()                    
+                    od['nbr_jac_dvdrow'][i] = jac.get_dvdrow()
+                    od['nbr_jac_dvdcol'][i] = jac.get_dvdcol()                    
+
+                    if obs.has_psf_gmix():
+                        flags = 0
+                        od['nbr_psf_fit_pars'][i,:] = obs.get_psf_gmix().get_full_pars()
+                    else:
+                        flags |= NBR_HAS_NO_PSF_FIT
+                        
+                    od['nbrs_flags'][i] = flags                
+                    
+                    # add to metadata
+                    obs.update_meta_data({'nbrs_data':od})
 
     def _render_single(self,model,band,obs,pars_tag,fit_data,psf_gmix,jac,coadd):
         """

@@ -43,6 +43,9 @@ MOF_FOFMEM_SKIPPED_IN_CONV_CHECK = 2**7
 MOF_NOT_CONVERGED                = 2**8
 MOF_SKIPPED_IN_CONV_CHECK        = 2**9
 
+# flags used in output of nbrs_data
+NBR_HAS_NO_PSF_FIT               = 2**30
+
 ################################
 # defaults
 DEFVAL = -9999
