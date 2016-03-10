@@ -197,6 +197,9 @@ class NGMixBootFitter(BaseFitter):
 
         self._fill_nimage_used(mb_obs_list,boot.mb_obs_list,coadd)
 
+        if self['model_nbrs']:
+            self._fill_nbrs_data(mb_obs_list)
+
         return fit_flags
 
     def _guess_and_run_boot(self,model,new_mb_obs_list,coadd,nbrs_fit_data=None):
@@ -268,6 +271,28 @@ class NGMixBootFitter(BaseFitter):
             return self._run_boot(model,new_mb_obs_list,coadd,
                                   guess=guess,
                                   guess_widths=guess_errs)
+        
+    def _fill_nbrs_data(self,mb_obs_list):
+        nd = len(mb_obs_list.meta['nbrs_ids'])
+        for band,obs_list in enumerate(mb_obs_list):
+            for obs in obs_list:
+                od = self.get_default_nbrs_data(nd)
+                for i in xrange(nd):
+                    od['nbr_id'][i] = mb_obs_list.meta['nbrs_ids'][i]
+                    od['nbr_flags'][i] = obs.meta['nbrs_flags'][i]
+                    od['nbr_jac_row0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[0][0]
+                    od['nbr_jac_col0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[1][0]
+                    
+                    od['nbr_jac_dudrow'][i] = obs.meta['nbrs_jacs'][i].get_dudrow()
+                    od['nbr_jac_dudcol'][i] = obs.meta['nbrs_jacs'][i].get_dudcol()
+
+                    od['nbr_jac_dvdrow'][i] = obs.meta['nbrs_jacs'][i].get_dvdrow()
+                    od['nbr_jac_dvdcol'][i] = obs.meta['nbrs_jacs'][i].get_dvdcol()
+                    
+                    if obs.meta['nbrs_psfs'][i].has_gmix():
+                        od['nbr_psf_fit_pars'][i,:] = obs.meta['nbrs_psfs'][i].get_gmix().get_full_pars()
+                        
+                obs.update_meta_data({'nbrs_data':od})
 
     def _render_single(self,model,band,obs,pars_tag,fit_data,psf_gmix,jac,coadd):
         """
@@ -1155,6 +1180,31 @@ class NGMixBootFitter(BaseFitter):
 
     def get_default_epoch_fit_data(self):
         d = self._make_epoch_struct()
+        return d
+
+    def get_nbrs_data_dtype(self):
+        npars = self.get_num_pars_psf()
+        dt = [('nbr_id','i8'),
+              ('nbr_flags','i4'),
+              ('nbr_jac_row0','f8'),
+              ('nbr_jac_col0','f8'),
+              ('nbr_jac_dudrow','f8'),
+              ('nbr_jac_dudcol','f8'),
+              ('nbr_jac_dvdrow','f8'),
+              ('nbr_jac_dvdcol','f8'),
+              ('nbr_psf_fit_pars','f8',(npars,)),
+              ]
+        
+        return dt
+        
+    def get_default_nbrs_data(self,n=1):
+        dt = self.get_nbrs_data_dtype()
+        d = numpy.zeros(n,dtype=dt)
+
+        for tag in d.dtype.names:
+            d[tag] = DEFVAL
+        d['nbr_flags'] = 0
+
         return d
 
 class MaxNGMixBootFitter(NGMixBootFitter):
