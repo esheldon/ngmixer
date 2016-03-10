@@ -255,6 +255,9 @@ class RenderNGmixNbrs(object):
             if len(qq) != 0:
                 return cen_ind,[],self.fit_data[fit_inds]
             fit_inds.append(qq[0])            
+
+        # doing fit data
+        fit_data = self.fit_data[fit_inds]
         
         # build flag, psf and jacobian lists
         nbrs_flags = []
@@ -276,8 +279,6 @@ class RenderNGmixNbrs(object):
                 nbrs_jac.append(None)
                 nbrs_psf_gmixes.append(None)
         
-        fit_data = self.fit_data[fit_inds]
-
         return cen_ind, cen_flags, cen_psf_gmix, cen_jac, nbrs_inds, nbrs_flags, nbrs_psf_gmixes, nbrs_jacs, fit_data
 
     @staticmethod
