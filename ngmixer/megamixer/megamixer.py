@@ -80,6 +80,9 @@ class BaseNGMegaMixer(dict):
         # ngmix config
         files['ngmix_config'] = self._get_ngmix_config() 
         
+        # nbrs config
+        files['nbrs_config'] = self._get_nbrs_config()
+
         return files
 
     def _set_output_files(self,files):
@@ -97,6 +100,8 @@ class BaseNGMegaMixer(dict):
             
         files['work_output_dir'] = os.path.join(files['main_output_dir'],
                                                 'work')
+
+        files['run_output_dir'] = os.path.join(odir,self['run'])
             
     def _get_ngmix_config(self):
         if 'NGMIXER_CONFIG_DIR' in os.environ:
@@ -111,7 +116,64 @@ class BaseNGMegaMixer(dict):
             ngmix_conf = 'ngmix-'+self['run']+'.yaml'
             
         return ngmix_conf
+
+    def _get_nbrs_config(self):
+        assert 'nbrs_config' in self or 'nbrs_version' in self,"nbrs_config or nbrs_version must be given to build nbrs files!"
+        if 'nbrs_version' in self and 'NGMIXER_CONFIG_DIR' in os.environ:
+            conf = os.path.join(os.environ['NGMIXER_CONFIG_DIR'],
+                                'nbrs_config',
+                                'nbrs-'+self['nbrs_version']+'.yaml')
+            conf = os.path.expandvars(conf)
+            conf = conf.replace(os.environ['NGMIXER_CONFIG_DIR'],'${NGMIXER_CONFIG_DIR}')
+        elif 'nbrs_config' in self:
+            conf = self['ngmix_config']
+        else:
+            conf = 'nbrs-'+self['nbrs_version']+'.yaml'
+
+        return conf
+
+    def setup_nbrs_coadd_tile(self,coadd_tile):
+        print("setting up nbrs for tile '%s'" % coadd_tile)
+        files = self.get_files(coadd_tile)
+        self.make_output_dirs(files,[])
+        os.system('cp %s %s' % (files['nbrs_config'],os.path.join(files['work_output_dir'],'.')))
+        self.write_nbrs_script(files)
+        self.write_nbrs_job_script(files)
+    
+    def write_nbrs_script(self,files):
+        fmt="""#!/bin/bash
+config={nbrs_config}
+obase={base_name}
+lfile=$obase".log"
+meds_file={tile}
+
+# call with -u to avoid buffering
+cmd="`which {cmd}` \
+ $config $meds_file"
+
+echo $cmd
+python -u $cmd &> $lfile
+
+"""
+        args = {}
+        args['nbrs_config'] = files['nbrs_config']
+        args['base_name'] = '%s-nbrs' % files['coadd_tile']
+        args['tile'] = files['meds_files'][0]
+        args['cmd'] = 'ngmixer-meds-make-nbrs-data'
         
+        scr = fmt.format(**args)
+        
+        scr_name = os.path.join(files['work_output_dir'],'runnbrs.sh')
+        with open(scr_name,'w') as fp:
+            fp.write(scr)
+
+        os.system('chmod 755 %s' % scr_name)        
+    
+    def run_nbrs_coadd_tile(self,coadd_tile):
+        print("running nbrs for tile '%s'" % coadd_tile)
+        files = self.get_files(coadd_tile)
+        self.run_nbrs(files)
+
     def get_chunk_output_dir(self,files,chunk,rng):
         return os.path.join(files['work_output_dir'], \
                             'chunk%05d_%d_%d' % (chunk,rng[0],rng[1]))
@@ -411,6 +473,28 @@ python -u $cmd &> $lfile
         """
         raise NotImplementedError("run_chunk method of BaseNGMegaMixer must be defined in subclass.")
 
+    def write_nbrs_job_script(self,files):
+        """
+        method that writes a script to run the runnbrs.sh script
+
+        The script must run the extra cmds in the file in self['extra_cmds'],
+        if this file exists, and then run 'runnbrs.sh'.
+
+        The script should assume it is in the same working dir as runnbrs.sh.
+
+        See the example below.
+        """
+        raise NotImplementedError
+
+    def run_nbrs(self,files):
+        """
+        This method must make some sort of system call to actually submit the nbrs job to a queue
+        or to run it on the local node.
+
+        See the example below.
+        """
+        raise NotImplementedError("run_nbrs method of BaseNGMegaMixer must be defined in subclass.")
+
 class NGMegaMixer(BaseNGMegaMixer):
     def write_job_script(self,files,i,rng):
         fname = os.path.join(self.get_chunk_output_dir(files,i,rng),'job.sh')
@@ -434,3 +518,26 @@ class NGMegaMixer(BaseNGMegaMixer):
     def run_chunk(self,files,chunk,rng):
         dr = self.get_chunk_output_dir(files,chunk,rng)
         os.system('cd %s && ./job.sh && cd -' % dr)
+
+    def write_nbrs_job_script(self,files):
+        fname = os.path.join(files['work_output_dir'],'jobnbrs.sh')
+
+        if len(self['extra_cmds']) > 0:
+            with open(self['extra_cmds'],'r') as f:
+                ec = f.readlines()
+            ec = '\n'.join([e.strip() for e in ec])
+        else:
+            ec = ''
+
+        with open(fname,'w') as fp:
+            fp.write("""#!/bin/bash
+{extracmds}
+./runnbrs.sh
+
+""".format(extracmds=ec))
+
+        os.system('chmod 755 %s' % fname)
+
+    def run_nbrs(self,files):
+        dr = files['work_output_dir']
+        os.system('cd %s && ./jobnbrs.sh && cd -' % dr)

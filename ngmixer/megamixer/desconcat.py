@@ -113,7 +113,7 @@ class DESConcat(Concat):
         epoch_data = numpy.zeros(epoch_data0.size, dtype=dt)
         for nm in epoch_data0.dtype.names:
             if nm in epoch_data.dtype.names:
-                epoch_data0[nm] = epoch_data[nm]
+                epoch_data[nm] = epoch_data0[nm]
 
         for band_num in xrange(self.nbands):
             w,=numpy.where(epoch_data['band_num'] == band_num)

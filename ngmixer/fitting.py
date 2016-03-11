@@ -77,6 +77,20 @@ class BaseFitter(dict):
         """
         raise NotImplementedError("get_default_epoch_fit_data method of BaseFitter must be defined in subclass.")
 
+    def get_nbrs_data_dtype(self):
+        """
+        returns a numpy dtype for the galaxy per epoch nbrs data as a list
+        For example
+            return [('x','f8'),('y','f8')]
+        """
+        raise NotImplementedError("get_nbrs_data_dtype method of BaseFitter must be defined in subclass.")
+
+    def get_default_nbrs_data(self):
+        """
+        returns a default line in the per galaxy epoch nbrs data
+        """
+        raise NotImplementedError("get_default_nbrs_data method of BaseFitter must be defined in subclass.")
+
     def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True,nbrs_fit_data=None,make_plots=False):
         """
         do fit of single obs list
@@ -127,6 +141,10 @@ class BaseFitter(dict):
 
             obs.image_orig
             obs.weight_orig
+
+        Any meta data (like PSF models or WCS jacobians) for the nbrs should be set in the nbrs_data field of
+        the meta data of each obs in the mb_obs_list. This field is a numpy array of dtype returned by 
+        'get_nbrs_data_dtype'.
 
         """
         raise NotImplementedError("__call__ method of BaseFitter must be defined in subclass.")

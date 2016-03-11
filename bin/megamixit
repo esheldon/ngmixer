@@ -52,7 +52,8 @@ parser.add_option("--seed", default=None,type=int,
                   help=("random seed to make seeds for jobs"))
 
 from ngmixer.megamixer import NGMegaMixer
-from ngmixer.megamixer import SLACNGMegaMixer
+from ngmixer.megamixer import SLACNGMegaMixer,SLACArrayNGMegaMixer
+from ngmixer.megamixer import CakeNGMegaMixer
 import ngmixer
 
 if __name__ == '__main__':
@@ -67,6 +68,10 @@ if __name__ == '__main__':
         MMixer = NGMegaMixer
     elif options.system == 'slac':
         MMixer = SLACNGMegaMixer
+    elif options.system == 'slac-array':
+        MMixer = SLACArrayNGMegaMixer
+    elif options.system == 'cake':
+        MMixer = CakeNGMegaMixer
     else:
         raise ValueError("system %s not supported!" % options.system)
 
@@ -138,5 +143,9 @@ if __name__ == '__main__':
                                  blind=not options.noblind,
                                  clobber=options.clobber,
                                  skip_errors=options.skip_errors)            
+        elif cmd == 'setup_nbrs':
+            ngmm.setup_nbrs_coadd_tile(coadd_run)
+        elif cmd == 'run_nbrs':
+            ngmm.run_nbrs_coadd_tile(coadd_run)
         else:
             raise ValueError("cmd %s not valid!" % cmd)

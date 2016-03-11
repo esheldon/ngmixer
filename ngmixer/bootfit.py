@@ -231,7 +231,10 @@ class NGMixBootFitter(BaseFitter):
                 w, = numpy.where(guess_errs < 0.0)
                 if w.size > 0:
                     guess_errs[w[:]] = 0.0
-
+                    
+                # take sqrt
+                guess_errs = numpy.sqrt(guess_errs)*scale
+                    
                 # get pars to scale by
                 # don't divide by zero! - if zero set to 0.1 (default val in ngmix)
                 w, = numpy.where(guess == 0.0)
@@ -241,7 +244,7 @@ class NGMixBootFitter(BaseFitter):
                 w = numpy.arange(4,guess.size,1)
 
                 # final equation - need sqrt then apply scale and then divide by pars
-                guess_errs[w[:]] = numpy.sqrt(guess_errs[w])*scale/numpy.abs(guess_scale[w])
+                guess_errs[w[:]] = guess_errs[w]/numpy.abs(guess_scale[w])
                 
                 # don't guess to wide for the shear
                 if guess_errs[2] > 0.1:
