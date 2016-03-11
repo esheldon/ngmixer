@@ -47,11 +47,11 @@ class RenderNGmixNbrs(object):
     model = 'cm' # cmodel fit
     object_segmap = ... # object seg map obtained from MEDS via 
                         #  interpolating coadd seg onto single epoch
-    cen_img, nbrs_imgs, nbrs_masks = renderer.render_nbrs(coadd_object_id,
-                                                          meds_cutout_index,
-                                                          object_segmap,
-                                                          model,
-                                                          band)
+    cen_img, nbrs_imgs, nbrs_masks, pixel_scale = renderer.render_nbrs(coadd_object_id,
+                                                                       meds_cutout_index,
+                                                                       object_segmap,
+                                                                       model,
+                                                                       band)
                                          
     # you can do things like add the images up (and AND the masks)
     nbrs_img = numpy.zeros(object_seg.shape,dtype='f8')
@@ -65,12 +65,12 @@ class RenderNGmixNbrs(object):
             nbr_mask *= msk 
 
     # you can also have the code do this for you by sending total=True
-    cen_img, nbrs_img, nbr_mask = renderer.render_nbrs(coadd_object_id,
-                                                       meds_cutout_index,
-                                                       object_segmap,
-                                                       model,
-                                                       band,
-                                                       total=True)
+    cen_img, nbrs_img, nbr_mask, pixel_scale = renderer.render_nbrs(coadd_object_id,
+                                                                    meds_cutout_index,
+                                                                    object_segmap,
+                                                                    model,
+                                                                    band,
+                                                                    total=True)
     
     Parameters
     ----------
@@ -103,8 +103,8 @@ class RenderNGmixNbrs(object):
                     segmap,
                     model,
                     band,
-                    total=False,
                     unmodeled_nbrs_masking_type='nbrs-seg',
+                    total=False,                    
                     verbose=True):
         """
         render nbr images for a given object
@@ -117,6 +117,7 @@ class RenderNGmixNbrs(object):
             method 'interpolate_coadd_seg')
         model: string with ngmix model to render (e.g., 'cm' for cmodel fits)
         band: integer gigivng band (e.g., 0 for g with griz MOF)
+        unmodeled_nbrs_masking_type: string indicating which type of masking to use (default: 'nbrs-seg')
         
         Optional Parameters
         -------------------
@@ -130,7 +131,7 @@ class RenderNGmixNbrs(object):
         nbr_masks: list of nbrs masks, if any nbr does not have an image in nbr_imgs, then its pixels 
             to be masked (according to unmodeled_nbrs_masking_type, see _mask_nbrs_seg) are set to 0 
             in this array, othwerwise this array is all ones
-        unmodeled_nbrs_masking_type: string indicating which type of masking to use (default: 'nbrs-seg')
+        pixel_scale: the pixel scale of the jacobian associated with the central image
             
         If total=True is sent, then nbr_imgs is just a single image and nbr_masks is just a single array.
         
@@ -140,7 +141,10 @@ class RenderNGmixNbrs(object):
         res = self._get_nbrs_data(cen_id,band,cutout_index)
         if res is None:
             return None
-        cen_ind, cen_flags, cen_psf_gmix, cen_jac, nbrs_inds, nbrs_flags, nbrs_psf_gmixes, nbrs_jacs, fit_data = res
+    
+        cen_ind, cen_flags, cen_psf_gmix, cen_jac, \
+            nbrs_inds, nbrs_flags, nbrs_psf_gmixes, nbrs_jacs, \
+            fit_data, pixel_scale = res
         
         pars_tag = '%s_max_pars' % model
         fit_flags_tag = '%s_max_flags' % model
@@ -162,23 +166,24 @@ class RenderNGmixNbrs(object):
                                 unmodeled_nbrs_masking_type=unmodeled_nbrs_masking_type,
                                 verbose=verbose,
                                 fracdev_tag=fracdev_tag,TdByTe_tag=TdByTe_tag)
-        
-        if total:
-            cen_img, nbrs_imgs, nbrs_masks = res
-            
+        if res is None:
+            return None
+ 
+        cen_img, nbrs_imgs, nbrs_masks = res       
+        if total:            
             nbrs_img = numpy.zeros(img_shape,dtype='f8')
             for img in nbrs_imgs:
                 if img is not None:
                     nbrs_img += img
     
-            nbr_mask = numpy.ones(img_shape,dtype='f8')
+            nbrs_mask = numpy.ones(img_shape,dtype='f8')
             for msk in nbrs_masks:
                 if msk is not None:
-                    nbr_mask *= msk 
+                    nbrs_mask *= msk 
                     
-            return cen_img, nbr_img, nbr_mask
+            return cen_img, nbrs_img, nbrs_mask, pixel_scale
         else:
-            return res
+            return cen_img, nbrs_imgs, nbrs_masks, pixel_scale
         
     def _get_nbrs_data(self,cen_id,band,cutout_index):
         """
@@ -201,6 +206,7 @@ class RenderNGmixNbrs(object):
         nbrs_psf_gmixes: a list of ngmix GMixes of the PSF models for the nbrs
         nbrs_jacs: a list of ngmix Jacobians for the nbrs
         fit_data: entries of input fit_data corresponding to cen_ind and nbrs_inds
+        pixel_scale: the pixel_scale of the jacobian associated with the image
         
         will return None if thete is an error or if not all quantities are found
         """
@@ -210,14 +216,14 @@ class RenderNGmixNbrs(object):
         # get cen stuff
         q, = numpy.where(self.fit_data['id'] == cen_id)
         if len(q) != 1:
-            return None        
+            return None
         
         cen_ind = 0        
         fit_inds.append(q[0])
         
         q, = numpy.where((self.nbrs_data['id'] == cen_id) 
                          & (self.nbrs_data['nbr_id'] == cen_id) 
-                         & (self.nbrs_data['band'] == band) 
+                         & (self.nbrs_data['band_num'] == band) 
                          & (self.nbrs_data['cutout_index'] == cutout_index))
         if len(q) != 1:
             return None
@@ -236,10 +242,12 @@ class RenderNGmixNbrs(object):
             cen_psf_gmix = None
             cen_jac = None
 
+        pixel_scale = self.nbrs_data['pixel_scale'][ind]
+            
         # get nbr ids
         q, = numpy.where((self.nbrs_data['id'] == cen_id) 
                          & (self.nbrs_data['nbr_id'] != cen_id) 
-                         & (self.nbrs_data['band'] == band) 
+                         & (self.nbrs_data['band_num'] == band) 
                          & (self.nbrs_data['cutout_index'] == cutout_index))
         if len(q) == 0:
             return None
@@ -252,8 +260,8 @@ class RenderNGmixNbrs(object):
         # find location of nbrs in fit_data
         for nbr_id in self.nbrs_data['nbr_id'][q]:
             qq, = numpy.where(self.fit_data['id'] == nbr_id)
-            if len(qq) != 0:
-                return cen_ind,[],self.fit_data[fit_inds]
+            if len(qq) != 1:
+                return None
             fit_inds.append(qq[0])            
 
         # doing fit data
@@ -268,18 +276,20 @@ class RenderNGmixNbrs(object):
             nbrs_flags.append(self.nbrs_data['nbr_flags'][ind])
             
             if nbrs_flags[-1] == 0:
-                nbrs_jac.append(Jacobian(self.nbrs_data['nbr_jac_row0'][ind],
-                                         self.nbrs_data['nbr_jac_col0'][ind],
-                                         self.nbrs_data['nbr_jac_dudrow'][ind],
-                                         self.nbrs_data['nbr_jac_dudcol'][ind],
-                                         self.nbrs_data['nbr_jac_dvdrow'][ind],
-                                         self.nbrs_data['nbr_jac_dvdcol'][ind]))
+                nbrs_jacs.append(Jacobian(self.nbrs_data['nbr_jac_row0'][ind],
+                                          self.nbrs_data['nbr_jac_col0'][ind],
+                                          self.nbrs_data['nbr_jac_dudrow'][ind],
+                                          self.nbrs_data['nbr_jac_dudcol'][ind],
+                                          self.nbrs_data['nbr_jac_dvdrow'][ind],
+                                          self.nbrs_data['nbr_jac_dvdcol'][ind]))
                 nbrs_psf_gmixes.append(GMix(pars=self.nbrs_data['nbr_psf_fit_pars'][ind,:]))
             else:
                 nbrs_jac.append(None)
                 nbrs_psf_gmixes.append(None)
         
-        return cen_ind, cen_flags, cen_psf_gmix, cen_jac, nbrs_inds, nbrs_flags, nbrs_psf_gmixes, nbrs_jacs, fit_data
+        return cen_ind, cen_flags, cen_psf_gmix, cen_jac, \
+            nbrs_inds, nbrs_flags, nbrs_psf_gmixes, nbrs_jacs, \
+            fit_data, pixel_scale
 
     @staticmethod
     def _render_nbrs(model, band, img_shape,
