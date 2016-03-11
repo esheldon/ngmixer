@@ -396,10 +396,10 @@ class RenderNGmixNbrs(object):
                     print('        masked nbr: %d' % (nbr_ind+1))
                     
                 msk = numpy.ones(img_shape)
-                RenderNGmixNbrs._mask_nbr(cen_seg,
-                                          nbrs_fit_data['number'][nbr_ind],
-                                          msk,
-                                          unmodeled_nbrs_masking_type=unmodeled_nbrs_masking_type)
+                RenderNGmixNbrs._mask_nbr_seg(cen_seg,
+                                              nbrs_fit_data['number'][nbr_ind],
+                                              msk,
+                                              unmodeled_nbrs_masking_type=unmodeled_nbrs_masking_type)
                 nbrs_imgs.append(None)
                 nbrs_masks.append(msk)
                 
@@ -486,7 +486,7 @@ class RenderNGmixNbrs(object):
         """
 
         if unmodeled_nbrs_masking_type == 'nbrs-seg':
-            q = numpy.where(seg == nbrs_number)
+            q = numpy.where(seg == nbr_number)
             if q[0].size > 0:
                 masked_pix[q] = 0
         else:

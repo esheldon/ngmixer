@@ -606,15 +606,16 @@ class NGMixBootFitter(BaseFitter):
                 # now do nbrs
                 nbrsim = numpy.zeros_like(cenim)
                 for curr_nbrsim in nbrs_imgs:
-                    nbrsim += curr_nbrsim
+                    if curr_nbrsim is not None:
+                        nbrsim += curr_nbrsim
                         
-                    if self['intr_prof_var_fac'] > 0.0:
-                        varim += self['intr_prof_var_fac']*curr_nbrsim*curr_nbrsim
+                        if self['intr_prof_var_fac'] > 0.0:
+                            varim += self['intr_prof_var_fac']*curr_nbrsim*curr_nbrsim
 
                 masked_pix = numpy.zeros_like(cenim)
                 masked_pix[:,:] = 1.0
                 for msk in nbrs_masks:
-                    if msk != None:
+                    if msk is not None:
                         masked_pix *= msk
                             
                 # get total image and adjust central if needed
