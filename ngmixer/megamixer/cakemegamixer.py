@@ -8,7 +8,12 @@ import glob
 from ..files import read_yaml
 
 from .megamixer import NGMegaMixer
-import cake
+
+# It is unlikely the user has cake installed
+try:
+    import cake
+except:
+    pass
 
 class CakeNGMegaMixer(NGMegaMixer):
     def setup_coadd_tile(self,coadd_tile):
