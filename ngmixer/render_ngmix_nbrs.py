@@ -354,7 +354,7 @@ class RenderNGmixNbrs(object):
             cen_img = None
 
             if verbose:
-                print('    central not rendered')
+                print('        central not rendered')
                 if (nbrs_fit_data[fit_flags_tag][cen_ind] != 0
                     or (nbrs_fit_data['flags'][cen_ind] & GAL_FIT_FAILURE) != 0):
                     print('        bad fit data for central: FoF obj = %d' % (cen_ind+1))
@@ -373,7 +373,7 @@ class RenderNGmixNbrs(object):
         nbrs_masks = []
         for nbr_ind,nbr_flags,nbr_psf_gmix,nbr_jac in zip(nbrs_inds,
                                                           nbrs_flags,
-                                                          nbrs_psfs,
+                                                          nbrs_psf_gmixes,
                                                           nbrs_jacs):
             if (nbr_flags == 0
                 and nbrs_fit_data[fit_flags_tag][nbr_ind] == 0
@@ -385,7 +385,7 @@ class RenderNGmixNbrs(object):
                 
                 curr_nbrsim = RenderNGmixNbrs._render_single(model, band, img_shape,
                                                              pars_tag, 
-                                                             nbrs_fit_data[nbr_ind:nbr_ind+1]
+                                                             nbrs_fit_data[nbr_ind:nbr_ind+1],
                                                              nbr_psf_gmix, nbr_jac,
                                                              fracdev_tag=fracdev_tag, TdByTe_tag=TdByTe_tag)
                 nbrs_imgs.append(curr_nbrsim)
