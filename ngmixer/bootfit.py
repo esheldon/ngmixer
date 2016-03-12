@@ -646,11 +646,11 @@ class NGMixBootFitter(BaseFitter):
                 obs.weight = new_weight
                     
                 if self['make_plots']:
-                    self._plot_nbrs_model(band,model,obs,totim,cenim,coadd)
+                    self._plot_nbrs_model(band,model,obs,nbrsim,cenim,coadd)
 
     _render_nbrs = _render_nbrs_new
 
-    def _plot_nbrs_model(self,band,model,obs,totim,cenim,coadd):
+    def _plot_nbrs_model(self,band,model,obs,nbrsim,cenim,coadd):
         """
         plot nbrs model
         """
@@ -681,7 +681,9 @@ class NGMixBootFitter(BaseFitter):
             return seg_new
 
         icut_cen = obs.meta['icut']
-
+        
+        totim = nbrsim + cenim
+        
         import images
         import biggles
         width = 1920
@@ -692,7 +694,7 @@ class NGMixBootFitter(BaseFitter):
         tab.title = title
 
         tab[0,0] = images.view(obs.image_orig,title='original image',show=False,nonlinear=0.075)
-        tab[0,1] = images.view(totim-cenim,title='models of nbrs',show=False,nonlinear=0.075)
+        tab[0,1] = images.view(nbrsim,title='models of nbrs',show=False,nonlinear=0.075)
 
         tab[0,2] = images.view(plot_seg(obs.seg),title='seg map',show=False)
 
@@ -713,6 +715,30 @@ class NGMixBootFitter(BaseFitter):
         except:
             print("        caught error plotting nbrs")
             pass
+
+        # for testing
+        if False:
+            import fitsio
+            if icut_cen > 0:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d.fits' % (ptype,band,icut_cen))
+            else:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd.fits' % (ptype,band))
+            print("        making file %s" % fname)
+            fitsio.write(fname,obs.image,clobber=True)
+
+            if icut_cen > 0:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d-nbrs.fits' % (ptype,band,icut_cen))
+            else:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd-nbrs.fits' % (ptype,band))
+            print("        making file %s" % fname)
+            fitsio.write(fname,nbrsim,clobber=True)
+
+            if icut_cen > 0:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d-cen.fits' % (ptype,band,icut_cen))
+            else:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd-cen.fits' % (ptype,band))
+            print("        making file %s" % fname)
+            fitsio.write(fname,cenim,clobber=True)
 
     def _fill_epoch_data(self,mb_obs_list,new_mb_obs_list):
         print('    filling PSF data')
