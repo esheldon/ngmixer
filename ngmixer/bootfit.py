@@ -728,6 +728,11 @@ class NGMixBootFitter(BaseFitter):
                       fit_pars=psf_pars,
                       norm_key='psf_norm')
 
+        # check for no obs in a band if PSF fit fails
+        for band,obs_list in enumerate(boot.mb_obs_list):
+            if len(obs_list) == 0:
+                raise BootPSFFailure("psf fitting failed - band %d has no obs" % band)
+
         if (self['make_plots']
             and (('made_psf_plots' not in self.mb_obs_list.meta) or
                  ('made_psf_plots' in self.mb_obs_list.meta and
