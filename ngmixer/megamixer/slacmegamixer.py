@@ -14,6 +14,9 @@ class SLACNGMegaMixer(NGMegaMixer):
         super(SLACNGMegaMixer,self).__init__(*args,**kwargs)
         self['queue'] = self.get('queue','medium')
 
+    def get_tmp_dir(self):
+        return '${TMPDIR}'
+
     def write_job_script(self,files,i,rng):
         fname = os.path.join(self.get_chunk_output_dir(files,i,rng),'job.sh')
         jobname = self.get_chunk_output_basename(files,self['run'],rng)
@@ -35,6 +38,7 @@ class SLACNGMegaMixer(NGMegaMixer):
 #BSUB -W 48:00
 
 {extracmds}
+export TMPDIR=/scratch/${USER}/${LSB_JOBID}
 ./runchunk.sh
 
 """.format(extracmds=ec,jobname=jobname))
@@ -66,6 +70,7 @@ class SLACNGMegaMixer(NGMegaMixer):
 #BSUB -W 48:00
 
 {extracmds}
+export TMPDIR=/scratch/${USER}/${LSB_JOBID}
 ./runnbrs.sh
 
 """.format(extracmds=ec,jobname=jobname))
@@ -172,6 +177,7 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
                          "#BSUB -W 48:00\n"
                          "\n"
                          "{extracmds}\n"
+                         "export TMPDIR=/scratch/${USER}/${LSB_JOBID}\n"
                          "./runarray.py $LSB_JOBINDEX\n"
                          "\n"
                          .format(extracmds=ec,

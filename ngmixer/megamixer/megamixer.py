@@ -224,6 +224,9 @@ python -u $cmd &> $lfile
         if len(self['extra_cmds']) > 0:
             os.system('cp %s %s' % (self['extra_cmds'],os.path.join(wdir,'.')))
 
+    def get_tmp_dir(self):
+        return '`mktemp -d /tmp/XXXXXXXXXX`'
+
     def make_scripts(self,files,fof_ranges):
         os.system('cp %s %s' % (files['ngmix_config'],os.path.join(files['work_output_dir'],'.')))
 
@@ -253,6 +256,8 @@ cmd="`which {cmd}` \
 
 echo $cmd
 python -u $cmd &> $lfile
+
+rm -rf $tmpdir
 
 """
         args = {}
@@ -447,9 +452,6 @@ python -u $cmd &> $lfile
         except:
             print("failed to link tile '%s'" % coadd_tile)
         
-    def get_tmp_dir(self):
-        return '`mktemp -d /tmp/XXXXXXXXXX`'
-
     def write_job_script(self,files,i,rng):
         """
         method that writes a script to run the runchunk.sh script
