@@ -27,7 +27,6 @@ class SLACNGMegaMixer(NGMegaMixer):
 
         with open(fname,'w') as fp:
             fp.write("""#!/bin/bash
-#BSUB -q {queue}
 #BSUB -J {jobname}
 #BSUB -oo ./{jobname}.oe
 #BSUB -R "linux64 && rhel60 && scratch > 2"
@@ -38,13 +37,13 @@ class SLACNGMegaMixer(NGMegaMixer):
 {extracmds}
 ./runchunk.sh
 
-""".format(extracmds=ec,queue=self['queue'],jobname=jobname))
+""".format(extracmds=ec,jobname=jobname))
 
         os.system('chmod 755 %s' % fname)
 
     def run_chunk(self,files,chunk,rng):
         dr = self.get_chunk_output_dir(files,chunk,rng)
-        os.system('cd %s && bsub < job.sh && cd -' % dr)
+        os.system('cd %s && bsub -q %s < job.sh && cd -' % (dr,self['queue']))
 
     def write_nbrs_job_script(self,files):
         fname = os.path.join(files['work_output_dir'],'jobnbrs.sh')
@@ -59,7 +58,6 @@ class SLACNGMegaMixer(NGMegaMixer):
 
         with open(fname,'w') as fp:
             fp.write("""#!/bin/bash
-#BSUB -q {queue}
 #BSUB -J {jobname}
 #BSUB -oo ./{jobname}.oe
 #BSUB -R "linux64 && rhel60 && scratch > 2"
@@ -70,13 +68,13 @@ class SLACNGMegaMixer(NGMegaMixer):
 {extracmds}
 ./runnbrs.sh
 
-""".format(extracmds=ec,queue=self['queue'],jobname=jobname))
+""".format(extracmds=ec,jobname=jobname))
 
         os.system('chmod 755 %s' % fname)
 
     def run_nbrs(self,files):
         dr = files['work_output_dir']
-        os.system('cd %s && bsub < jobnbrs.sh && cd -' % dr)
+        os.system('cd %s && bsub -q %s < jobnbrs.sh && cd -' % (dr,self['queue']))
 
 class SLACArrayNGMegaMixer(SLACNGMegaMixer):
     def __init__(self,*args,**kwargs):
@@ -167,7 +165,6 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
         
             with open(raname,'w') as fp:
                 fp.write("#!/bin/bash\n"
-                         "#BSUB -q {queue}\n"
                          "#BSUB -J {jobnamearr}\n"
                          "#BSUB -oo ./chunk%I/{jobname}.%I.oe\n"
                          "#BSUB -R \"linux64 && rhel60 && scratch > 2\"\n"
@@ -178,11 +175,10 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
                          "./runarray.py $LSB_JOBINDEX\n"
                          "\n"
                          .format(extracmds=ec,
-                                 queue=self['queue'],
                                  jobname=jobname,
                                  jobnamearr=jobnamearr,
                                  odir='array_job_output'))
                 
             os.system('chmod 755 %s' % raname)
             
-            os.system('cd %s && bsub < jobarray.sh && cd -' % files['work_output_dir'])
+            os.system('cd %s && bsub -q %s < jobarray.sh && cd -' % (files['work_output_dir'],self['queue']))
