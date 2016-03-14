@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-    %prog [options] command [run|run_config_file] [coadd_run|release|tile list]
+    %prog [options] command [run|run_config_file] [coadd_run|release|coadd_run_list_file]
     Process the input coadd tile(s) with a given ngmix run
 
     Possible commands are:
@@ -100,6 +100,7 @@ if __name__ == '__main__':
     # get data to process
     coadd_run = args[2]
     if os.path.exists(coadd_run):
+        # this is a list of coadd runs
         coadd_runs = []
         for line in open(coadd_run,'r'):
             if len(line.strip()) > 0:
@@ -107,8 +108,10 @@ if __name__ == '__main__':
 
     else:
         import desdb
+        # if this query gives us something, we got a good release
         coadd_runs = desdb.files.get_release_runs(coadd_run)
         if len(coadd_runs) == 0:
+            # OK, let's assume this was a run
             coadd_runs = [coadd_run]
     
     if options.queue is not None:
