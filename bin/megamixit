@@ -10,7 +10,8 @@
         collate - combine job outputs into a single file
         clean - clean all outputs from a run
         archive - run after collate to delete intermediate files and tar logs
-        link - make symlinks to all final outputs under {run}/output"""
+        link - make symlinks to all final outputs under {run}/output
+        collate-link - collate and link the final outputs"""
 import os
 import sys
 import meds
@@ -138,6 +139,17 @@ if __name__ == '__main__':
             ngmm.archive_coadd_tile(coadd_run,
                                     compress=not options.nocompress)
         elif cmd == 'link':
+            ngmm.link_coadd_tile(coadd_run,
+                                 verify=options.verify,
+                                 blind=not options.noblind,
+                                 clobber=options.clobber,
+                                 skip_errors=options.skip_errors)
+        elif cmd == 'collate-link':
+            ngmm.collate_coadd_tile(coadd_run,
+                                    verify=options.verify,
+                                    blind=not options.noblind,
+                                    clobber=options.clobber,
+                                    skip_errors=options.skip_errors)
             ngmm.link_coadd_tile(coadd_run,
                                  verify=options.verify,
                                  blind=not options.noblind,
