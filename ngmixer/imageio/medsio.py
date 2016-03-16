@@ -308,11 +308,12 @@ class MEDSImageIO(ImageIO):
             # get fiducial location of object in postage stamp
             row = self.meds_list[band]['orig_row'][nbr_mindex,nbr_icut] - cen_obs.meta['orig_start_row']
             col = self.meds_list[band]['orig_col'][nbr_mindex,nbr_icut] - cen_obs.meta['orig_start_col']
-            nbr_jac = Jacobian(row,col,
-                               self.meds_list[band]['dudrow'][nbr_mindex,nbr_icut],
-                               self.meds_list[band]['dudcol'][nbr_mindex,nbr_icut],
-                               self.meds_list[band]['dvdrow'][nbr_mindex,nbr_icut],
-                               self.meds_list[band]['dvdcol'][nbr_mindex,nbr_icut])
+            nbr_jac = Jacobian(row=row,
+                               col=col,
+                               dudrow=self.meds_list[band]['dudrow'][nbr_mindex,nbr_icut],
+                               dudcol=self.meds_list[band]['dudcol'][nbr_mindex,nbr_icut],
+                               dvdrow=self.meds_list[band]['dvdrow'][nbr_mindex,nbr_icut],
+                               dvdcol=self.meds_list[band]['dvdcol'][nbr_mindex,nbr_icut])
             # FIXME - the code below is wrong...I think - commented out for now
             #pixscale = jacob.get_scale()
             #row += pars_obj[0]/pixscale
@@ -647,12 +648,12 @@ class MEDSImageIO(ImageIO):
         Get a Jacobian object for the requested object
         """
         jdict = meds.get_jacobian(mindex, icut)
-        jacob = Jacobian(jdict['row0'],
-                         jdict['col0'],
-                         jdict['dudrow'],
-                         jdict['dudcol'],
-                         jdict['dvdrow'],
-                         jdict['dvdcol'])
+        jacob = Jacobian(row=jdict['row0'],
+                         col=jdict['col0'],
+                         dudrow=jdict['dudrow'],
+                         dudcol=jdict['dudcol'],
+                         dvdrow=jdict['dvdrow'],
+                         dvdcol=jdict['dvdcol'])
         return jacob
 
     def _get_psf_observation(self, band, mindex, icut, image_jacobian):
