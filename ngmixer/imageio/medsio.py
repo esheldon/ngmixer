@@ -318,7 +318,7 @@ class MEDSImageIO(ImageIO):
             #pixscale = jacob.get_scale()
             #row += pars_obj[0]/pixscale
             #col += pars_obj[1]/pixscale
-            #nbr_jac.set_cen(row,col)
+            #nbr_jac.set_cen(row=row,col=col)
 
             return nbr_psf_obs,nbr_jac
         else:
@@ -664,7 +664,7 @@ class MEDSImageIO(ImageIO):
         im, cen, sigma_pix, fname = self._get_psf_image(band, mindex, icut)
 
         psf_jacobian = image_jacobian.copy()
-        psf_jacobian.set_cen(cen[0], cen[1])
+        psf_jacobian.set_cen(row=cen[0], col=cen[1])
 
         psf_obs = Observation(im, jacobian=psf_jacobian)
         psf_obs.filename=fname

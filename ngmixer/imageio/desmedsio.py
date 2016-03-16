@@ -517,7 +517,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
 
         # 2a) now get new Jacobian
         J_nbr = J.copy() # or whatever
-        J_nbr.set_cen(rowcol_nbr[0],rowcol_nbr[1])
+        J_nbr.set_cen(row=rowcol_nbr[0],col=rowcol_nbr[1])
 
         # 3) return it!
         print('        did off-chip nbr %d for cen %d:' % (nbr_ind+1,cen_ind+1))
