@@ -121,8 +121,11 @@ class NGMixer(dict):
 
         def_edata = self.fitter.get_default_epoch_fit_data()
 
-        self.default_data=def_data
-        self.default_epoch_data=def_edata
+        def_ndata = self.fitter.get_default_nbrs_data()
+
+        self.default_data = def_data
+        self.default_epoch_data = def_edata
+        self.default_nbrs_data = def_ndata
 
     def _set_priors(self):
         """
@@ -136,6 +139,9 @@ class NGMixer(dict):
 
     def get_epoch_data(self):
         return numpy.array(self.epoch_data,dtype=self.epoch_data_dtype)
+
+    def get_nbrs_data(self):
+        return numpy.array(self.nbrs_data,dtype=self.nbrs_data_dtype)
 
     def get_file_meta_data(self):
         return self.imageio.get_file_meta_data()
@@ -273,7 +279,7 @@ class NGMixer(dict):
 
         return flags
 
-    def fit_obj(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None,make_epoch_data=True):
+    def fit_obj(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None,make_epoch_data=True,make_nbrs_data=False):
         """
         fit a single object
         """
@@ -284,7 +290,10 @@ class NGMixer(dict):
         flags = self._check_basic_things(coadd_mb_obs_list,mb_obs_list)
 
         if flags == 0:
-            fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data,make_epoch_data=make_epoch_data)
+            fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list,
+                                               nbrs_fit_data=nbrs_fit_data,
+                                               make_epoch_data=make_epoch_data,
+                                               make_nbrs_data=make_nbrs_data)
             flags |= fit_flags
 
         # add in data
@@ -295,14 +304,16 @@ class NGMixer(dict):
         # fill in from mb_obs_meta
         for tag in mb_obs_list.meta['meta_data'].dtype.names:
             self.curr_data[tag][self.curr_data_index] = mb_obs_list.meta['meta_data'][tag][0]
-
+            
     def _fill_epoch_data(self,mb_obs_list):
         # fill in epoch data
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
                 if 'fit_data' in obs.meta and obs.meta['fit_data'] is not None \
-                   and 'meta_data' in obs.meta:
+                   and 'meta_data' in obs.meta and obs.meta['flags'] == 0:
+                    
                     ed = self._make_epoch_struct()
+                    
                     for tag in self.default_epoch_data.dtype.names:
                         ed[tag] = self.default_epoch_data[tag]
 
@@ -314,7 +325,29 @@ class NGMixer(dict):
 
                     self.epoch_data.extend(list(ed))
 
-    def fit_all_obs_lists(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None,make_epoch_data=True):
+    def _fill_nbrs_data(self,mb_obs_list):
+        # fill in nbrs data
+        for band,obs_list in enumerate(mb_obs_list):
+            for obs in obs_list:
+                if 'nbrs_data' in obs.meta and obs.meta['nbrs_data'] is not None \
+                        and 'fit_data' in obs.meta and obs.meta['fit_data'] is not None \
+                        and 'meta_data' in obs.meta and obs.meta['flags'] == 0:
+                    
+                    ed = self._make_nbrs_struct(len(obs.meta['nbrs_data']))                    
+                    
+                    for tag in self.default_nbrs_data.dtype.names:
+                        ed[tag] = self.default_nbrs_data[tag][0]
+
+                    for tag in obs.meta['nbrs_data'].dtype.names:
+                        ed[tag] = obs.meta['nbrs_data'][tag]
+                        
+                    for i in xrange(len(obs.meta['nbrs_data'])):
+                        for tag in obs.meta['meta_data'].dtype.names:
+                            ed[tag][i] = obs.meta['meta_data'][tag][0]
+
+                    self.nbrs_data.extend(list(ed))
+
+    def fit_all_obs_lists(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None,make_epoch_data=True,make_nbrs_data=True):
         """
         fit all obs lists
         """
@@ -329,6 +362,9 @@ class NGMixer(dict):
                 # fill in epoch data
                 if make_epoch_data:
                     self._fill_epoch_data(mb_obs_list)
+                    
+                if make_nbrs_data and self['model_nbrs']:
+                    self._fill_nbrs_data(mb_obs_list)
 
                 # fill in fit data
                 for tag in mb_obs_list.meta['fit_data'].dtype.names:
@@ -351,6 +387,9 @@ class NGMixer(dict):
                 if make_epoch_data:
                     self._fill_epoch_data(coadd_mb_obs_list)
 
+                if make_nbrs_data and self['model_nbrs']:
+                    self._fill_nbrs_data(coadd_mb_obs_list)
+                    
                 # fill in fit data
                 for tag in coadd_mb_obs_list.meta['fit_data'].dtype.names:
                     self.curr_data[tag][self.curr_data_index] = coadd_mb_obs_list.meta['fit_data'][tag][0]
@@ -431,6 +470,8 @@ class NGMixer(dict):
             self.data_dtype = self._get_dtype()
             self.epoch_data = []
             self.epoch_data_dtype = self._get_epoch_dtype()
+            self.nbrs_data = []
+            self.nbrs_data_dtype = self._get_nbrs_dtype()            
 
     def _get_epoch_dtype(self):
         """
@@ -447,6 +488,22 @@ class NGMixer(dict):
         dt = self._get_epoch_dtype()
         epoch_data = numpy.zeros(ncutout, dtype=dt)
         return epoch_data
+
+    def _get_nbrs_dtype(self):
+        """
+        make nbrs dtype
+        """
+        dt = self.imageio.get_epoch_meta_data_dtype()
+        dt += self.fitter.get_nbrs_data_dtype()
+        return dt
+
+    def _make_nbrs_struct(self,ncutout=1):
+        """
+        returns ncutout nbrs structs to be filled
+        """
+        dt = self._get_nbrs_dtype()
+        nbrs_data = numpy.zeros(ncutout, dtype=dt)
+        return nbrs_data
 
     def _get_dtype(self):
         dt = self.imageio.get_meta_data_dtype()
@@ -509,6 +566,9 @@ class NGMixer(dict):
                     if 'epoch_data' in fobj:
                         self.checkpoint_data['epoch_data']=fobj['epoch_data'][:]
 
+                    if 'nbrs_data' in fobj:
+                        self.checkpoint_data['nbrs_data']=fobj['nbrs_data'][:]
+
                     if 'checkpoint_data' in fobj:
                         self.checkpoint_data['checkpoint_data'] = fobj['checkpoint_data'][:]
 
@@ -534,6 +594,16 @@ class NGMixer(dict):
             else:
                 self.epoch_data_dtype = self._get_epoch_dtype()
                 self.epoch_data = []
+
+            # nbrs data
+            if 'nbrs_data' in self.checkpoint_data:
+                self.nbrs_data = self.checkpoint_data['nbrs_data']
+                self.nbrs_data = self.nbrs_data.byteswap().newbyteorder()
+                self.nbrs_data_dtype = self._get_nbrs_dtype()
+                self.nbrs_data = list(self.nbrs_data)
+            else:
+                self.nbrs_data_dtype = self._get_nbrs_dtype()
+                self.nbrs_data = []
 
             # checkpoint data
             rs = cPickle.loads(self.checkpoint_data['checkpoint_data']['random_state'][0])
@@ -595,9 +665,15 @@ class NGMixer(dict):
 
         with StagedOutFile(self.checkpoint_file, tmpdir=self['work_dir']) as sf:
             with fitsio.FITS(sf.path,'rw',clobber=True) as fobj:
+                
                 fobj.write(numpy.array(self.data,dtype=self.data_dtype), extname="model_fits")
+                
                 if len(self.epoch_data) > 0:
                     fobj.write(numpy.array(self.epoch_data,dtype=self.epoch_data_dtype), extname="epoch_data")
+
+                if len(self.nbrs_data) > 0:
+                    fobj.write(numpy.array(self.nbrs_data,dtype=self.nbrs_data_dtype), extname="nbrs_data")
+
                 fobj.write(cd, extname="checkpoint_data")
 
     def cleanup_checkpoint(self):
@@ -625,6 +701,9 @@ class NGMixer(dict):
 
                     if self.epoch_data is not None:
                         fobj.write(self.get_epoch_data(),extname="epoch_data")
+
+                    if self.nbrs_data is not None:
+                        fobj.write(self.get_nbrs_data(),extname="nbrs_data")
 
                     if self.meta is not None:
                         fobj.write(self.meta,extname="meta_data")

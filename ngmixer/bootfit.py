@@ -9,9 +9,11 @@ from copy import deepcopy
 # local imports
 from .defaults import DEFVAL, NO_ATTEMPT, \
     PSF_FIT_FAILURE, GAL_FIT_FAILURE, \
-    LOW_PSF_FLUX, PSF_FLUX_FIT_FAILURE
+    LOW_PSF_FLUX, PSF_FLUX_FIT_FAILURE, \
+    NBR_HAS_NO_PSF_FIT
 from .fitting import BaseFitter
 from .util import Namer, print_pars
+from .render_ngmix_nbrs import RenderNGmixNbrs
 
 # ngmix imports
 import ngmix
@@ -197,6 +199,9 @@ class NGMixBootFitter(BaseFitter):
 
         self._fill_nimage_used(mb_obs_list,boot.mb_obs_list,coadd)
 
+        if self['model_nbrs']:
+            self._fill_nbrs_data(mb_obs_list)
+
         return fit_flags
 
     def _guess_and_run_boot(self,model,new_mb_obs_list,coadd,nbrs_fit_data=None):
@@ -268,6 +273,61 @@ class NGMixBootFitter(BaseFitter):
             return self._run_boot(model,new_mb_obs_list,coadd,
                                   guess=guess,
                                   guess_widths=guess_errs)
+        
+    def _fill_nbrs_data(self,mb_obs_list):
+        nd = len(mb_obs_list.meta['nbrs_ids'])
+        
+        # if no nbrs, return
+        if nd == 0:
+            return
+        
+        for band,obs_list in enumerate(mb_obs_list):
+            for obs in obs_list:
+                # if we use this obs, grab nbrs
+                if obs.meta['flags'] == 0:
+                    od = self.get_default_nbrs_data(nd+1)                
+                    
+                    # do nbrs
+                    for i in xrange(nd):
+                        od['nbr_id'][i] = mb_obs_list.meta['nbrs_ids'][i]
+                        od['nbr_flags'][i] = obs.meta['nbrs_flags'][i]
+                    
+                        if od['nbr_flags'][i] == 0 and obs.meta['nbrs_psfs'][i].has_gmix():
+                            od['nbr_jac_row0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[0][0]
+                            od['nbr_jac_col0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[1][0]
+                            
+                            od['nbr_jac_dudrow'][i] = obs.meta['nbrs_jacs'][i].get_dudrow()
+                            od['nbr_jac_dudcol'][i] = obs.meta['nbrs_jacs'][i].get_dudcol()
+                            
+                            od['nbr_jac_dvdrow'][i] = obs.meta['nbrs_jacs'][i].get_dvdrow()
+                            od['nbr_jac_dvdcol'][i] = obs.meta['nbrs_jacs'][i].get_dvdcol()
+                            
+                            od['nbr_psf_fit_pars'][i,:] = obs.meta['nbrs_psfs'][i].get_gmix().get_full_pars()
+                        else:
+                            od['nbr_flags'][i] |= NBR_HAS_NO_PSF_FIT
+                        
+                    # add in cen as "nbr" of self
+                    i = nd
+                    od['nbr_id'][i] = mb_obs_list.meta['id']
+                    
+                    jac = obs.get_jacobian()
+                    od['nbr_jac_row0'][i] = jac.get_cen()[0][0]
+                    od['nbr_jac_col0'][i] = jac.get_cen()[1][0]                    
+                    od['nbr_jac_dudrow'][i] = jac.get_dudrow()
+                    od['nbr_jac_dudcol'][i] = jac.get_dudcol()                    
+                    od['nbr_jac_dvdrow'][i] = jac.get_dvdrow()
+                    od['nbr_jac_dvdcol'][i] = jac.get_dvdcol()                    
+
+                    if obs.has_psf_gmix():
+                        flags = 0
+                        od['nbr_psf_fit_pars'][i,:] = obs.get_psf_gmix().get_full_pars()
+                    else:
+                        flags |= NBR_HAS_NO_PSF_FIT
+                        
+                    od['nbr_flags'][i] = flags                
+                    
+                    # add to metadata
+                    obs.update_meta_data({'nbrs_data':od})
 
     def _render_single(self,model,band,obs,pars_tag,fit_data,psf_gmix,jac,coadd):
         """
@@ -315,7 +375,7 @@ class NGMixBootFitter(BaseFitter):
             raise ValueError("no support for unmodeled nbrs "
                              "masking type %s" % mtype)
 
-    def _render_nbrs(self,model,mb_obs_list,coadd,nbrs_fit_data):
+    def _render_nbrs_old(self,model,mb_obs_list,coadd,nbrs_fit_data):
         """
         render nbrs
         """
@@ -465,7 +525,132 @@ class NGMixBootFitter(BaseFitter):
                 if self['make_plots']:
                     self._plot_nbrs_model(band,model,obs,totim,cenim,coadd)
 
-    def _plot_nbrs_model(self,band,model,obs,totim,cenim,coadd):
+    def _render_nbrs_new(self,model,mb_obs_list,coadd,nbrs_fit_data):
+        """
+        render nbrs
+        """
+
+        print('    rendering nbrs')
+
+        if len(mb_obs_list.meta['nbrs_inds']) == 0:
+            return
+
+        n=self._get_namer(model, coadd)
+
+        pars_name = 'max_pars'
+        if n(pars_name) not in nbrs_fit_data.dtype.names:
+            pars_name = 'pars'
+
+        pars_tag = n(pars_name)
+        assert pars_tag in nbrs_fit_data.dtype.names
+
+        if 'max' in pars_tag:
+            fit_flags_tag = n('max_flags')
+        else:
+            fit_flags_tag = n('flags')
+
+        if model == 'cm':
+            fracdev_tag = n('fracdev')
+            TdByTe_tag = n('TdByTe')
+        else:
+            fracdev_tag=None
+            TdByTe_tag=None
+
+        cen_ind = mb_obs_list.meta['cen_ind']
+        for band,obs_list in enumerate(mb_obs_list):
+            for obs in obs_list:
+                if obs.meta['flags'] != 0:
+                    continue
+                
+                # get properties of cen and nbrs
+                if obs.has_psf_gmix():
+                    cen_psf_gmix = obs.get_psf_gmix()
+                else:
+                    cen_psf_gmix = None                    
+                cen_jac = obs.get_jacobian()
+                cen_seg = obs.seg
+                
+                nbrs_inds = mb_obs_list.meta['nbrs_inds']
+                nbrs_flags = obs.meta['nbrs_flags']
+                nbrs_psf_gmixes = []
+                for psf_obs in obs.meta['nbrs_psfs']:
+                    if psf_obs.has_gmix():
+                        nbrs_psf_gmixes.append(psf_obs.get_gmix())
+                    else:
+                        nbrs_psf_gmixes.append(None)
+                nbrs_jacs = obs.meta['nbrs_jacs']
+                
+                # call the nbrs code
+                cenim, nbrs_imgs, nbrs_masks = RenderNGmixNbrs._render_nbrs(model, band, 
+                                                                            obs.image.shape,
+                                                                            cen_ind, cen_psf_gmix, cen_jac, cen_seg,
+                                                                            nbrs_inds, nbrs_flags,
+                                                                            nbrs_jacs, nbrs_psf_gmixes,
+                                                                            pars_tag, fit_flags_tag, nbrs_fit_data,
+                                                                            unmodeled_nbrs_masking_type=self['unmodeled_nbrs_masking_type'],
+                                                                            verbose=True,
+                                                                            fracdev_tag=fracdev_tag,TdByTe_tag=TdByTe_tag)
+                
+                # do central
+                if cenim is not None:
+                    sub_nbrs_from_cenim = False
+                else:                
+                    cenim = obs.image_orig.copy()
+                    sub_nbrs_from_cenim = True
+
+                if self['intr_prof_var_fac'] > 0.0:
+                    varim = numpy.zeros_like(cenim)  
+                    if not sub_nbrs_from_cenim:
+                        varim += self['intr_prof_var_fac']*cenim*cenim
+
+                # now do nbrs
+                nbrsim = numpy.zeros_like(cenim)
+                for curr_nbrsim in nbrs_imgs:
+                    if curr_nbrsim is not None:
+                        nbrsim += curr_nbrsim
+                        
+                        if self['intr_prof_var_fac'] > 0.0:
+                            varim += self['intr_prof_var_fac']*curr_nbrsim*curr_nbrsim
+
+                masked_pix = numpy.zeros_like(cenim)
+                masked_pix[:,:] = 1.0
+                for msk in nbrs_masks:
+                    if msk is not None:
+                        masked_pix *= msk
+                            
+                # get total image and adjust central if needed
+                if sub_nbrs_from_cenim:
+                    cenim -= nbrsim                    
+                totim = cenim + nbrsim
+                
+                if self['model_nbrs_method'] == 'subtract':
+                    obs.image = obs.image_orig - nbrsim
+                elif self['model_nbrs_method'] == 'frac':
+                    frac = numpy.zeros_like(totim)
+                    frac[:,:] = 1.0
+                    msk = totim > 0.0
+                    frac[msk] = cenim[msk]/totim[msk]
+                    obs.image = obs.image_orig*frac
+                else:
+                    assert False,'nbrs model method %s not implemented!' % self['model_nbrs_method']
+                    
+                # mask unmodeled nbrs
+                new_weight = obs.weight_orig.copy()
+                new_weight *= masked_pix
+
+                if self['intr_prof_var_fac'] > 0.0:
+                    qnz = numpy.where(new_weight != 0.0)
+                    if qnz[0].size > 0:
+                        new_weight[qnz] = 1.0/(1.0/new_weight[qnz] + varim[qnz])
+
+                obs.weight = new_weight
+                    
+                if self['make_plots']:
+                    self._plot_nbrs_model(band,model,obs,nbrsim,cenim,coadd)
+
+    _render_nbrs = _render_nbrs_new
+
+    def _plot_nbrs_model(self,band,model,obs,nbrsim,cenim,coadd):
         """
         plot nbrs model
         """
@@ -496,7 +681,9 @@ class NGMixBootFitter(BaseFitter):
             return seg_new
 
         icut_cen = obs.meta['icut']
-
+        
+        totim = nbrsim + cenim
+        
         import images
         import biggles
         width = 1920
@@ -507,7 +694,7 @@ class NGMixBootFitter(BaseFitter):
         tab.title = title
 
         tab[0,0] = images.view(obs.image_orig,title='original image',show=False,nonlinear=0.075)
-        tab[0,1] = images.view(totim-cenim,title='models of nbrs',show=False,nonlinear=0.075)
+        tab[0,1] = images.view(nbrsim,title='models of nbrs',show=False,nonlinear=0.075)
 
         tab[0,2] = images.view(plot_seg(obs.seg),title='seg map',show=False)
 
@@ -528,6 +715,30 @@ class NGMixBootFitter(BaseFitter):
         except:
             print("        caught error plotting nbrs")
             pass
+
+        # for testing
+        if False:
+            import fitsio
+            if icut_cen > 0:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d.fits' % (ptype,band,icut_cen))
+            else:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd.fits' % (ptype,band))
+            print("        making file %s" % fname)
+            fitsio.write(fname,obs.image,clobber=True)
+
+            if icut_cen > 0:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d-nbrs.fits' % (ptype,band,icut_cen))
+            else:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd-nbrs.fits' % (ptype,band))
+            print("        making file %s" % fname)
+            fitsio.write(fname,nbrsim,clobber=True)
+
+            if icut_cen > 0:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d-cen.fits' % (ptype,band,icut_cen))
+            else:
+                fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd-cen.fits' % (ptype,band))
+            print("        making file %s" % fname)
+            fitsio.write(fname,cenim,clobber=True)
 
     def _fill_epoch_data(self,mb_obs_list,new_mb_obs_list):
         print('    filling PSF data')
@@ -928,7 +1139,11 @@ class NGMixBootFitter(BaseFitter):
                     data[n('Q')][dindex,:] = res['Q']
                     data[n('R')][dindex,:,:] = res['R']
 
-            for f in ['fracdev','fracdev_noclip','fracdev_err','TdByTe']:
+            for f in ['fracdev',
+                      'fracdev_noclip',
+                      'fracdev_err',
+                      'TdByTe',
+                      'TdByTe_noclip']:
                 if f in res:
                     data[n(f)][dindex] = res[f]
 
@@ -1080,9 +1295,10 @@ class NGMixBootFitter(BaseFitter):
 
             if 'cm' in model:
                 dt += [(n('fracdev'),'f4'),
-                       (n('fracdev_noclip'),'f4'),
+                       (n('fracdev_noclip'),'f4'),                       
                        (n('fracdev_err'),'f4'),
-                       (n('TdByTe'),'f4')]
+                       (n('TdByTe'),'f4'),
+                       (n('TdByTe_noclip'),'f4')]
 
         return dt
 
@@ -1140,6 +1356,7 @@ class NGMixBootFitter(BaseFitter):
                 data[n('fracdev_noclip')] = DEFVAL
                 data[n('fracdev_err')] = DEFVAL
                 data[n('TdByTe')] = DEFVAL
+                data[n('TdByTe_noclip')] = DEFVAL
 
         return data
 
@@ -1160,6 +1377,31 @@ class NGMixBootFitter(BaseFitter):
 
     def get_default_epoch_fit_data(self):
         d = self._make_epoch_struct()
+        return d
+
+    def get_nbrs_data_dtype(self):
+        npars = self.get_num_pars_psf()
+        dt = [('nbr_id','i8'),
+              ('nbr_flags','i4'),
+              ('nbr_jac_row0','f8'),
+              ('nbr_jac_col0','f8'),
+              ('nbr_jac_dudrow','f8'),
+              ('nbr_jac_dudcol','f8'),
+              ('nbr_jac_dvdrow','f8'),
+              ('nbr_jac_dvdcol','f8'),
+              ('nbr_psf_fit_pars','f8',(npars,)),
+              ]
+        
+        return dt
+        
+    def get_default_nbrs_data(self,n=1):
+        dt = self.get_nbrs_data_dtype()
+        d = numpy.zeros(n,dtype=dt)
+
+        for tag in d.dtype.names:
+            d[tag] = DEFVAL
+        d['nbr_flags'] = 0
+
         return d
 
 class MaxNGMixBootFitter(NGMixBootFitter):

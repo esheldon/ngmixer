@@ -54,12 +54,12 @@ class DESConcat(Concat):
         """
         Read the chunk data
         """
-        d,ed,m = super(DESConcat,self).read_chunk(fname)
+        d,ed,nd,m = super(DESConcat,self).read_chunk(fname)
 
         if self.blind:
             self.blind_data(d)
 
-        return d,ed,m
+        return d,ed,nd,m
 
     def blind_data(self,data):
         """
@@ -121,6 +121,29 @@ class DESConcat(Concat):
                 epoch_data['band'][w] = self.bands[band_num]
 
         return epoch_data
+
+    def pick_nbrs_fields(self, nbrs_data0):
+        """
+        pick out some fields, add some fields, rename some fields
+        """
+
+        dt=nbrs_data0.dtype.descr
+
+        names=nbrs_data0.dtype.names
+        ind=names.index('band_num')
+        dt.insert( ind, ('band','S1') )
+
+        nbrs_data = numpy.zeros(nbrs_data0.size, dtype=dt)
+        for nm in nbrs_data0.dtype.names:
+            if nm in nbrs_data.dtype.names:
+                nbrs_data[nm] = nbrs_data0[nm]
+
+        for band_num in xrange(self.nbands):
+            w,=numpy.where(nbrs_data['band_num'] == band_num)
+            if w.size > 0:
+                nbrs_data['band'][w] = self.bands[band_num]
+
+        return nbrs_data
 
     def get_models(self, data):
         models=[]
