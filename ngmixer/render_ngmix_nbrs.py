@@ -231,12 +231,12 @@ class RenderNGmixNbrs(object):
         ind = q[0]
         cen_flags = self.nbrs_data['nbr_flags'][ind]
         if cen_flags == 0:
-            cen_jac = Jacobian(self.nbrs_data['nbr_jac_row0'][ind],
-                               self.nbrs_data['nbr_jac_col0'][ind],
-                               self.nbrs_data['nbr_jac_dudrow'][ind],
-                               self.nbrs_data['nbr_jac_dudcol'][ind],
-                               self.nbrs_data['nbr_jac_dvdrow'][ind],
-                               self.nbrs_data['nbr_jac_dvdcol'][ind])
+            cen_jac = Jacobian(row=self.nbrs_data['nbr_jac_row0'][ind],
+                               col=self.nbrs_data['nbr_jac_col0'][ind],
+                               dudrow=self.nbrs_data['nbr_jac_dudrow'][ind],
+                               dudcol=self.nbrs_data['nbr_jac_dudcol'][ind],
+                               dvdrow=self.nbrs_data['nbr_jac_dvdrow'][ind],
+                               dvdcol=self.nbrs_data['nbr_jac_dvdcol'][ind])
             cen_psf_gmix = GMix(pars=self.nbrs_data['nbr_psf_fit_pars'][ind,:])
         else:
             cen_psf_gmix = None
@@ -276,12 +276,12 @@ class RenderNGmixNbrs(object):
             nbrs_flags.append(self.nbrs_data['nbr_flags'][ind])
             
             if nbrs_flags[-1] == 0:
-                nbrs_jacs.append(Jacobian(self.nbrs_data['nbr_jac_row0'][ind],
-                                          self.nbrs_data['nbr_jac_col0'][ind],
-                                          self.nbrs_data['nbr_jac_dudrow'][ind],
-                                          self.nbrs_data['nbr_jac_dudcol'][ind],
-                                          self.nbrs_data['nbr_jac_dvdrow'][ind],
-                                          self.nbrs_data['nbr_jac_dvdcol'][ind]))
+                nbrs_jacs.append(Jacobian(row=self.nbrs_data['nbr_jac_row0'][ind],
+                                          col=self.nbrs_data['nbr_jac_col0'][ind],
+                                          dudrow=self.nbrs_data['nbr_jac_dudrow'][ind],
+                                          dudcol=self.nbrs_data['nbr_jac_dudcol'][ind],
+                                          dvdrow=self.nbrs_data['nbr_jac_dvdrow'][ind],
+                                          dvdcol=self.nbrs_data['nbr_jac_dvdcol'][ind]))
                 nbrs_psf_gmixes.append(GMix(pars=self.nbrs_data['nbr_psf_fit_pars'][ind,:]))
             else:
                 nbrs_jac.append(None)
