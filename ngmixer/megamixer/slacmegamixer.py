@@ -38,7 +38,7 @@ class SLACNGMegaMixer(NGMegaMixer):
 #BSUB -W 48:00
 
 {extracmds}
-export TMPDIR=/scratch/${USER}/${LSB_JOBID}
+export TMPDIR=/scratch/$USER/$LSB_JOBID
 ./runchunk.sh
 
 """.format(extracmds=ec,jobname=jobname))
@@ -70,7 +70,7 @@ export TMPDIR=/scratch/${USER}/${LSB_JOBID}
 #BSUB -W 48:00
 
 {extracmds}
-export TMPDIR=/scratch/${USER}/${LSB_JOBID}
+export TMPDIR=/scratch/$USER/$LSB_JOBID
 ./runnbrs.sh
 
 """.format(extracmds=ec,jobname=jobname))
@@ -177,7 +177,7 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
                          "#BSUB -W 48:00\n"
                          "\n"
                          "{extracmds}\n"
-                         "export TMPDIR=/scratch/${USER}/${LSB_JOBID}\n"
+                         "export TMPDIR=/scratch/$USER/$LSB_JOBID\n"
                          "./runarray.py $LSB_JOBINDEX\n"
                          "\n"
                          .format(extracmds=ec,
