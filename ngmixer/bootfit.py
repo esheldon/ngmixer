@@ -378,7 +378,7 @@ class NGMixBootFitter(BaseFitter):
                 nbrs_flags = obs.meta['nbrs_flags']
                 nbrs_psf_gmixes = []
                 for psf_obs in obs.meta['nbrs_psfs']:
-                    if psf_obs.has_gmix():
+                    if psf_obs is not None and psf_obs.has_gmix():
                         nbrs_psf_gmixes.append(psf_obs.get_gmix())
                     else:
                         nbrs_psf_gmixes.append(None)
