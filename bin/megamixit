@@ -144,18 +144,18 @@ if __name__ == '__main__':
                                     compress=not options.nocompress)
         elif cmd == 'link':
             ngmm.link_coadd_tile(coadd_run,
-                                 verify=options.verify,
+                                 verify=False,
                                  blind=not options.noblind,
                                  clobber=options.clobber,
                                  skip_errors=options.skip_errors)
         elif cmd == 'collate-link':
             ngmm.collate_coadd_tile(coadd_run,
-                                    verify=options.verify,
+                                    verify=False,
                                     blind=not options.noblind,
                                     clobber=options.clobber,
                                     skip_errors=options.skip_errors)
             ngmm.link_coadd_tile(coadd_run,
-                                 verify=options.verify,
+                                 verify=False,
                                  blind=not options.noblind,
                                  clobber=options.clobber,
                                  skip_errors=options.skip_errors)            
