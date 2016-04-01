@@ -329,203 +329,7 @@ class NGMixBootFitter(BaseFitter):
                     # add to metadata
                     obs.update_meta_data({'nbrs_data':od})
 
-    def _render_single(self,model,band,obs,pars_tag,fit_data,psf_gmix,jac,coadd):
-        """
-        render a single image of model with pars_tag in fit_data and psf_gmix w/ jac
-        """
-        n = self._get_namer(model, coadd)
-
-        pars_obj = fit_data[pars_tag][0].copy()
-        band_pars_obj = numpy.zeros(6,dtype='f8')
-        band_pars_obj[0:5] = pars_obj[0:5]
-        band_pars_obj[5] = pars_obj[5+band]
-        assert len(band_pars_obj) == 6
-
-        for i in [1,2]:
-            try:
-                if model != 'cm':
-                    gmix_sky = GMixModel(band_pars_obj, model)
-                else:
-                    gmix_sky = GMixCM(fit_data[n('fracdev')][0],
-                                      fit_data[n('TdByTe')][0],
-                                      band_pars_obj)
-                gmix_image = gmix_sky.convolve(psf_gmix)
-            except GMixRangeError:
-                print('        setting T=0 for nbr!')
-                band_pars_obj[4] = 0.0 # set T to zero and try again
-        
-        image = gmix_image.make_image(obs.image.shape, jacobian=jac)
-        return image
-
-    def _mask_nbr(self,mb_obs_list,nbr_ind,masked_pix,nbrs_fit_data):
-        """
-        mask a nbr in weight map of central using a seg map
-        """
-        mtype=self['unmodeled_nbrs_masking_type']
-        if mtype == 'nbrs-seg':
-            nbrs_number = nbrs_fit_data['number'][nbr_ind]
-            for band,obs_list in enumerate(mb_obs_list):
-                for obs in obs_list:
-                    if obs.meta['flags'] != 0:
-                        continue
-                    q = numpy.where(obs.seg == nbrs_number)
-                    if q[0].size > 0:
-                        masked_pix[q] = 1
-        else:
-            raise ValueError("no support for unmodeled nbrs "
-                             "masking type %s" % mtype)
-
-    def _render_nbrs_old(self,model,mb_obs_list,coadd,nbrs_fit_data):
-        """
-        render nbrs
-        """
-
-        print('    rendering nbrs')
-
-        if len(mb_obs_list.meta['nbrs_inds']) == 0:
-            return
-
-        n=self._get_namer(model, coadd)
-
-        pars_name = 'max_pars'
-        if n(pars_name) not in nbrs_fit_data.dtype.names:
-            pars_name = 'pars'
-
-        pars_tag = n(pars_name)
-        assert pars_tag in nbrs_fit_data.dtype.names
-
-        if 'max' in pars_tag:
-            fit_flags_tag = n('max_flags')
-        else:
-            fit_flags_tag = n('flags')
-
-        cen_ind = mb_obs_list.meta['cen_ind']
-        for band,obs_list in enumerate(mb_obs_list):
-            for obs in obs_list:
-                if obs.meta['flags'] != 0:
-                    continue
-
-                # do central image first
-                # FIXME - need to clean up all flags
-                if (nbrs_fit_data[fit_flags_tag][cen_ind] == 0
-                        and obs.has_psf_gmix()
-                        and nbrs_fit_data['flags'][cen_ind] == 0):
-
-                    cenim = self._render_single(model,band,obs,pars_tag,
-                                                nbrs_fit_data[cen_ind:cen_ind+1],
-                                                obs.get_psf_gmix(),obs.get_jacobian(),
-                                                coadd)
-                    sub_nbrs_from_cenim = False
-                    print('        rendered central object')
-                else:
-                    if (nbrs_fit_data[fit_flags_tag][cen_ind] != 0
-                            or (nbrs_fit_data['flags'][cen_ind] & GAL_FIT_FAILURE) != 0):
-
-                        print('        bad fit data for central: FoF obj = %d' % (cen_ind+1))
-                    elif (nbrs_fit_data['flags'][cen_ind] & LOW_PSF_FLUX) != 0:
-                        print('        PSF flux too low for central: FoF obj = %d' % (cen_ind+1))
-                    elif (nbrs_fit_data['flags'][cen_ind] & PSF_FLUX_FIT_FAILURE) != 0:
-                        print('        bad PSF flux fit for central: FoF obj = %d' % (cen_ind+1))
-                    elif (nbrs_fit_data['flags'][cen_ind] & PSF_FIT_FAILURE) != 0:
-                        print('        bad PSF fit for central: FoF obj = %d' % (cen_ind+1))
-                    else:
-                        print('        central not rendered for unknown '
-                              'reason: FoF obj = %d' % (cen_ind+1))
-                    
-                    cenim = obs.image_orig.copy()
-                    sub_nbrs_from_cenim = True
-
-                if self['intr_prof_var_fac'] > 0.0:
-                    varim = numpy.zeros_like(cenim)  
-                    if not sub_nbrs_from_cenim:
-                        varim += self['intr_prof_var_fac']*cenim*cenim
-                    
-                # now do nbrs
-                nbrsim = numpy.zeros_like(cenim)
-                masked_pix = numpy.zeros_like(cenim)
-                for nbrs_ind,nbrs_flags,nbrs_psf,nbrs_jac in zip(mb_obs_list.meta['nbrs_inds'],
-                                                                 obs.meta['nbrs_flags'],
-                                                                 obs.meta['nbrs_psfs'],
-                                                                 obs.meta['nbrs_jacs']):
-                    if (nbrs_flags == 0
-                            and nbrs_fit_data[fit_flags_tag][nbrs_ind] == 0
-                            and nbrs_fit_data['flags'][nbrs_ind] == 0
-                            and nbrs_psf.has_gmix() ):
-
-                        print('        rendered nbr: %d' % (nbrs_ind+1))                        
-                        nbrs_psf_gmix = nbrs_psf.get_gmix()
-                        curr_nbrsim = self._render_single(model,
-                                                          band,
-                                                          obs,
-                                                          pars_tag,
-                                                          nbrs_fit_data[nbrs_ind:nbrs_ind+1],
-                                                          nbrs_psf_gmix,
-                                                          nbrs_jac,
-                                                          coadd)
-                        nbrsim += curr_nbrsim
-                        
-                        if self['intr_prof_var_fac'] > 0.0:
-                            varim += self['intr_prof_var_fac']*curr_nbrsim*curr_nbrsim
-
-                    else:
-                        print('        masked nbr: %d' % (nbrs_ind+1))
-                        
-                        if nbrs_flags != 0:
-                            print('        nbrs_flags set to %d: FoF obj = %d' % (nbrs_flags,nbrs_ind+1))
-                        elif nbrs_fit_data[fit_flags_tag][nbrs_ind] != 0 or (nbrs_fit_data['flags'][nbrs_ind] & GAL_FIT_FAILURE) != 0:
-                            print('        bad fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
-                        elif (nbrs_fit_data['flags'][nbrs_ind] & LOW_PSF_FLUX) != 0:
-                            print('        PSF flux too low for nbr: FoF obj = %d' % (nbrs_ind+1))
-                        elif (nbrs_fit_data['flags'][nbrs_ind] & PSF_FLUX_FIT_FAILURE) != 0:
-                            print('        bad PSF flux fit for nbr: FoF obj = %d' % (nbrs_ind+1))
-                        elif (nbrs_fit_data['flags'][nbrs_ind] & PSF_FIT_FAILURE) != 0:
-                            print('        bad PSF fit for nbr: FoF obj = %d' % (nbrs_ind+1))
-                        elif not nbrs_psf.has_gmix():
-                            # FIXME - better flagging of nbrs
-                            if 'fit_flags' in obs.meta and obs.meta['fit_flags'] != 0:
-                                print('        bad PSF fit data for nbr: FoF obj = %d' % (nbrs_ind+1))
-                            else:
-                                # FIXME - need to fit psf from off chip nbrs
-                                print('        FIXME: need to fit PSF for '
-                                      'off-chip nbr %d for cen %d' % (nbrs_ind+1,cen_ind+1))
-                        else:
-                            print('        nbr not rendered for unknown reason: FoF obj = %d' % (nbrs_ind+1))
-                            
-                        self._mask_nbr(mb_obs_list,nbrs_ind,masked_pix,nbrs_fit_data)
-                            
-                # get total image and adjust central if needed
-                if sub_nbrs_from_cenim:
-                    cenim -= nbrsim                    
-                totim = cenim + nbrsim
-                
-                if self['model_nbrs_method'] == 'subtract':
-                    obs.image = obs.image_orig - nbrsim
-                elif self['model_nbrs_method'] == 'frac':
-                    frac = numpy.zeros_like(totim)
-                    frac[:,:] = 1.0
-                    msk = totim > 0.0
-                    frac[msk] = cenim[msk]/totim[msk]
-                    obs.image = obs.image_orig*frac
-                else:
-                    assert False,'nbrs model method %s not implemented!' % self['model_nbrs_method']
-                    
-                # mask unmodeled nbrs
-                new_weight = obs.weight_orig.copy()
-                q = numpy.where(masked_pix == 1.0)
-                if q[0].size > 0:
-                    new_weight[q] = 0.0
-
-                if self['intr_prof_var_fac'] > 0.0:
-                    qnz = numpy.where(new_weight != 0.0)
-                    if qnz[0].size > 0:
-                        new_weight[qnz] = 1.0/(1.0/new_weight[qnz] + varim[qnz])
-
-                obs.weight = new_weight
-                    
-                if self['make_plots']:
-                    self._plot_nbrs_model(band,model,obs,totim,cenim,coadd)
-
-    def _render_nbrs_new(self,model,mb_obs_list,coadd,nbrs_fit_data):
+    def _render_nbrs(self,model,mb_obs_list,coadd,nbrs_fit_data):
         """
         render nbrs
         """
@@ -574,7 +378,7 @@ class NGMixBootFitter(BaseFitter):
                 nbrs_flags = obs.meta['nbrs_flags']
                 nbrs_psf_gmixes = []
                 for psf_obs in obs.meta['nbrs_psfs']:
-                    if psf_obs.has_gmix():
+                    if psf_obs is not None and psf_obs.has_gmix():
                         nbrs_psf_gmixes.append(psf_obs.get_gmix())
                     else:
                         nbrs_psf_gmixes.append(None)
@@ -647,8 +451,6 @@ class NGMixBootFitter(BaseFitter):
                     
                 if self['make_plots']:
                     self._plot_nbrs_model(band,model,obs,nbrsim,cenim,coadd)
-
-    _render_nbrs = _render_nbrs_new
 
     def _plot_nbrs_model(self,band,model,obs,nbrsim,cenim,coadd):
         """

@@ -407,59 +407,6 @@ class NGMixer(dict):
 
         return fit_flags
 
-    def _get_box_size(self, mb_obs_list):
-        box_size = DEFVAL
-        for band,obs_list in enumerate(mb_obs_list):
-            for obs in obs_list:
-                if obs.meta['flags'] == 0:
-                    box_size = obs.image.shape[0]
-                    break
-        return box_size
-
-    def _obj_check(self, mb_obs_list):
-        """
-        Check box sizes, number of cutouts
-        Require good in all bands
-        """
-        for band,obs_list in enumerate(mb_obs_list):
-            flags=self._obj_check_one(band,obs_list)
-            if flags != 0:
-                break
-        return flags
-
-    def _obj_check_one(self, band, obs_list):
-        """
-        Check box sizes, number of cutouts, flags on images
-        """
-        flags=0
-
-        ncutout = len(obs_list)
-
-        if ncutout == 0:
-            print('    no cutouts')
-            flags |= NO_CUTOUTS
-            return flags
-
-        num_use = 0
-        for obs in obs_list:
-            if obs.meta['flags'] == 0:
-                num_use += 1
-
-        if num_use < ncutout:
-            print("    for band %d removed %d/%d images due to flags"
-                     % (band, ncutout-num_use, ncutout))
-
-        if num_use == 0:
-            flags |= IMAGE_FLAGS
-            return flags
-
-        box_size = self.curr_data['box_size'][self.curr_data_index]
-        if box_size > self['max_box_size']:
-            print('    box size too big: %d' % box_size)
-            flags |= BOX_SIZE_TOO_BIG
-
-        return flags
-
     def _setup_output_data(self):
         """
         set the output data structures, if not already set based

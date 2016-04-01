@@ -8,6 +8,7 @@
         run - run jobs
         rerun - rerun jobs
         collate - combine job outputs into a single file
+        verify - verify that all job outputs are present and OK
         clean - clean all outputs from a run
         archive - run after collate to delete intermediate files and tar logs
         link - make symlinks to all final outputs under {run}/output
@@ -36,9 +37,6 @@ parser.add_option('--noblind',action='store_true',default=False,
 
 parser.add_option('--clobber',action='store_true',default=False,
                   help="clobber existing catalog, else skip over")
-
-parser.add_option('--verify',action='store_true',default=False,
-                  help="just verify every file")
 
 parser.add_option('--skip-errors',action='store_true',default=False,
                   help="skip over errors")
@@ -129,10 +127,16 @@ if __name__ == '__main__':
             ngmm.rerun_coadd_tile(coadd_run)
         elif cmd == 'collate':
             ngmm.collate_coadd_tile(coadd_run,
-                                    verify=options.verify,
+                                    verify=False,
                                     blind=not options.noblind,
                                     clobber=options.clobber,
                                     skip_errors=options.skip_errors)
+        elif cmd == 'verify':
+            ngmm.collate_coadd_tile(coadd_run,
+                                    verify=True,
+                                    blind=not options.noblind,
+                                    clobber=options.clobber,
+                                    skip_errors=False)
         elif cmd == 'clean':
             ngmm.clean_coadd_tile(coadd_run)
         elif cmd == 'archive':
@@ -140,18 +144,18 @@ if __name__ == '__main__':
                                     compress=not options.nocompress)
         elif cmd == 'link':
             ngmm.link_coadd_tile(coadd_run,
-                                 verify=options.verify,
+                                 verify=False,
                                  blind=not options.noblind,
                                  clobber=options.clobber,
                                  skip_errors=options.skip_errors)
         elif cmd == 'collate-link':
             ngmm.collate_coadd_tile(coadd_run,
-                                    verify=options.verify,
+                                    verify=False,
                                     blind=not options.noblind,
                                     clobber=options.clobber,
                                     skip_errors=options.skip_errors)
             ngmm.link_coadd_tile(coadd_run,
-                                 verify=options.verify,
+                                 verify=False,
                                  blind=not options.noblind,
                                  clobber=options.clobber,
                                  skip_errors=options.skip_errors)            

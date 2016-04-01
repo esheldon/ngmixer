@@ -257,8 +257,6 @@ cmd="`which {cmd}` \
 echo $cmd
 python -u $cmd &> $lfile
 
-rm -rf $tmpdir
-
 """
         args = {}
         args['chunk'] = i

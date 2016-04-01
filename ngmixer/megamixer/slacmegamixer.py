@@ -32,14 +32,16 @@ class SLACNGMegaMixer(NGMegaMixer):
             fp.write("""#!/bin/bash
 #BSUB -J {jobname}
 #BSUB -oo ./{jobname}.oe
-#BSUB -R "linux64 && rhel60 && scratch > 2"
+#BSUB -R "linux64 && rhel60 && scratch > 6"
 #BSUB -n 1
 #BSUB -We 24:00
 #BSUB -W 48:00
 
 {extracmds}
-export TMPDIR=/scratch/${USER}/${LSB_JOBID}
+export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
+mkdir -p $TMPDIR
 ./runchunk.sh
+rm -rf $TMPDIR
 
 """.format(extracmds=ec,jobname=jobname))
 
@@ -64,14 +66,16 @@ export TMPDIR=/scratch/${USER}/${LSB_JOBID}
             fp.write("""#!/bin/bash
 #BSUB -J {jobname}
 #BSUB -oo ./{jobname}.oe
-#BSUB -R "linux64 && rhel60 && scratch > 2"
+#BSUB -R "linux64 && rhel60 && scratch > 6"
 #BSUB -n 1
 #BSUB -We 24:00
 #BSUB -W 48:00
 
 {extracmds}
-export TMPDIR=/scratch/${USER}/${LSB_JOBID}
+export TMPDIR=/scratch/$USER/$LSB_JOBID
+mkdir -p $TMPDIR
 ./runnbrs.sh
+rm -rf $TMPDIR
 
 """.format(extracmds=ec,jobname=jobname))
 
@@ -172,12 +176,11 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
                 fp.write("#!/bin/bash\n"
                          "#BSUB -J {jobnamearr}\n"
                          "#BSUB -oo ./chunk%I/{jobname}.%I.oe\n"
-                         "#BSUB -R \"linux64 && rhel60 && scratch > 2\"\n"
+                         "#BSUB -R \"linux64 && rhel60 && scratch > 6\"\n"
                          "#BSUB -We 24:00\n"
                          "#BSUB -W 48:00\n"
                          "\n"
                          "{extracmds}\n"
-                         "export TMPDIR=/scratch/${USER}/${LSB_JOBID}\n"
                          "./runarray.py $LSB_JOBINDEX\n"
                          "\n"
                          .format(extracmds=ec,

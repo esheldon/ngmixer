@@ -476,7 +476,7 @@ class RenderNGmixNbrs(object):
                 print('        setting T=0 for nbr!')
                 band_pars_obj[4] = 0.0 # set T to zero and try again
         
-        image = gmix_image.make_image(img_shape, jacobian=jac)
+        image = gmix_image.make_image(img_shape, jacobian=jac, fast_exp=True)
         return image
     
     @staticmethod
