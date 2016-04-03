@@ -96,7 +96,7 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
 
     def write_job_script(self,files,i,rng):
         super(SLACArrayNGMegaMixer,self).write_job_script(files,i,rng)
-        
+
         array_name = os.path.join(files['work_output_dir'],'array_jobs.dat')
         dr = os.path.join('.',*self.get_chunk_output_dir(files,i,rng).split('/')[-1:])
         with open(array_name,'a') as fp:
@@ -111,9 +111,9 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
             os.remove(os.path.join(files['work_output_dir'],'array_jobs.dat'))
         except:
             pass
-                
-        super(SLACArrayNGMegaMixer,self).setup_coadd_tile(coadd_tile)        
-        
+
+        super(SLACArrayNGMegaMixer,self).setup_coadd_tile(coadd_tile)
+
         raname = os.path.join(files['work_output_dir'],'runarray.py')
         with open(raname,'w') as fp:
             fp.write("#!/usr/bin/env python\n"
@@ -132,20 +132,20 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
                      "os.system(cmd)\n"
                      "\n")
 
-        os.system('chmod 755 %s' % raname)        
-        
+        os.system('chmod 755 %s' % raname)
+
     def run_coadd_tile(self,coadd_tile):
         self._run_chunks = []
         super(SLACArrayNGMegaMixer,self).run_coadd_tile(coadd_tile)
-        files,fof_ranges = self.get_files_fof_ranges(coadd_tile)        
-        
+        files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
+
         if len(self['extra_cmds']) > 0:
             with open(self['extra_cmds'],'r') as f:
                 ec = f.readlines()
             ec = '\n'.join([e.strip() for e in ec])
         else:
             ec = ''
-        
+
         raname = os.path.join(files['work_output_dir'],'jobarray.sh')
         jobname = files['coadd_tile']
 
@@ -159,9 +159,9 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
                     curr_rng[1] = self._run_chunks[i-1]
                     rngs.append(curr_rng)
                     curr_rng = [self._run_chunks[i],self._run_chunks[i]]
-                    
+
             rngs.append(curr_rng)
-            
+
             istr = '['
             for rng in rngs:
                 if rng[0] == rng[1]:
@@ -171,7 +171,7 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
             istr = istr[:-1]
             istr += ']'
             jobnamearr = jobname+istr
-        
+
             with open(raname,'w') as fp:
                 fp.write("#!/bin/bash\n"
                          "#BSUB -J {jobnamearr}\n"
@@ -187,7 +187,7 @@ class SLACArrayNGMegaMixer(SLACNGMegaMixer):
                                  jobname=jobname,
                                  jobnamearr=jobnamearr,
                                  odir='array_job_output'))
-                
+
             os.system('chmod 755 %s' % raname)
-            
+
             os.system('cd %s && bsub -q %s < jobarray.sh && cd -' % (files['work_output_dir'],self['queue']))
