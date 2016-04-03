@@ -355,7 +355,8 @@ class NGMixer(dict):
         fit_flags = None
 
         if self['fit_me_galaxy']:
-            print('    fitting me galaxy')
+            nfit=sum([len(ol) for ol in mb_obs_list])
+            print('    fitting',nfit,'me galaxy')
             try:
                 me_fit_flags = self.fitter(mb_obs_list,coadd=False,nbrs_fit_data=nbrs_fit_data,make_epoch_data=make_epoch_data)
 
