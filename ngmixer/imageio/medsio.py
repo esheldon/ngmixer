@@ -550,6 +550,7 @@ class MEDSImageIO(ImageIO):
 
         fname = self._get_meds_orig_filename(meds, mindex, icut)
         im = self._get_meds_image(meds, mindex, icut)
+        bmask = self._get_meds_bmask(meds, mindex, icut)
         wt,wt_us,seg = self._get_meds_weight(meds, mindex, icut)
         jacob = self._get_jacobian(meds, mindex, icut)
 
@@ -560,6 +561,7 @@ class MEDSImageIO(ImageIO):
 
         obs=Observation(im,
                         weight=wt.copy(),
+                        bmask=bmask,
                         jacobian=jacob,
                         psf=psf_obs)
         if wt_us is not None:
@@ -601,9 +603,14 @@ class MEDSImageIO(ImageIO):
         """
         Get an image cutout from the input MEDS file
         """
-        im = meds.get_cutout(mindex, icut)
-        im = im.astype('f8', copy=False)
-        return im
+        return meds.get_cutout(mindex, icut)
+
+    def _get_meds_bmask(self, meds, mindex, icut):
+        """
+        Get an image cutout from the input MEDS file
+        """
+        return meds.get_cutout(mindex, icut, type='bmask')
+
 
     def _get_meds_weight(self, meds, mindex, icut):
         """
