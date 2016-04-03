@@ -234,8 +234,33 @@ python -u $cmd &> $lfile
             self.write_script(files,i,rng)
             self.write_job_script(files,i,rng)
 
-    def write_script(self,files,i,rng):
-        fmt = r"""#!/bin/bash
+    def get_chunk_script_file(self, files, chunk, rng):
+        """
+        path to the script to run a chunk
+        """
+        return os.path.join(self.get_chunk_output_dir(files,chunk,rng),'runchunk.sh')
+
+    def get_chunk_output_file(self, files, chunk, rng):
+        """
+        path to the script to run a chunk
+        """
+        dr = self.get_chunk_output_dir(files,chunk,rng)
+        base = self.get_chunk_output_basename(files,self['run'],rng)
+        fname = os.path.join(dr,base+'.fits')
+
+        return fname
+
+    def get_chunk_log_file(self, files, chunk, rng):
+        """
+        path to the script to run a chunk
+        """
+        outfile=self.get_chunk_output_file(files, chunk, rng)
+        logfile=outfile.replace('.fits','.log')
+        assert outfile!=logfile,"output file is not .fits"
+        return logfile
+
+    def get_script_template(self):
+        template = r"""#!/bin/bash
 chunk={chunk}
 config={ngmix_config}
 obase={base_name}
@@ -255,11 +280,15 @@ cmd="`which {cmd}` \
     $config $ofile $meds"
 
 echo $cmd
-python -u $cmd &> $lfile
+python -u $cmd &> $lfile\n"""
+        return template
 
-"""
+    def write_script(self,files,chunk,rng):
+
+        fmt=self.get_script_template()
         args = {}
-        args['chunk'] = i
+        args['output_dir'] = self.get_chunk_output_dir(files,chunk,rng)
+        args['chunk'] = chunk
         args['start'] = rng[0]
         args['stop'] = rng[1]
         if 'NGMIXER_CONFIG_DIR' not in os.environ:
@@ -294,7 +323,7 @@ python -u $cmd &> $lfile
 
         scr = fmt.format(**args)
 
-        scr_name = os.path.join(self.get_chunk_output_dir(files,i,rng),'runchunk.sh')
+        scr_name = self.get_chunk_script_file(files,chunk,rng)
         with open(scr_name,'w') as fp:
             fp.write(scr)
 
@@ -315,18 +344,18 @@ python -u $cmd &> $lfile
     def setup_coadd_tile(self,coadd_tile):
         print("setting up tile '%s'" % coadd_tile)
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
-        
+
         self.make_output_dirs(files,fof_ranges)
         self.make_scripts(files,fof_ranges)
+
+        return files, fof_ranges
 
     def run_coadd_tile(self,coadd_tile):
         print("running tile '%s'" % coadd_tile)
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
         for chunk,rng in enumerate(fof_ranges):
-            dr = self.get_chunk_output_dir(files,chunk,rng)
-            base = self.get_chunk_output_basename(files,self['run'],rng)
-            fname = os.path.join(dr,base+'.fits')
+            fname=self.get_chunk_output_file(files,chunk,rng)
             if not os.path.exists(fname):
                 self.run_chunk(files,chunk,rng)
 
@@ -348,13 +377,13 @@ python -u $cmd &> $lfile
 
     def rerun_coadd_tile(self,coadd_tile):
         print("re-running tile '%s'" % coadd_tile)
-        
+
         # first clean
         self.clean_coadd_tile(coadd_tile)
-        
+
         # then run
         self.run_coadd_tile(coadd_tile)
-    
+
     def collate_coadd_tile(self,coadd_tile,verify=False,blind=True,clobber=True,skip_errors=False):
         print("collating tile '%s'" % coadd_tile)
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
