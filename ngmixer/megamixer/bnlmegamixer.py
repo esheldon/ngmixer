@@ -39,6 +39,13 @@ class BNLCondorMegaMixer(NGMegaMixer):
         # is written just for those outputs that don't exist
         self.write_condor(files,fof_ranges,all=True)
 
+        # this one just holds the jobs for which the output file
+        # was not found.
+        # note when using megamixit run this will be over-written
+        # just in case some more files were completed or removed
+        # after running setup
+        self.write_condor(files,fof_ranges,all=False)
+
 
 
     def run_coadd_tile(self,coadd_tile):
@@ -55,7 +62,7 @@ class BNLCondorMegaMixer(NGMegaMixer):
         cmd='cd %s && condor_submit %s && cd -' % (dr,fname)
         print "not submitting"
         print cmd
-        #os.system(cmd)
+        os.system(cmd)
 
 
     def get_tmp_dir(self):
