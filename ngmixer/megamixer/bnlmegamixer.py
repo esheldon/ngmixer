@@ -104,7 +104,7 @@ pushd $tmpdir
     $config $output_file $meds
 
 popd
-        \n"""
+        """
         return template
 
 
