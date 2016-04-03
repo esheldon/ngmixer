@@ -28,11 +28,14 @@ from pprint import pprint
 def get_bootstrapper(obs, type='boot', **keys):
     from ngmix.bootstrap import Bootstrapper
     from ngmix.bootstrap import CompositeBootstrapper
+    from ngmix.bootstrap import MetacalBootstrapper
 
     if type=='boot':
         boot=Bootstrapper(obs, **keys)
     elif type=='composite':
         boot=CompositeBootstrapper(obs, **keys)
+    elif type=='metacal':
+        boot=MetacalBootstrapper(obs, **keys)
     else:
         raise ValueError("bad bootstrapper type: '%s'" % type)
 
@@ -1262,7 +1265,7 @@ class MaxNGMixBootFitter(NGMixBootFitter):
 class ISampNGMixBootFitter(MaxNGMixBootFitter):
     def _setup(self):
         super(ISampNGMixBootFitter,self)._setup()
-        
+
         # verbose True so we can see isamp output
         self['verbose'] = True
 
@@ -1376,6 +1379,22 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         if self['nrand'] is None:
             self['nrand']=1
 
+    def _get_bootstrapper(self, model, mb_obs_list):
+        """
+        get the bootstrapper for fitting psf through galaxy
+        """
+
+        find_cen=self.get('pre_find_center',False)
+        boot=get_bootstrapper(
+            mb_obs_list,
+            find_cen=find_cen,
+            type='metacal',
+            **self
+        )
+
+        return boot
+
+
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
         mb_obs_list = self.boot.mb_obs_list
 
@@ -1385,7 +1404,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                                                        **kwargs)
         self._do_metacal(model, self.boot)
 
-        metacal_res = self.boot.get_metacal_max_result()
+        metacal_res = self.boot.get_metacal_result()
 
         res=self.gal_fitter.get_result()
         res.update(metacal_res)
@@ -1400,17 +1419,14 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         prior=self['model_pars'][model]['prior']
 
-        Tguess=4.0
+        Tguess=boot.mb_obs_list[0][0].psf.gmix.get_T()
+
         ppars=self['psf_pars']
         psf_fit_pars = ppars.get('fit_pars',None)
         max_pars=self['max_pars']
 
-        # need to make this more general, rather than a single extra noise value
-        if self['nrand'] is not None and self['nrand'] > 1:
-            print("    nrand:",self['nrand'])
-
         try:
-            boot.fit_metacal_max(
+            boot.fit_metacal(
                 ppars['model'],
                 model,
                 max_pars,
@@ -1419,10 +1435,10 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 prior=prior,
                 ntry=max_pars['ntry'],
                 metacal_pars=self['metacal_pars'],
-                nrand=self['nrand'],
-                metacal_obs=metacal_obs
             )
-
+            # needs to be inplace because Matt assumes some
+            # sharing of the obs list I think
+            boot.replace_masked_pixels(inplace=True)
 
         except BootPSFFailure as err:
             # the _run_boot code catches this one
@@ -1441,18 +1457,25 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         super(MetacalNGMixBootFitter,self)._copy_galaxy_result(model,coadd)
 
         dindex=0
+        d=self.data
         res=self.gal_fitter.get_result()
 
-        tmodel='%s_mcal' % model
-        n = self._get_namer(tmodel, coadd)
+        for type in ngmix.metacal.METACAL_TYPES:
+            tres=res[type]
+            if type=='noshear':
+                back=''
+            else:
+                back='_%s' % type
 
-        if res['flags'] == 0:
+            d['mcal_pars%s' % back][dindex] = tres['pars']
+            d['mcal_g%s' % back][dindex] = tres['g']
+            d['mcal_g_cov%s' % back][dindex] = tres['g_cov']
+            d['mcal_s2n_r%s' % back][dindex] = tres['s2n_r']
 
-            for f in self.mcal_flist:
-                front='%s_' % (model)
-                mf = f.replace(front,'')
-                #print("copying %s -> %s" % (f,mf))
-                self.data[f][dindex] = res[mf]
+            if type=='noshear':
+                for p in ['pars_cov','gpsf','Tpsf']:
+                    name='mcal_%s' % p
+                    d[name][dindex] = tres[p]
 
     def _get_metacal_dtype(self, coadd):
 
@@ -1461,19 +1484,34 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         np=simple_npars
 
         dt=[]
-        for model in self._get_all_models(coadd):
-            front='%s_mcal' % (model)
-            n=Namer(front)
+
+        models=self._get_all_models(coadd)
+        if len(models) > 1:
+            raise RuntimeError("for metacal, only fit one model and "
+                               "either coadd or me")
+
+        for type in ngmix.metacal.METACAL_TYPES:
+
+            if type=='noshear':
+                back=''
+            else:
+                back='_%s' % type
+
             dt += [
-                (n('pars'),'f8',np),
-                (n('pars_cov'),'f8',(np,np)),
-                (n('g'),'f8',2),
-                (n('g_cov'),'f8', (2,2) ),
-                #(n('c'),'f8',2),
-                (n('s2n_r'),'f8'),
-                (n('R'),'f8',(2,2)),
-                (n('Rpsf'),'f8',2),
-                (n('gpsf'),'f8',2),
+                ('mcal_g%s' % back,'f8',2),
+                ('mcal_g_cov%s' % back,'f8',(2,2)),  # might be used for weights
+                ('mcal_pars%s' % back,'f8',np),
+            ]
+
+            if type=='noshear':
+                dt += [
+                    ('mcal_pars_cov','f8',(np,np)),
+                    ('mcal_gpsf','f8',2),
+                    ('mcal_Tpsf','f8'),
+                ]
+
+            dt += [
+                ('mcal_s2n_r%s' % back,'f8'),
             ]
 
         self.mcal_flist = [d[0] for d in dt]
