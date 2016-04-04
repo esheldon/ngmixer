@@ -37,14 +37,14 @@ class BNLCondorMegaMixer(NGMegaMixer):
         # this holds everything and is not automatically used.
         # when using the megamixer run command, another file
         # is written just for those outputs that don't exist
-        self.write_condor(files,fof_ranges,all=True)
+        self.write_condor(files,fof_ranges,doall=True)
 
         # this one just holds the jobs for which the output file
         # was not found.
         # note when using megamixit run this will be over-written
         # just in case some more files were completed or removed
         # after running setup
-        self.write_condor(files,fof_ranges,all=False)
+        self.write_condor(files,fof_ranges,doall=False)
 
 
 
@@ -245,7 +245,7 @@ Queue\n"""
 
                 output_file=self.get_chunk_output_file(files,chunk, rng)
 
-                if all:
+                if doall:
                     dowrite=True
                 elif not os.path.exists(output_file):
                     dowrite=True
