@@ -517,6 +517,8 @@ class MEDSImageIO(ImageIO):
                 obs = Observation(numpy.zeros((0,0)))
             else:
                 obs = self._get_band_observation(band, mindex, icut)
+                if obs is None:
+                    continue
                 flags=0
 
             # fill the meta data
@@ -556,6 +558,10 @@ class MEDSImageIO(ImageIO):
 
         # for the psf fitting code
         wt=wt.clip(min=0.0)
+
+        if wt.max() <= 0.0:
+            print("    weight all zero, skipping")
+            return None
 
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
 
