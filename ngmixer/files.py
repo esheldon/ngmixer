@@ -118,7 +118,10 @@ def read_yaml(config_path):
     read from the file assuming it is yaml
     """
     import yaml
-    with open(config_path) as fobj:
+
+    fname=os.path.expandvars(config_path)
+    fname=os.path.expanduser(fname)
+    with open(fname) as fobj:
         conf=yaml.load(fobj)
     return conf
 
