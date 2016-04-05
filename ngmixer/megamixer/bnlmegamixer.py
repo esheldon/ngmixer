@@ -237,6 +237,7 @@ Queue\n"""
         fname=self.get_condor_file(files,doall=doall)
 
         print "writing:",fname
+        nwrite=0
         with open(fname,'w') as fobj:
             head=self.get_condor_head_template(files)
             fobj.write(head)
@@ -253,6 +254,7 @@ Queue\n"""
                     dowrite=False
 
                 if dowrite:
+                    nwrite+=1
                     jobname=self.get_chunk_jobname(files, rng)
                     script_file=self.get_chunk_script_file(files, chunk, rng)
                     log_file=self.get_chunk_log_file(files, chunk, rng)
@@ -261,6 +263,7 @@ Queue\n"""
 
                     fobj.write(line)
 
+        print "    wrote",nwrite,"jobs"
         return fname
 
     def write_job_script(self,files,i,rng):
