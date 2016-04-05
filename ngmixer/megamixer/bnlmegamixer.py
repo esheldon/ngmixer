@@ -55,13 +55,16 @@ class BNLCondorMegaMixer(NGMegaMixer):
         """
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
-        fname=self.write_condor(files,fof_ranges)
+        fname,nwrite=self.write_condor(files,fof_ranges)
+
+        if  nwrite == 0:
+            print "    no unfinished jobs left to run"
+            return
         fname=os.path.basename(fname)
 
         dr = files['work_output_dir']
         cmd='cd %s && condor_submit %s && cd -' % (dr,fname)
-        print "not submitting"
-        print cmd
+        print "condor command: '%s'" % cmd
         os.system(cmd)
 
 
@@ -205,7 +208,7 @@ Notification    = Never
 # Run this exe with these args
 Executable      = {master_script}
 
-Image_Size      = 1500000
+Image_Size      = 1000000
 
 GetEnv = True
 
@@ -264,7 +267,7 @@ Queue\n"""
                     fobj.write(line)
 
         print "    wrote",nwrite,"jobs"
-        return fname
+        return fname, nwrite
 
     def write_job_script(self,files,i,rng):
         """
