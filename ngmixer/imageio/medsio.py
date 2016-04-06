@@ -515,6 +515,8 @@ class MEDSImageIO(ImageIO):
             if iflags != 0:
                 flags = IMAGE_FLAGS
                 obs = Observation(numpy.zeros((0,0)))
+                print("    bad flags, skipping:",iflags)
+                continue
             else:
                 obs = self._get_band_observation(band, mindex, icut)
                 if obs is None:
@@ -559,8 +561,16 @@ class MEDSImageIO(ImageIO):
         # for the psf fitting code
         wt=wt.clip(min=0.0)
 
-        if wt.max() <= 0.0:
+        skip=False
+        if im.sum()==0.0:
+            print("    image all zero, skipping")
+            skip=True
+
+        if wt.sum() == 0.0:
             print("    weight all zero, skipping")
+            skip=True
+
+        if skip:
             return None
 
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
