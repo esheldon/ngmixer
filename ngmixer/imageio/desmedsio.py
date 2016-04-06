@@ -535,7 +535,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         J = cen_obs.get_jacobian()
         Jinv = numpy.linalg.inv([[J.dudrow,J.dudcol],[J.dvdrow,J.dvdcol]])
         row0,col0 = J.get_cen()
-        rowcol_nbr = numpy.dot(Jinv,uv_nbr) + numpy.array([row0[0],col0[0]])
+        rowcol_nbr = numpy.dot(Jinv,uv_nbr) + numpy.array([row0,col0])
 
         # 2a) now get new Jacobian
         J_nbr = J.copy() # or whatever
