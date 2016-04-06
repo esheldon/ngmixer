@@ -630,6 +630,7 @@ class DESRenderNGmixNbrs(RenderNGmixNbrs):
         nbr_masks: list of nbrs masks, if any nbr does not have an image in nbr_imgs, then its pixels 
             to be masked (according to unmodeled_nbrs_masking_type, see _mask_nbrs_seg) are set to 0 
             in this array, othwerwise this array is all ones
+        nbr_ids: (coadd_objects) ids of nbrs
         pixel_scale: the pixel scale of the jacobian associated with the central image
             
         If total=True is sent, then nbr_imgs is just a single image and nbr_masks is just a single array.
