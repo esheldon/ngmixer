@@ -525,7 +525,7 @@ class DESRenderNGmixNbrs(RenderNGmixNbrs):
     1) ngmix MOF was run with griz
     2) cmodel or 'cm' fits were used in the MOF
     3) that {'unmodeled_nbrs_masking_type':'nbrs-seg'} was set when running ngmix
-    4) the coadd seg map was used for 3) 
+    4) the coadd seg map was used for 3) (or if no such seg map can be found, it defaults to the SE segmap)
     5) you have copies of the MEDS files stored in $DESDATA in the right spot
     6) you have set $DESDATA correctly
     7) you have installed a working copy of fitsio
@@ -537,8 +537,7 @@ class DESRenderNGmixNbrs(RenderNGmixNbrs):
 
     ***END OF WARNING***
     
-    The procedures to render the nbrs follow exaclty those used for the actual 
-    MOF. (In fact, the MOF uses the static methods of this class.) 
+    The procedures to render the nbrs follow exaclty those used for the actual MOF.
     
     Example
     -------    
