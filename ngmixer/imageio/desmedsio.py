@@ -11,12 +11,14 @@ from ..util import print_with_verbosity, \
     interpolate_image, \
     radec_to_unitvecs_ruv, \
     radec_to_thetaphi, \
-    thetaphi_to_unitvecs_ruv
+    thetaphi_to_unitvecs_ruv, \
+    MissingDataError
 
 import meds
 
 # flagging
 IMAGE_FLAGS_SET=2**0
+PSF_IN_BLACKLIST=2**1
 
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
@@ -256,11 +258,37 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         return psfpath
 
+    def _get_psfex_object(self, psfpath):
+        """
+        read a single PSFEx object
+        """
+        from psfex import PSFExError, PSFEx
+        flags=0
+        pex=None
+        if self.conf['use_psf_rerun'] and 'coadd' not in psfpath:
+            # check black list here when we get that set up, for
+            # now just check if the path exists
+            if not os.path.exists(psfpath):
+                print("   flagging:",psfpath)
+                flags |= PSF_IN_BLACKLIST
+
+        if flags == 0:
+            # we expect an existing file
+            if not os.path.exists(psfpath):
+                raise MissingDataError("missing psfex: %s" % psfpath)
+            else:
+                print_with_verbosity("loading: %s" % psfpath,verbosity=2)
+                try:
+                    pex=PSFEx(psfpath)
+                except PSFExError as err:
+                    raise MissingDataError("problem with psfex file "
+                                           "'%s': %s " % (psfpath,str(err)))
+        return pex, flags
+
     def _get_psfex_objects(self, meds, band):
         """
         Load psfex objects for all images, including coadd
         """
-        from psfex import PSFExError, PSFEx
 
         psfex_list=[]
 
@@ -276,16 +304,10 @@ class SVDESMEDSImageIO(MEDSImageIO):
                 impath=info['image_path'][i].strip()
                 psfpath = self._psfex_path_from_image_path(meds, impath)
 
-                if not os.path.exists(psfpath):
-                    print("warning: missing psfex: %s" % psfpath)
-                    self.all_image_flags[band][i] |= self.conf['image_flags2check']
-                else:
-                    print_with_verbosity("loading: %s" % psfpath,verbosity=2)
-                    try:
-                        pex=PSFEx(psfpath)
-                    except PSFExError as err:
-                        print("problem with psfex file: %s " % str(err))
-                        pex=None
+                # might be None with flags set
+                pex, psf_flags = self._get_psfex_object(psfpath)
+                flags |= psf_flags
+
 
             psfex_list.append(pex)
 

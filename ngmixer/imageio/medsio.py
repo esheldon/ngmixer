@@ -506,22 +506,23 @@ class MEDSImageIO(ImageIO):
         coadd_obs_list = ObsList()
         obs_list       = ObsList()
 
+        fake=numpy.zeros((0,0))
         for icut in xrange(ncutout):
 
+            flags=0
             if not self._should_use_obs(band, mindex, icut):
-                continue
-
-            iflags = image_flags[icut]
-            if iflags != 0:
+                obs = Observation(fake)
                 flags = IMAGE_FLAGS
-                obs = Observation(numpy.zeros((0,0)))
-                print("    bad flags, skipping:",iflags)
-                continue
             else:
-                obs = self._get_band_observation(band, mindex, icut)
-                if obs is None:
-                    continue
-                flags=0
+                iflags = image_flags[icut]
+                if iflags != 0:
+                    flags = IMAGE_FLAGS
+                    obs = Observation(fake)
+                else:
+                    obs = self._get_band_observation(band, mindex, icut)
+                    if obs is None:
+                        flags = IMAGE_FLAGS
+                        obs = Observation(fake)
 
             # fill the meta data
             self._fill_obs_meta_data(obs,band,mindex,icut)
