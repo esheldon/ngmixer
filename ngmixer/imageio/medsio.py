@@ -569,6 +569,7 @@ class MEDSImageIO(ImageIO):
         # for the psf fitting code
         wt=wt.clip(min=0.0)
 
+        '''
         skip=False
         if im.sum()==0.0:
             print("    image all zero, skipping")
@@ -580,6 +581,7 @@ class MEDSImageIO(ImageIO):
 
         if skip:
             return None
+        '''
 
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
 
