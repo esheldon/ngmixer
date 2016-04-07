@@ -304,10 +304,9 @@ class SVDESMEDSImageIO(MEDSImageIO):
                 impath=info['image_path'][i].strip()
                 psfpath = self._psfex_path_from_image_path(meds, impath)
 
-                # might be None with flags set
+                # pex might be None with flags set
                 pex, psf_flags = self._get_psfex_object(psfpath)
-                flags |= psf_flags
-
+                self.all_image_flags[band][i] |= psf_flags
 
             psfex_list.append(pex)
 
