@@ -279,8 +279,13 @@ cmd="`which {cmd}` \
     {seed_opt} \
     $config $ofile $meds"
 
-echo $cmd
-python -u $cmd &> $lfile\n"""
+if [ ! -f "$ofile" ]
+then
+    echo $cmd
+    python -u $cmd &> $lfile
+fi
+
+"""
         return template
 
     def write_script(self,files,chunk,rng):

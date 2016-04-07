@@ -296,8 +296,8 @@ class NGMixBootFitter(BaseFitter):
                         od['nbr_flags'][i] = obs.meta['nbrs_flags'][i]
                     
                         if od['nbr_flags'][i] == 0 and obs.meta['nbrs_psfs'][i].has_gmix():
-                            od['nbr_jac_row0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[0][0]
-                            od['nbr_jac_col0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[1][0]
+                            od['nbr_jac_row0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[0]
+                            od['nbr_jac_col0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[1]
                             
                             od['nbr_jac_dudrow'][i] = obs.meta['nbrs_jacs'][i].get_dudrow()
                             od['nbr_jac_dudcol'][i] = obs.meta['nbrs_jacs'][i].get_dudcol()
@@ -314,8 +314,8 @@ class NGMixBootFitter(BaseFitter):
                     od['nbr_id'][i] = mb_obs_list.meta['id']
                     
                     jac = obs.get_jacobian()
-                    od['nbr_jac_row0'][i] = jac.get_cen()[0][0]
-                    od['nbr_jac_col0'][i] = jac.get_cen()[1][0]                    
+                    od['nbr_jac_row0'][i] = jac.get_cen()[0]
+                    od['nbr_jac_col0'][i] = jac.get_cen()[1]                    
                     od['nbr_jac_dudrow'][i] = jac.get_dudrow()
                     od['nbr_jac_dudcol'][i] = jac.get_dudcol()                    
                     od['nbr_jac_dvdrow'][i] = jac.get_dvdrow()

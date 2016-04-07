@@ -9,7 +9,7 @@ from . import bootfit
 from . import mofngmixing
 from . import megamixer
 from . import render_ngmix_nbrs
-from .render_ngmix_nbrs import RenderNGmixNbrs
+from .render_ngmix_nbrs import RenderNGmixNbrs, DESRenderNGmixNbrs
 
 #######################################################
 # setup fitter dict
