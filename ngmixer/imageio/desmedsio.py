@@ -24,6 +24,11 @@ PSF_IN_BLACKLIST=2**1
 class SVDESMEDSImageIO(MEDSImageIO):
 
     def __init__(self, *args, **kw):
+        conf = args[0]
+        if conf['use_psf_rerun']:
+            rerun=conf['psf_rerun_version']
+            self._load_psfex_blacklist(rerun)
+
         super(SVDESMEDSImageIO,self).__init__(*args, **kw)
 
         self._load_image_metadata()
@@ -71,7 +76,6 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
                     band_meta.append(h)
                 self._image_metadata[band] = band_meta
-
 
     def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
         assert False,'        FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1)
@@ -221,6 +225,54 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         return im, cen, sigma_pix, pex['filename']
 
+    def _get_blacklist_dir(self):
+        """
+        location for DES black lists
+        """
+        dir='$DESDATA/EXTRA/blacklists'
+        return os.path.expandvars(dir)
+
+    def _get_psfex_blacklist_file(self, rerun):
+        """
+        location of DES psfex blacklists for reruns outside
+        of DESDM
+        """
+        dir=self._get_blacklist_dir()
+        fname='psfex-%s.txt' % rerun
+        return os.path.join(dir,fname)
+
+    def _get_psfex_blacklist_key(self, run, expname, ccd):
+        """
+        this is our unique key into the blacklist
+        """
+        key='%s-%s-%02d' % (run,expname,ccd)
+        return key
+
+    def _load_psfex_blacklist(self, rerun):
+        """
+        each psfex rerun has an associated blacklist file
+        in a standard location.  Read this and make
+        a dictionary keyed by the image metadata
+        """
+        fname=self._get_psfex_blacklist_file(rerun)
+        print("loading psfex blacklist from:",fname)
+
+        blacklist={}
+        with open(fname) as fobj:
+            for line in fobj:
+                data=line.strip().split()
+
+                run     = data[0]
+                expname = data[1]
+                ccd     = int(data[2])
+                flags   = int(data[3])
+
+                key=self._get_psfex_blacklist_key(run, expname, ccd)
+
+                blacklist[key] = flags
+
+        self._psfex_blacklist=blacklist
+
     def _get_psfex_lists(self):
         """
         Load psfex objects for each of the SE images
@@ -266,14 +318,23 @@ class SVDESMEDSImageIO(MEDSImageIO):
         flags=0
         pex=None
         if self.conf['use_psf_rerun'] and 'coadd' not in psfpath:
-            # check black list here when we get that set up, for
-            # now just check if the path exists
-            if not os.path.exists(psfpath):
-                print("   flagging:",psfpath)
+            # in Mike's reruns, sometimes the files are corrupted or missing,
+            # but these should all be in the blacklist
+            fs=psfpath.split('/')
+            run=fs[-5]
+            expname=fs[-2]
+            bname=fs[-1]
+            bs=bname.split('_')
+            ccd=int(bs[2])
+
+            key=self._get_psfex_blacklist_key(run, expname, ccd)
+
+            if key in self._psfex_blacklist:
+                print("   psfex in blacklist, flagging:",psfpath)
                 flags |= PSF_IN_BLACKLIST
 
         if flags == 0:
-            # we expect an existing file
+            # we expect a well-formed, existing file if there are no flags set
             if not os.path.exists(psfpath):
                 raise MissingDataError("missing psfex: %s" % psfpath)
             else:
@@ -294,6 +355,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         info=meds.get_image_info()
         nimage=info.size
+        nflagged=0
         for i in xrange(nimage):
             pex=None
 
@@ -306,10 +368,14 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
                 # pex might be None with flags set
                 pex, psf_flags = self._get_psfex_object(psfpath)
-                self.all_image_flags[band][i] |= psf_flags
+                if psf_flags != 0:
+                    self.all_image_flags[band][i] |= psf_flags
+                    nflagged += 1
+
 
             psfex_list.append(pex)
 
+        print("    flagged %d/%d psfex for band %s" % (nflagged,nimage,band))
         return psfex_list
 
     def _get_replacement_flags(self, filenames):
