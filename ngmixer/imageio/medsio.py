@@ -74,6 +74,7 @@ class MEDSImageIO(ImageIO):
         self.conf['min_weight'] = self.conf.get('min_weight',-numpy.inf)
         self.conf['reject_outliers'] = self.conf.get('reject_outliers',True) # from cutouts
         self.conf['model_nbrs'] = self.conf.get('model_nbrs',False)
+        self.conf['ignore_zero_weights_images'] = self.conf.get('ignore_zero_weights_images',False)
 
     def _load_psf_data(self):
         pass
@@ -569,19 +570,18 @@ class MEDSImageIO(ImageIO):
         # for the psf fitting code
         wt=wt.clip(min=0.0)
 
-        '''
-        skip=False
-        if im.sum()==0.0:
-            print("    image all zero, skipping")
-            skip=True
+        if self.conf['ignore_zero_weights_images']:
+            skip=False
+            if im.sum()==0.0:
+                print("    image all zero, skipping")
+                skip=True
 
-        if wt.sum() == 0.0:
-            print("    weight all zero, skipping")
-            skip=True
+            if wt.sum() == 0.0:
+                print("    weight all zero, skipping")
+                skip=True
 
-        if skip:
-            return None
-        '''
+            if skip:
+                return None
 
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
 
