@@ -298,8 +298,15 @@ class MEDSImageIO(ImageIO):
             if obs.meta['meta_data']['file_id'][0] == cen_file_id and self.meds_list[band]['id'][nbr_mindex] == obs.meta['id']:
                 nbr_obs = obs
 
-        if nbr_obs is not None:
-            assert nbr_obs.meta['flags'] == 0
+        if nbr_obs is not None:            
+            # cause the object to be flagged above
+            if nbr_obs.meta['flags'] != 0:
+                # for debug
+                if False:
+                    assert False, "nbr obs has flags != 0 when cen does not! band = %d, cen id = %d, nbr_id = %d, file_id = %d" % \
+                        (band,self.meds_list[band]['id'][cen_mindex],self.meds_list[band]['id'][nbr_mindex],cen_file_id)
+                return None,None
+            
             nbr_psf_obs = nbr_obs.get_psf()
             nbr_icut = nbr_obs.meta['icut']
             assert self.meds_list[band]['file_id'][nbr_mindex,nbr_icut] == cen_file_id
