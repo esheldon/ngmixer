@@ -71,8 +71,6 @@ if __name__ == '__main__':
     # fpacking
     fpack_dims = [10240,1]
     
-    print('reading/extracting data...')
-    
     # read ngmix output MOF data
     ngmix_output = args[0]
     fit_data = fitsio.read(ngmix_output)
