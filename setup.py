@@ -13,6 +13,7 @@ dirty = subprocess.check_output(['git','status','--porcelain'])
 if len(dirty) > 0:
     githash += '-dirty'
 
+# add to package
 os.system('echo "#!/usr/bin/env python\nhash = \\"%s\\"\n\n" > ngmixer/githash.py' % githash)
 
 setup(name="ngmixer", 
@@ -24,6 +25,5 @@ setup(name="ngmixer",
       scripts=scripts,
       packages=['ngmixer','ngmixer.imageio','ngmixer.megamixer'])
 
-print githash
-
+# return package to original state
 os.system('echo "#!/usr/bin/env python\nhash = None\n\n" > ngmixer/githash.py')
