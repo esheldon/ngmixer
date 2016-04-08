@@ -27,3 +27,8 @@ FITTERS['metacal-subn-ngmix-boot'] = bootfit.MetacalSubnNGMixBootFitter
 FITTERS['metacal-regauss-boot'] = bootfit.MetacalRegaussBootFitter
 FITTERS['isamp-ngmix-boot'] = bootfit.ISampNGMixBootFitter
 FITTERS['pcal-ngmix-boot'] = bootfit.PostcalNGMixBootFitter
+
+try:
+    from .githash import hash as __gitrepohash__
+except:
+    __gitrepohash__ = None
