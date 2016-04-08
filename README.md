@@ -15,6 +15,7 @@ Structure of Repo
 * util.py - utils of various kinds
 * defaults.py - default flags. etc.
 * files.py - I/O utils
+* render_ngmix_nbrs.py - code to render nbrs for ngmix MOF
 
 Getting Started
 ---------------
@@ -230,3 +231,14 @@ region: "mof"
 
 This config setting is for Y1. The `prop_sat_starpix` and `flag_y1_stellarhalo_masked` options may 
 not apply to future data releases. 
+
+#### Building Nbrs Corrected MEDS Files
+Once you have a run of the ngmix MOF, you can use the script `ngmixer-meds-mof-nbrs-correct ` to build 
+MEDS files which have the nbrs subtracted and/or masked. See the help menu for this script to see how 
+to run it. Note that this script writes the nbrs-corrected MEDS files to the same path of the original 
+MEDS files, but with `-mof-nbrs-corr-{ngmix run}` appended to the name. 
+
+#### Correcting for Nbrs On-the-Fly
+One can use the classes `RenderNGmixNbrs` or (`DESRenderNGmixNbrs` for DES to render the nbrs on-the-fly 
+when running other codes that use the ngmix MOF results. See their doc strings for details.
+
