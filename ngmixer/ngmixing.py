@@ -195,7 +195,8 @@ class NGMixer(dict):
 
         tm=time.time()-t0
         print("time: %f" % tm)
-        print("time per: %f" % (tm/num))
+        if num > 0:
+            print("time per: %f" % (tm/num))
 
         self.done = True
 
@@ -640,6 +641,10 @@ class NGMixer(dict):
         if self.output_file is not None:
             self.meta = self.get_file_meta_data()
 
+            from .githash import hash
+            self.ngmixer_data = numpy.zeros(1,dtype=[('gitrepohash','S%d' % len(hash))])
+            self.ngmixer_data['gitrepohash'][:] = hash
+                        
             from .files import StagedOutFile
             work_dir = self['work_dir']
             with StagedOutFile(self.output_file, tmpdir=work_dir) as sf:
@@ -656,4 +661,6 @@ class NGMixer(dict):
                     if self.meta is not None:
                         fobj.write(self.meta,extname="meta_data")
 
+                    if self.ngmixer_data is not None:
+                        fobj.write(self.ngmixer_data,extname="ngmixer_data")
 

@@ -371,8 +371,10 @@ class MOFNGMixer(NGMixer):
 
         tm=time.time()-t0
         print("time: %f" % tm)
-        print("time per fit: %f" % (tm/num))
-        print("time per fof: %f" % (tm/numfof))
+        if num > 0:
+            print("time per fit: %f" % (tm/num))
+        if numfof > 0:
+            print("time per fof: %f" % (tm/numfof))
 
         self.done = True
 
