@@ -236,9 +236,10 @@ not apply to future data releases.
 Once you have a run of the ngmix MOF, you can use the script `ngmixer-meds-mof-nbrs-correct ` to build 
 MEDS files which have the nbrs subtracted and/or masked. See the help menu for this script to see how 
 to run it. Note that this script writes the nbrs-corrected MEDS files to the same path of the original 
-MEDS files, but with `-mof-nbrs-corr-{ngmix run}` appended to the name. 
+MEDS files, but with `-mof-nbrs-corr-{ngmix run}` appended to the name. Here `{ngmix-run}` is the run name 
+for the MOF results used to render the nbrs.
 
 #### Correcting for Nbrs On-the-Fly
-One can use the classes `RenderNGmixNbrs` or (`DESRenderNGmixNbrs` for DES to render the nbrs on-the-fly 
+One can use the classes `RenderNGmixNbrs` or (`DESRenderNGmixNbrs` for DES) to render the nbrs on-the-fly 
 when running other codes that use the ngmix MOF results. See their doc strings for details.
 
