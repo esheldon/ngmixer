@@ -641,9 +641,15 @@ class NGMixer(dict):
         if self.output_file is not None:
             self.meta = self.get_file_meta_data()
 
-            from .githash import hash
-            self.ngmixer_data = numpy.zeros(1,dtype=[('gitrepohash','S%d' % len(hash))])
-            self.ngmixer_data['gitrepohash'][:] = hash
+            from .githash import hash as ngmixer_hash
+            try:
+                from ngmix.githash import hash as ngmix_hash
+            except:
+                ngmix_hash = ' '
+            self.githashes = numpy.zeros(1,dtype=[('ngmixer_githash','S%d' % len(ngmixer_hash)),
+                                                  ('ngmix_githash','S%d' % len(ngmix_hash))])
+            self.githashes['ngmixer_githash'][:] = ngmixer_hash
+            self.githashes['ngmix_githash'][:] = ngmix_hash
                         
             from .files import StagedOutFile
             work_dir = self['work_dir']
@@ -661,6 +667,6 @@ class NGMixer(dict):
                     if self.meta is not None:
                         fobj.write(self.meta,extname="meta_data")
 
-                    if self.ngmixer_data is not None:
-                        fobj.write(self.ngmixer_data,extname="ngmixer_data")
+                    if self.githashes is not None:
+                        fobj.write(self.githashes,extname="githashes")
 
