@@ -293,7 +293,7 @@ class RenderNGmixNbrs(object):
                                           dvdcol=self.nbrs_data['nbr_jac_dvdcol'][ind]))
                 nbrs_psf_gmixes.append(GMix(pars=self.nbrs_data['nbr_psf_fit_pars'][ind,:]))
             else:
-                nbrs_jac.append(None)
+                nbrs_jacs.append(None)
                 nbrs_psf_gmixes.append(None)
         
         return cen_ind, cen_flags, cen_psf_gmix, cen_jac, \
