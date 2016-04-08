@@ -135,7 +135,8 @@ if __name__ == '__main__':
                                                    total=True,
                                                    verbose=options.verbose)
                         if res is None:
-                            print('        no nbrs')
+                            if options.verbose:
+                                print('        no nbrs')
                             continue
 
                         if options.verbose:
