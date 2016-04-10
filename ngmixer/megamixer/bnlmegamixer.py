@@ -127,7 +127,7 @@ popd
         path=self.get_master_script_file(files)
         text=self.get_master_script_text()
 
-        print "writing:",path
+        print "    writing:",path
         with open(path,'w') as fobj:
             fobj.write(text)
         os.system('chmod 755 %s' % path)
@@ -208,7 +208,8 @@ Notification    = Never
 # Run this exe with these args
 Executable      = {master_script}
 
-Image_Size      = 1000000
+#Image_Size      = 1000000
+Image_Size       =  500000
 
 GetEnv = True
 
@@ -239,7 +240,7 @@ Queue\n"""
 
         fname=self.get_condor_file(files,doall=doall)
 
-        print "writing:",fname
+        print "    writing:",fname
         nwrite=0
         with open(fname,'w') as fobj:
             head=self.get_condor_head_template(files)
@@ -266,7 +267,10 @@ Queue\n"""
 
                     fobj.write(line)
 
-        print "    wrote",nwrite,"jobs"
+        if doall:
+            print "        total of",nwrite,"jobs"
+        else:
+            print "        wrote",nwrite,"jobs"
         return fname, nwrite
 
     def write_job_script(self,files,i,rng):
