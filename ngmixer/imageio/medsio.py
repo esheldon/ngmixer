@@ -595,9 +595,7 @@ class MEDSImageIO(ImageIO):
         else:
             obs.weight_us = None
 
-        # was not always raw before
-        #obs.weight_raw = wt.copy()
-        obs.weight_raw = wt_raw.copy()
+        obs.weight_raw = wt_raw
         obs.seg = seg
         obs.filename=fname
 
@@ -649,7 +647,7 @@ class MEDSImageIO(ImageIO):
         wt_raw = meds.get_cutout(mindex, icut, type='weight')
         if self.conf['region'] == 'mof':
             #wt = meds.get_cutout(mindex, icut, type='weight')
-            wt=wt_raw
+            wt=wt_raw.copy()
             wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
         elif self.conf['region'] == "cweight-nearest":
             wt = meds.get_cweight_cutout_nearest(mindex, icut)
@@ -659,7 +657,7 @@ class MEDSImageIO(ImageIO):
             wt_us = None
         elif self.conf['region'] == 'weight':
             #wt=meds.get_cutout(mindex, icut, type='weight')
-            wt=wt_raw
+            wt=wt_raw.copy()
             wt_us = None
         else:
             raise ValueError("no support for region type %s" % self.conf['region'])
