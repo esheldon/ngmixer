@@ -564,7 +564,7 @@ class MEDSImageIO(ImageIO):
         fname = self._get_meds_orig_filename(meds, mindex, icut)
         im = self._get_meds_image(meds, mindex, icut)
         bmask = self._get_meds_bmask(meds, mindex, icut)
-        wt,wt_us,seg = self._get_meds_weight(meds, mindex, icut)
+        wt,wt_us,wt_raw,seg = self._get_meds_weight(meds, mindex, icut)
         jacob = self._get_jacobian(meds, mindex, icut)
 
         # for the psf fitting code
@@ -594,7 +594,10 @@ class MEDSImageIO(ImageIO):
             obs.weight_us = wt_us.copy()
         else:
             obs.weight_us = None
-        obs.weight_raw = wt.copy()
+
+        # was not always raw before
+        #obs.weight_raw = wt.copy()
+        obs.weight_raw = wt_raw.copy()
         obs.seg = seg
         obs.filename=fname
 
@@ -643,8 +646,10 @@ class MEDSImageIO(ImageIO):
         Get a weight map from the input MEDS file
         """
 
+        wt_raw = meds.get_cutout(mindex, icut, type='weight')
         if self.conf['region'] == 'mof':
-            wt = meds.get_cutout(mindex, icut, type='weight')
+            #wt = meds.get_cutout(mindex, icut, type='weight')
+            wt=wt_raw
             wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
         elif self.conf['region'] == "cweight-nearest":
             wt = meds.get_cweight_cutout_nearest(mindex, icut)
@@ -653,7 +658,8 @@ class MEDSImageIO(ImageIO):
             wt=meds.get_cweight_cutout(mindex, icut)
             wt_us = None
         elif self.conf['region'] == 'weight':
-            wt=meds.get_cutout(mindex, icut, type='weight')
+            #wt=meds.get_cutout(mindex, icut, type='weight')
+            wt=wt_raw
             wt_us = None
         else:
             raise ValueError("no support for region type %s" % self.conf['region'])
@@ -674,7 +680,7 @@ class MEDSImageIO(ImageIO):
         except:
             seg = meds.get_cutout(mindex, icut, type='seg')
 
-        return wt,wt_us,seg
+        return wt,wt_us,wt_raw,seg
 
     def _get_jacobian(self, meds, mindex, icut):
         """

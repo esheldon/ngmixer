@@ -1379,6 +1379,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         if self['nrand'] is None:
             self['nrand']=1
 
+        self['use_original_weight'] = self.get('use_original_weight',False)
+
     def _get_bootstrapper(self, model, mb_obs_list):
         """
         get the bootstrapper for fitting psf through galaxy
@@ -1393,7 +1395,6 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         )
 
         return boot
-
 
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
         mb_obs_list = self.boot.mb_obs_list
@@ -1435,6 +1436,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 prior=prior,
                 ntry=max_pars['ntry'],
                 metacal_pars=self['metacal_pars'],
+                use_original_weight=self['use_original_weight'],
             )
             # needs to be inplace because Matt assumes some
             # sharing of the obs list I think
