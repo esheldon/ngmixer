@@ -74,6 +74,7 @@ class MEDSImageIO(ImageIO):
         self.conf['min_weight'] = self.conf.get('min_weight',-numpy.inf)
         self.conf['reject_outliers'] = self.conf.get('reject_outliers',True) # from cutouts
         self.conf['model_nbrs'] = self.conf.get('model_nbrs',False)
+        self.conf['ignore_zero_weights_images'] = self.conf.get('ignore_zero_weights_images',False)
 
     def _load_psf_data(self):
         pass
@@ -298,8 +299,15 @@ class MEDSImageIO(ImageIO):
             if obs.meta['meta_data']['file_id'][0] == cen_file_id and self.meds_list[band]['id'][nbr_mindex] == obs.meta['id']:
                 nbr_obs = obs
 
-        if nbr_obs is not None:
-            assert nbr_obs.meta['flags'] == 0
+        if nbr_obs is not None:            
+            # cause the object to be flagged above
+            if nbr_obs.meta['flags'] != 0:
+                # for debug
+                if False:
+                    assert False, "nbr obs has flags != 0 when cen does not! band = %d, cen id = %d, nbr_id = %d, file_id = %d" % \
+                        (band,self.meds_list[band]['id'][cen_mindex],self.meds_list[band]['id'][nbr_mindex],cen_file_id)
+                return None,None
+            
             nbr_psf_obs = nbr_obs.get_psf()
             nbr_icut = nbr_obs.meta['icut']
             assert self.meds_list[band]['file_id'][nbr_mindex,nbr_icut] == cen_file_id
@@ -506,18 +514,23 @@ class MEDSImageIO(ImageIO):
         coadd_obs_list = ObsList()
         obs_list       = ObsList()
 
+        fake=numpy.zeros((0,0))
         for icut in xrange(ncutout):
 
+            flags=0
             if not self._should_use_obs(band, mindex, icut):
-                continue
-
-            iflags = image_flags[icut]
-            if iflags != 0:
+                obs = Observation(fake)
                 flags = IMAGE_FLAGS
-                obs = Observation(numpy.zeros((0,0)))
             else:
-                obs = self._get_band_observation(band, mindex, icut)
-                flags=0
+                iflags = image_flags[icut]
+                if iflags != 0:
+                    flags = IMAGE_FLAGS
+                    obs = Observation(fake)
+                else:
+                    obs = self._get_band_observation(band, mindex, icut)
+                    if obs is None:
+                        flags = IMAGE_FLAGS
+                        obs = Observation(fake)
 
             # fill the meta data
             self._fill_obs_meta_data(obs,band,mindex,icut)
@@ -550,23 +563,36 @@ class MEDSImageIO(ImageIO):
 
         fname = self._get_meds_orig_filename(meds, mindex, icut)
         im = self._get_meds_image(meds, mindex, icut)
-        wt,wt_us,seg = self._get_meds_weight(meds, mindex, icut)
+        bmask = self._get_meds_bmask(meds, mindex, icut)
+        wt,wt_us,wt_raw,seg = self._get_meds_weight(meds, mindex, icut)
         jacob = self._get_jacobian(meds, mindex, icut)
 
-        # for the psf fitting code
-        wt=wt.clip(min=0.0)
+        if self.conf['ignore_zero_weights_images']:
+            skip=False
+            if im.sum()==0.0:
+                print("    image all zero, skipping")
+                skip=True
+
+            if wt.sum() == 0.0 or wt_raw.sum() == 0 or (wt_us is not None and wt_us.sum() == 0):
+                print("    weight all zero, skipping")
+                skip=True
+
+            if skip:
+                return None
 
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
 
         obs=Observation(im,
-                        weight=wt.copy(),
+                        weight=wt,
+                        bmask=bmask,
                         jacobian=jacob,
                         psf=psf_obs)
         if wt_us is not None:
-            obs.weight_us = wt_us.copy()
+            obs.weight_us = wt_us
         else:
             obs.weight_us = None
-        obs.weight_raw = wt.copy()
+
+        obs.weight_raw = wt_raw
         obs.seg = seg
         obs.filename=fname
 
@@ -601,17 +627,30 @@ class MEDSImageIO(ImageIO):
         """
         Get an image cutout from the input MEDS file
         """
-        im = meds.get_cutout(mindex, icut)
-        im = im.astype('f8', copy=False)
-        return im
+        return meds.get_cutout(mindex, icut)
+
+    def _get_meds_bmask(self, meds, mindex, icut):
+        """
+        Get an image cutout from the input MEDS file
+        """
+        return meds.get_cutout(mindex, icut, type='bmask')
+
+    def _clip_weight(self,wt):
+        wt = wt.astype('f8', copy=False)
+        w = numpy.where(wt < self.conf['min_weight'])
+        if w[0].size > 0:
+            wt[w] = 0.0
+        wt=wt.clip(min=0.0)
+        return wt    
 
     def _get_meds_weight(self, meds, mindex, icut):
         """
         Get a weight map from the input MEDS file
         """
 
+        wt_raw = meds.get_cutout(mindex, icut, type='weight')
         if self.conf['region'] == 'mof':
-            wt = meds.get_cutout(mindex, icut, type='weight')
+            wt=wt_raw.copy()
             wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
         elif self.conf['region'] == "cweight-nearest":
             wt = meds.get_cweight_cutout_nearest(mindex, icut)
@@ -620,28 +659,22 @@ class MEDSImageIO(ImageIO):
             wt=meds.get_cweight_cutout(mindex, icut)
             wt_us = None
         elif self.conf['region'] == 'weight':
-            wt=meds.get_cutout(mindex, icut, type='weight')
+            wt=wt_raw.copy()
             wt_us = None
         else:
             raise ValueError("no support for region type %s" % self.conf['region'])
 
-        wt = wt.astype('f8', copy=False)
-        w = numpy.where(wt < self.conf['min_weight'])
-        if w[0].size > 0:
-            wt[w] = 0.0
-
+        wt = self._clip_weight(wt)
+        wt_raw = self._clip_weight(wt_raw)
         if wt_us is not None:
-            wt_us = wt_us.astype('f8', copy=False)
-            w = numpy.where(wt_us < self.conf['min_weight'])
-            if w[0].size > 0:
-                wt_us[w] = 0.0
-
+            wt_us = self._clip_weight(wt_us)
+        
         try:
             seg = meds.interpolate_coadd_seg(mindex, icut)
         except:
             seg = meds.get_cutout(mindex, icut, type='seg')
 
-        return wt,wt_us,seg
+        return wt,wt_us,wt_raw,seg
 
     def _get_jacobian(self, meds, mindex, icut):
         """

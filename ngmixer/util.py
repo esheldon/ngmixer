@@ -227,6 +227,16 @@ class UtterFailure(Exception):
     def __str__(self):
         return repr(self.value)
 
+class MissingDataError(Exception):
+    """
+    could not make a good guess
+    """
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
 class Namer(object):
     """
     create strings with a specified front prefix

@@ -36,6 +36,9 @@ parser.add_option("--seed", default=None,type=int,
 parser.add_option("--nbrs-file", default=None,
                   help=("file with the neighbors of each object"))
 
+parser.add_option("--mof-file", default=None,
+                  help=("file with the MOF fit data for doing nbrs subtraction"))
+
 parser.add_option("--psf-file", default=None,
                   help=("file with PSF images"))
 
@@ -76,6 +79,10 @@ if __name__ == '__main__':
         extra_data['obj_flags'] = fitsio.read(os.path.expandvars(options.obj_flags))
     if options.psf_file is not None:
         extra_data['psf_file'] = options.psf_file
+    if options.mof_file is not None:
+        extra_data['mof_fit_data'] = fitsio.read(os.path.expandvars(options.mof_file))
+        extra_data['mof_nbrs_data'] = fitsio.read(os.path.expandvars(options.mof_file),
+                                                  extname='nbrs_data')
 
     verbosity=int(options.verbosity)
     ngmixer.defaults.VERBOSITY.level = verbosity
@@ -83,7 +90,7 @@ if __name__ == '__main__':
     config = ngmixer.files.read_yaml(config_file)
     doMOF = config.get('model_nbrs',False)
 
-    if doMOF:
+    if doMOF and options.mof_file is None:
         MOFNGMixer(config_file,
                    data_files,
                    output_file=out_file,

@@ -9,7 +9,7 @@ from . import bootfit
 from . import mofngmixing
 from . import megamixer
 from . import render_ngmix_nbrs
-from .render_ngmix_nbrs import RenderNGmixNbrs
+from .render_ngmix_nbrs import RenderNGmixNbrs, DESRenderNGmixNbrs
 
 #######################################################
 # setup fitter dict
@@ -20,10 +20,9 @@ FITTERS = {}
 from . import bootfit
 FITTERS['max-ngmix-boot'] = bootfit.MaxNGMixBootFitter
 FITTERS['metacal-ngmix-boot'] = bootfit.MetacalNGMixBootFitter
-FITTERS['metacal-detrend-ngmix-boot'] = bootfit.MetacalDetrendNGMixFitter
-FITTERS['metacal-simn-ngmix-boot'] = bootfit.MetacalSimnNGMixBootFitter
-FITTERS['metacal-addn-ngmix-boot'] = bootfit.MetacalAddnNGMixBootFitter
-FITTERS['metacal-subn-ngmix-boot'] = bootfit.MetacalSubnNGMixBootFitter
-FITTERS['metacal-regauss-boot'] = bootfit.MetacalRegaussBootFitter
 FITTERS['isamp-ngmix-boot'] = bootfit.ISampNGMixBootFitter
-FITTERS['pcal-ngmix-boot'] = bootfit.PostcalNGMixBootFitter
+
+try:
+    from .githash import hash as __gitrepohash__
+except:
+    __gitrepohash__ = None

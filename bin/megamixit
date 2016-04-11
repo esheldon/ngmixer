@@ -69,6 +69,8 @@ if __name__ == '__main__':
         MMixer = SLACNGMegaMixer
     elif options.system == 'slac-array':
         MMixer = SLACArrayNGMegaMixer
+    elif options.system == 'bnl-condor':
+        MMixer = ngmixer.megamixer.BNLCondorMegaMixer
     elif options.system == 'cake':
         MMixer = CakeNGMegaMixer
     else:
