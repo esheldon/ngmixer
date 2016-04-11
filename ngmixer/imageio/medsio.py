@@ -567,17 +567,13 @@ class MEDSImageIO(ImageIO):
         wt,wt_us,wt_raw,seg = self._get_meds_weight(meds, mindex, icut)
         jacob = self._get_jacobian(meds, mindex, icut)
 
-        wt=wt.clip(min=0.0)
-        wt_us=wt_us.clip(min=0.0)
-        wt_raw=wt_raw.clip(min=0.0)
-
         if self.conf['ignore_zero_weights_images']:
             skip=False
             if im.sum()==0.0:
                 print("    image all zero, skipping")
                 skip=True
 
-            if wt.sum() == 0.0:
+            if wt.sum() == 0.0 or wt_raw.sum() == 0 or (wt_us is not None and wt_us.sum() == 0):
                 print("    weight all zero, skipping")
                 skip=True
 
@@ -587,12 +583,12 @@ class MEDSImageIO(ImageIO):
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
 
         obs=Observation(im,
-                        weight=wt.copy(),
+                        weight=wt,
                         bmask=bmask,
                         jacobian=jacob,
                         psf=psf_obs)
         if wt_us is not None:
-            obs.weight_us = wt_us.copy()
+            obs.weight_us = wt_us
         else:
             obs.weight_us = None
 
@@ -639,6 +635,13 @@ class MEDSImageIO(ImageIO):
         """
         return meds.get_cutout(mindex, icut, type='bmask')
 
+    def _clip_weight(self,wt):
+        wt = wt.astype('f8', copy=False)
+        w = numpy.where(wt < self.conf['min_weight'])
+        if w[0].size > 0:
+            wt[w] = 0.0
+        wt=wt.clip(min=0.0)
+        return wt    
 
     def _get_meds_weight(self, meds, mindex, icut):
         """
@@ -647,7 +650,6 @@ class MEDSImageIO(ImageIO):
 
         wt_raw = meds.get_cutout(mindex, icut, type='weight')
         if self.conf['region'] == 'mof':
-            #wt = meds.get_cutout(mindex, icut, type='weight')
             wt=wt_raw.copy()
             wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
         elif self.conf['region'] == "cweight-nearest":
@@ -657,23 +659,16 @@ class MEDSImageIO(ImageIO):
             wt=meds.get_cweight_cutout(mindex, icut)
             wt_us = None
         elif self.conf['region'] == 'weight':
-            #wt=meds.get_cutout(mindex, icut, type='weight')
             wt=wt_raw.copy()
             wt_us = None
         else:
             raise ValueError("no support for region type %s" % self.conf['region'])
 
-        wt = wt.astype('f8', copy=False)
-        w = numpy.where(wt < self.conf['min_weight'])
-        if w[0].size > 0:
-            wt[w] = 0.0
-
+        wt = self._clip_weight(wt)
+        wt_raw = self._clip_weight(wt_raw)
         if wt_us is not None:
-            wt_us = wt_us.astype('f8', copy=False)
-            w = numpy.where(wt_us < self.conf['min_weight'])
-            if w[0].size > 0:
-                wt_us[w] = 0.0
-
+            wt_us = self._clip_weight(wt_us)
+        
         try:
             seg = meds.interpolate_coadd_seg(mindex, icut)
         except:

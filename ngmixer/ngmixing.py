@@ -43,7 +43,8 @@ class NGMixer(dict):
         self['max_box_size']=self.get('max_box_size',2048)
         self['verbosity'] = verbosity
         self.profile = profile
-
+        self.extra_data = extra_data
+        
         # random numbers
         seed_numpy(random_seed)
 
@@ -146,6 +147,30 @@ class NGMixer(dict):
     def get_file_meta_data(self):
         return self.imageio.get_file_meta_data()
 
+    # FIXME move this method to the fitter class
+    def _extract_nbrs_data(self,coadd_mb_obs_lists,mb_obs_lists):
+        if 'mof_fit_data' not in self.extra_data:
+            raise ValueError('MOF fit data must be given to extract nbrs_fit_data!')
+
+        if 'mof_nbrs_data' not in self.extra_data:
+            raise ValueError('MOF nbrs data must be given to fill in nbrs psfs and jacs!')
+        
+        # FIXME extract nbrs psfs, jacs and flags and set them in the obs lists here        
+
+        cids = []
+        for mb_obs_list in mb_obs_lists:
+            cids.append(mb_obs_list.meta['id'])
+        
+        nbrs_fit_data = []
+        for cid in cids:
+            q, = numpy.where(self.extra_data['mof_data']['id'] == cid)
+            if len(q) != 1:
+                raise ValueError('MOF data for object %d not found!' % cid)
+            nbrs_fit_data.append(self.extra_data['mof_data'][q[0]])
+        nbrs_fit_data = numpy.array(nbrs_fit_data,dtype=self.extra_data['mof_data'].dtype.descr)
+
+        return nbrs_fit_data
+
     def do_fits(self):
         """
         Fit all objects in our list
@@ -169,6 +194,11 @@ class NGMixer(dict):
                 self.curr_data[tag][:] = self.default_data[tag]
             self.curr_data_index = 0
 
+            if 'mof_fit_data' in self.extra_data:
+                nbrs_fit_data = self._extract_nbrs_data(coadd_mb_obs_lists,mb_obs_lists)
+            else:
+                nbrs_fit_data = None
+            
             # fit the fof
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
                 if foflen > 1:
@@ -177,7 +207,7 @@ class NGMixer(dict):
 
                 num += 1
                 ti = time.time()
-                self.fit_obj(coadd_mb_obs_list,mb_obs_list)
+                self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data)
                 ti = time.time()-ti
                 print('    time: %f' % ti)
 

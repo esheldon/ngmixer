@@ -227,7 +227,7 @@ class RenderNGmixNbrs(object):
         if len(q) != 1:
             return None
         
-        cen_ind = 0        
+        cen_ind = 0
         fit_inds.append(q[0])
         
         q, = numpy.where((self.nbrs_data['id'] == cen_id) 
@@ -371,7 +371,10 @@ class RenderNGmixNbrs(object):
                                                    fracdev_tag=fracdev_tag,TdByTe_tag=TdByTe_tag)
         else:
             cen_img = None
-
+            
+            import ipdb
+            ipdb.set_trace()
+            
             if verbose:
                 print('        central not rendered')
                 if (nbrs_fit_data[fit_flags_tag][cen_ind] != 0
