@@ -111,6 +111,7 @@ pushd $tmpdir
     {nbrs_opt} \
     {flags_opt} \
     {seed_opt} \
+    {mof_opt} \
     $config $output_file $meds
 
 popd
