@@ -552,7 +552,7 @@ fi
             else:
                 raise IOError("MOF output file '%s' already exists in DESDATA!" % moff)
 
-        os.system('cp %s %s' % (collated_file,moff)            
+        os.system('cp %s %s' % (collated_file,moff))            
 
     def write_job_script(self,files,i,rng):
         """
