@@ -371,7 +371,7 @@ class RenderNGmixNbrs(object):
                                                    fracdev_tag=fracdev_tag,TdByTe_tag=TdByTe_tag)
         else:
             cen_img = None
-            
+
             if verbose:
                 print('        central not rendered')
                 if (nbrs_fit_data[fit_flags_tag][cen_ind] != 0
@@ -383,6 +383,8 @@ class RenderNGmixNbrs(object):
                     print('        bad PSF flux fit for central: FoF obj = %d' % (cen_ind+1))
                 elif (nbrs_fit_data['flags'][cen_ind] & PSF_FIT_FAILURE) != 0:
                     print('        bad PSF fit for central: FoF obj = %d' % (cen_ind+1))
+                elif cen_psf_gmix is None:
+                    print('        no PSF fit data for central: FoF obj = %d' % (cen_ind+1))
                 else:
                     print('        central not rendered for unknown '
                           'reason: FoF obj = %d' % (cen_ind+1))

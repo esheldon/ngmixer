@@ -22,6 +22,7 @@ from ngmix.fitting import EIG_NOTFINITE
 from ngmix.gexceptions import BootPSFFailure, BootGalFailure
 from ngmix.gmix import GMixModel, GMix, GMixCM
 from ngmix.shape import Shape
+from ngmix.jacobian import Jacobian
 
 from pprint import pprint
 
@@ -154,7 +155,7 @@ class NGMixBootFitter(BaseFitter):
                     obs.weight = wt
 
 
-    def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True,nbrs_fit_data=None):
+    def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True,nbrs_fit_data=None,nbrs_meta_data=None):
         """
         fit the obs list
         """
@@ -182,6 +183,11 @@ class NGMixBootFitter(BaseFitter):
             print('    fitting: %s' % model)
 
             if self['model_nbrs'] and nbrs_fit_data is not None:
+                # put back nbrs info if needed
+                if nbrs_meta_data is not None:
+                    self._restore_nbrs_meta_data(mb_obs_list,nbrs_meta_data,coadd=coadd)
+                    
+                # render nbrs
                 self._render_nbrs(model,new_mb_obs_list,coadd,nbrs_fit_data)
 
             model_flags, boot = self._guess_and_run_boot(model,
@@ -332,6 +338,94 @@ class NGMixBootFitter(BaseFitter):
                     # add to metadata
                     obs.update_meta_data({'nbrs_data':od})
 
+    def _restore_nbrs_meta_data(self,mb_obs_list,nbrs_meta_data,coadd=False):
+        """
+        restore the nbrs info - reverse of _fill_nbrs_data function
+        """
+        nd = len(mb_obs_list.meta['nbrs_ids'])
+        
+        # if no nbrs, return
+        if nd == 0:
+            return
+        
+        cen_id = mb_obs_list.meta['id']
+
+        for band,obs_list in enumerate(mb_obs_list):
+            band_num = obs_list.meta['band_num']
+            
+            for obs in obs_list:
+                cutout_index = obs.meta['cutout_index']
+                
+                # if we use this obs, grab nbrs
+                if obs.meta['flags'] == 0:
+                    # do central
+                    q, = numpy.where((nbrs_meta_data['id'] == cen_id) &
+                                     (nbrs_meta_data['nbr_id'] == cen_id) &
+                                     (nbrs_meta_data['band_num'] == band_num) &
+                                     (nbrs_meta_data['cutout_index'] == cutout_index))                    
+                    
+                    if len(q) != 1:
+                        raise ValueError('cen not found in nbrs_meta_data during restore!'\
+                                             ' - cen_id = %d, band = %d, cutout_index = %d' \
+                                             % (cen_id,band_num,cutout_index))
+                    
+                    cen_flags = nbrs_meta_data['nbr_flags'][q[0]]
+                    if cen_flags == 0:
+                        cen_jac = Jacobian(row=nbrs_meta_data['nbr_jac_row0'][q[0]],
+                                       col=nbrs_meta_data['nbr_jac_col0'][q[0]],
+                                       dudrow=nbrs_meta_data['nbr_jac_dudrow'][q[0]],
+                                       dudcol=nbrs_meta_data['nbr_jac_dudcol'][q[0]],
+                                       dvdrow=nbrs_meta_data['nbr_jac_dvdrow'][q[0]],
+                                       dvdcol=nbrs_meta_data['nbr_jac_dvdcol'][q[0]])
+                        cen_psf_gmix = GMix(pars=nbrs_meta_data['nbr_psf_fit_pars'][q[0],:])
+                        cen_psf_obs = Observation(numpy.zeros((1,1)),gmix=cen_psf_gmix)
+                    else:
+                        cen_psf_obs = Observation(numpy.zeros((1,1)))
+                        cen_jac = None
+                        
+                    obs.update_meta_data({'cen_flags':cen_flags,
+                                          'cen_jac':cen_jac,
+                                          'cen_psf':cen_psf_obs})
+                        
+                    # do nbrs
+                    nbrs_flags = []
+                    nbrs_psfs = []
+                    nbrs_jacs = []
+                    for i in xrange(nd):
+                        # get
+                        nbrs_id = mb_obs_list.meta['nbrs_ids'][i]
+                        
+                        # find the nbr
+                        q, = numpy.where((nbrs_meta_data['id'] == cen_id) &
+                                         (nbrs_meta_data['nbr_id'] == nbrs_id) &
+                                         (nbrs_meta_data['band_num'] == band_num) &
+                                         (nbrs_meta_data['cutout_index'] == cutout_index))
+                        
+                        if len(q) != 1:
+                            raise ValueError('more than one nbr or no nbr found in nbrs_meta_data during restore!'\
+                                                 ' - cen_id = %d, nbrs_id = %d, band = %d, cutout_index = %d' \
+                                                 % (cen_id,nbrs_id,band_num,cutout_index))
+                        
+                        nbrs_flags.append(nbrs_meta_data['nbr_flags'][q[0]])
+                        if nbrs_meta_data['nbr_flags'][q[0]] == 0:
+                            jac = Jacobian(row=nbrs_meta_data['nbr_jac_row0'][q[0]],
+                                           col=nbrs_meta_data['nbr_jac_col0'][q[0]],
+                                           dudrow=nbrs_meta_data['nbr_jac_dudrow'][q[0]],
+                                           dudcol=nbrs_meta_data['nbr_jac_dudcol'][q[0]],
+                                           dvdrow=nbrs_meta_data['nbr_jac_dvdrow'][q[0]],
+                                           dvdcol=nbrs_meta_data['nbr_jac_dvdcol'][q[0]])
+                            nbrs_jacs.append(jac)
+                            psf_gmix = GMix(pars=nbrs_meta_data['nbr_psf_fit_pars'][q[0],:])
+                            psf_obs = Observation(numpy.zeros((1,1)),gmix=psf_gmix)
+                            nbrs_psfs.append(psf_obs)
+                        else:
+                            nbrs_psfs.append(Observation(numpy.zeros((1,1))))
+                            nbrs_jacs.append(None)
+                            
+                    obs.update_meta_data({'nbrs_jacs':nbrs_jacs,
+                                          'nbrs_psfs':nbrs_psfs,
+                                          'nbrs_flags':nbrs_flags})
+                        
     def _render_nbrs(self,model,mb_obs_list,coadd,nbrs_fit_data):
         """
         render nbrs
@@ -369,14 +463,22 @@ class NGMixBootFitter(BaseFitter):
                 if obs.meta['flags'] != 0:
                     continue
                 
-                # get properties of cen and nbrs
-                if obs.has_psf_gmix():
-                    cen_psf_gmix = obs.get_psf_gmix()
+                # get properties of cen 
+                if 'cen_flags' in obs.meta and obs.meta['cen_flags'] == 0:
+                    cen_jac = obs.meta['cen_jac']
+                    if obs.meta['cen_psf'].has_gmix():
+                        cen_psf_gmix = obs.meta['cen_psf'].get_gmix()
+                    else:
+                        cen_psf_gmix = None
                 else:
-                    cen_psf_gmix = None                    
-                cen_jac = obs.get_jacobian()
+                    if obs.has_psf_gmix():
+                        cen_psf_gmix = obs.get_psf_gmix()
+                    else:
+                        cen_psf_gmix = None                    
+                    cen_jac = obs.get_jacobian()
                 cen_seg = obs.seg
                 
+                # get props of nbrs
                 nbrs_inds = mb_obs_list.meta['nbrs_inds']
                 nbrs_flags = obs.meta['nbrs_flags']
                 nbrs_psf_gmixes = []
