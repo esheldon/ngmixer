@@ -372,9 +372,6 @@ class RenderNGmixNbrs(object):
         else:
             cen_img = None
             
-            import ipdb
-            ipdb.set_trace()
-            
             if verbose:
                 print('        central not rendered')
                 if (nbrs_fit_data[fit_flags_tag][cen_ind] != 0
