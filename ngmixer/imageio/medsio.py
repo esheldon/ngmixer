@@ -567,8 +567,9 @@ class MEDSImageIO(ImageIO):
         wt,wt_us,wt_raw,seg = self._get_meds_weight(meds, mindex, icut)
         jacob = self._get_jacobian(meds, mindex, icut)
 
-        # for the psf fitting code
         wt=wt.clip(min=0.0)
+        wt_us=wt_us.clip(min=0.0)
+        wt_raw=wt_raw.clip(min=0.0)
 
         if self.conf['ignore_zero_weights_images']:
             skip=False
