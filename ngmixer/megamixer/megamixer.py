@@ -532,9 +532,9 @@ fi
                 files['main_output_dir'],
                 files['coadd_tile'],
                 bands=self['bands'],
-                blind=blind,
-                clobber=clobber,
-                skip_errors=skip_errors)
+                blind=False,
+                clobber=False,
+                skip_errors=False)
 
         # now copy to proper spot in DESDATA
         collated_file = tc.collated_file
