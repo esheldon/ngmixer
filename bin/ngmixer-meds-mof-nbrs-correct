@@ -39,7 +39,7 @@ class MyMeds(meds.MEDS):
 def _get_corr_fname(fname,work_dir,ngmix_run):
     bname = os.path.basename(fname)
     bname = bname.replace('.fits.fz','').replace('.fits','')
-    bname = '%s-mof-nbrs-corr-%s.fits' % (bname,ngmix_run)
+    bname = '%s-mof-%s.fits' % (bname,ngmix_run)
     newf = os.path.expandvars(os.path.join(work_dir, bname))
     return newf
 
