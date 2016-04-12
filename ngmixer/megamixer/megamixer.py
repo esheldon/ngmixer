@@ -18,13 +18,14 @@ class BaseNGMegaMixer(dict):
         self.rng = np.random.RandomState(seed=seed)
         
     def get_mof_file(self,full_coadd_tile,DESDATA,mof_version):
+        coadd_tile = full_coadd_tile.split('_')[-1]
         moff = os.path.join(DESDATA,
                             'EXTRA',
                             'meds',
                             self['meds_version'],
                             'mof-data',
                             mof_version,
-                            files['full_coadd_tile'].split('/')[-1],
+                            full_coadd_tile.split('/')[-1],
                             '%s-meds-%s-mof-%s.fits' % (coadd_tile,self['meds_version'],mof_version))
         return moff
 
@@ -538,8 +539,8 @@ fi
 
         # now copy to proper spot in DESDATA
         collated_file = tc.collated_file
-        moff = self.get_mof_file(full_coadd_tile,DESDATA,self['run'])
-        odir = os.path.basename(moff)
+        moff = self.get_mof_file(coadd_tile,files['DESDATA'],self['run'])
+        odir = os.path.split(moff)[0]
         if not os.path.exists(odir):
             os.makedirs(odir)
             
@@ -552,6 +553,7 @@ fi
             else:
                 raise IOError("MOF output file '%s' already exists in DESDATA!" % moff)
 
+        print("    moving '%s' -> '%s'"%(collated_file,moff))
         os.system('cp %s %s' % (collated_file,moff))            
 
     def write_job_script(self,files,i,rng):
