@@ -13,7 +13,9 @@
         archive - run after collate to delete intermediate files and tar logs
         link - make symlinks to all final outputs under {run}/output
         collate-link - collate and link the final outputs
-        install-mof - install outputs of MOF run to proper spot in DESDATA"""
+        install-mof - install outputs of MOF run to proper spot in DESDATA
+        setup-nbrs - setup the nbrs jobs to build the FoFs
+        run-nbrs - run the nbrs jobs"""
 import os
 import sys
 import meds
@@ -165,9 +167,9 @@ if __name__ == '__main__':
         elif cmd == 'install-mof':
             ngmm.install_mof_outputs(coadd_run,
                                      clobber=options.clobber)
-        elif cmd == 'setup_nbrs':
+        elif cmd == 'setup-nbrs':
             ngmm.setup_nbrs_coadd_tile(coadd_run)
-        elif cmd == 'run_nbrs':
+        elif cmd == 'run-nbrs':
             ngmm.run_nbrs_coadd_tile(coadd_run)
         else:
             raise ValueError("cmd %s not valid!" % cmd)
