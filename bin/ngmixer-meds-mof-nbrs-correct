@@ -75,7 +75,7 @@ if __name__ == '__main__':
     ngmix_output = args[0]
     fit_data = fitsio.read(ngmix_output)
     nbrs_data = fitsio.read(ngmix_output,ext='nbrs_data')
-    ngmix_run = ngmix_output[len('DES0347-5540-'):-len('.fits')] # use a dummy tile name to extract the run
+    ngmix_run = os.path.basename(ngmix_output)[len('DES0347-5540-'):-len('.fits')] # use a dummy tile name to extract the run
     if 'blind' in ngmix_run:
         raise ValueError('Blinded ngmix outputs cannot be used to correct for nbrs!')
     
