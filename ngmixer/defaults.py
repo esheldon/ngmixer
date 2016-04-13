@@ -33,7 +33,7 @@ else:
 # an overall flag for metacal fitting
 # this will be set if any flags in
 # the mcal_flags field are set
-METACAL_FLAG = 2**4
+METACAL_FAILURE = 2**4
 
 ################################
 # flags used by MOF 
