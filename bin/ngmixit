@@ -82,7 +82,7 @@ if __name__ == '__main__':
     if options.mof_file is not None:
         extra_data['mof_fit_data'] = fitsio.read(os.path.expandvars(options.mof_file))
         extra_data['mof_nbrs_data'] = fitsio.read(os.path.expandvars(options.mof_file),
-                                                  extname='nbrs_data')
+                                                  ext='nbrs_data')
 
     verbosity=int(options.verbosity)
     ngmixer.defaults.VERBOSITY.level = verbosity

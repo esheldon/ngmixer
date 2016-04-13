@@ -49,36 +49,8 @@ already. Any new fitter has to be registered in the main package `__init__.py`.
 Once you have a fitter and an imageio class, you can run the code. You will need any configs etc. 
 setup properly. 
 
-For ngmix, start with the MOF Y1 configs (`ngmix-y1-014.yaml` in the package `esheldon/ngmix-y1-configs`) 
-and make sure to set the following:
-
-```yaml
-read_wcs: False
-read_me_wcs: False
-
-model_nbrs: False
-model_nbrs_method: 'subtract'
-mof:
-    maxabs_conv:  [1.0e-3,1.0e-3,1.0e-6,1.0e-6,1.0e-6,1.0e-6,1.0e-6,1.0e-6,1.0e-6]
-    maxfrac_conv: [1.0e-6,1.0e-6,1.0e-6,1.0e-6,1.0e-6,1.0e-3,1.0e-3,1.0e-3,1.0e-3]
-    maxerr_conv: 0.5
-    max_itr: 15
-    min_itr: 10
-    min_useg_itr: 1
-    write_convergence_data: False
-    convergence_model: 'cm'
-
-prop_sat_starpix: False
-flag_y1_stellarhalo_masked: False
-intr_prof_var_fac: 0.0
-
-region: "cweight-nearest"
-```
-
-This turns off all of the MOF magic.
-
-Then you can directly call `ngmixit` (which gets installed when the repo is installed.) This bit of code is 
-just like the old script from gmix_meds. (See here https://github.com/esheldon/ngmixer/blob/master/bin/ngmixit).
+For ngmix, see the metacal and MOF examples on the main repo wiki. Both of these examples eventally use the 
+`ngmixit` command to run the code.
 
 #### Big Runs
 
@@ -93,40 +65,7 @@ objects in each file to fit. If you are not doing a MOF run, this parameter defa
 (i.e., it makes dummy FoFs). Unfortunately, this whole scheme currently requires that MEDS files be input into the code. 
 Fixing this dependence def needs to happen, but has not yet.
 
-To call it, use the command line util `megamixit`. For this you will need a run config (see the Y1 one here 
-https://github.com/esheldon/ngmix-y1-config/blob/master/run_config/run-y1-014.yaml). You can ignore the 
-`nbrs_version` tag, unless you are doing MOF. By default, if you set the `run` field in the run config to `y1-014` 
-the code expects an ngmix config called `ngmix-y1-014.yaml`. You can set this by hand by 
-setting the `ngmix_config` field in the run config.
-
-You can call the megamixer like this (at SLAC)
-
-```bash
-#!/bin/bash
-
-seed=3461743891
-megamixit \
-    --clobber \
-    --system=slac \
-    --queue=medium \
-    --extra-cmds=extra_cmds.txt \
-    --seed=${seed} \
-    ${1} \
-    run-y1-014.yaml \
-    tiles.txt
-```
-
-The extra-cmds options puts any commands in the file it points to into the job scripts. 
-Always give a seed so that things can be rerun in exactly the same way. You then specify 
-a run config and finally a list of tiles. The `${1}` above is the command. To do a run you 
-feed it (at least) four commands (assuming you have put the above code into a script called `megamix.sh`)
-
-```
-./megamix.sh setup   # builds all jobs and configs on disk
-./megamix.sh run     # submits jobs to medium queue at SLAC
-./megamix.sh collate # when all jobs are done run this to recombine the files to single outputs per tile
-./megamix.sh link    # links all outputs to ${run}/output
-```
+To call the megamixer, use the command line util `megamixit`. Again see the wiki for details.
 
 Implementing a new megamixer is not that hard at all. See the base class here
 
@@ -232,14 +171,5 @@ region: "mof"
 This config setting is for Y1. The `prop_sat_starpix` and `flag_y1_stellarhalo_masked` options may 
 not apply to future data releases. 
 
-#### Building Nbrs Corrected MEDS Files
-Once you have a run of the ngmix MOF, you can use the script `ngmixer-meds-mof-nbrs-correct ` to build 
-MEDS files which have the nbrs subtracted and/or masked. See the help menu for this script to see how 
-to run it. Note that this script writes the nbrs-corrected MEDS files to the same path of the original 
-MEDS files, but with `-mof-nbrs-corr-{ngmix run}` appended to the name. Here `{ngmix-run}` is the run name 
-for the MOF results used to render the nbrs.
-
-#### Correcting for Nbrs On-the-Fly
-One can use the classes `RenderNGmixNbrs` or (`DESRenderNGmixNbrs` for DES) to render the nbrs on-the-fly 
-when running other codes that use the ngmix MOF results. See their doc strings for details.
-
+#### Using the MOF Results
+See the repo wiki.

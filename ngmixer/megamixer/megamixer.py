@@ -17,6 +17,18 @@ class BaseNGMegaMixer(dict):
         self['extra_cmds'] = extra_cmds        
         self.rng = np.random.RandomState(seed=seed)
         
+    def get_mof_file(self,full_coadd_tile,DESDATA,mof_version):
+        coadd_tile = full_coadd_tile.split('_')[-1]
+        moff = os.path.join(DESDATA,
+                            'EXTRA',
+                            'meds',
+                            self['meds_version'],
+                            'mof-data',
+                            mof_version,
+                            full_coadd_tile.split('/')[-1],
+                            '%s-meds-%s-mof-%s.fits' % (coadd_tile,self['meds_version'],mof_version))
+        return moff
+
     def get_files(self,full_coadd_tile):
         """
         get all paths to files
@@ -51,6 +63,13 @@ class BaseNGMegaMixer(dict):
                              files['full_coadd_tile'].split('/')[-1],
                              '%s-meds-%s-nbrslist-%s.fits' % (coadd_tile,self['meds_version'],self['nbrs_version']))
         files['nbrs_file'] = nbrsf
+
+        # now look for mof
+        if 'mof_version' in self:
+            moff = self.get_mof_file(full_coadd_tile,DESDATA,self['mof_version'])
+        else:
+            moff = None
+        files['mof_file'] = moff
 
         # do the fofs
         foff = os.path.join(DESDATA,
@@ -277,6 +296,7 @@ cmd="`which {cmd}` \
     {nbrs_opt} \
     {flags_opt} \
     {seed_opt} \
+    {mof_opt} \
     $config $ofile $meds"
 
 if [ ! -f "$ofile" ]
@@ -309,7 +329,7 @@ fi
         args['fof_opt'] = ''
         args['nbrs_opt'] = ''
         args['flags_opt'] = ''
-
+        
         if self['model_nbrs']:
             if os.path.exists(files['fof_file']):
                 args['fof_opt'] = '--fof-file=%s'% files['fof_file'].replace(files['DESDATA'],'${DESDATA}')
@@ -319,6 +339,12 @@ fi
 
             if os.path.exists(files['obj_flags']):
                 args['flags_opt'] = '--obj-flags=%s'% files['obj_flags'].replace(files['DESDATA'],'${DESDATA}')
+
+        if 'mof_version' in self:
+            if os.path.exists(files['mof_file']):
+                args['mof_opt'] = "--mof-file=%s"% files['mof_file'].replace(files['DESDATA'],'${DESDATA}')
+        else:
+            args['mof_opt'] = ''
 
         if 'seed' not in self:
             seed = self.rng.randint(low=1,high=1000000000)
@@ -341,6 +367,9 @@ fi
         if self['model_nbrs']:
             assert os.path.exists(files['fof_file']),"fof file %s must be made to model nbrs!" % files['fof_file']
             assert os.path.exists(files['nbrs_file']),"nbrs file %s must be made to model nbrs!" % files['nbrs_file']
+
+        if 'mof_version' in self:
+            assert os.path.exists(files['mof_file']),"MOF file %s must be made to subtract nbrs on the fly!" % files['mof_file']
 
         fof_ranges = self.get_fof_ranges(files)
 
@@ -484,6 +513,49 @@ fi
         except:
             print("failed to link tile '%s'" % coadd_tile)
         
+    def install_mof_outputs(self,coadd_tile,clobber=True):
+        print("installing MOF outputs for tile '%s'" % coadd_tile)
+
+        # startup concat to get output name
+        files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
+
+        clist = []
+        for chunk,rng in enumerate(fof_ranges):
+            dr = self.get_chunk_output_dir(files,chunk,rng)
+            base = self.get_chunk_output_basename(files,self['run'],rng)
+            fname = os.path.join(dr,base+'.fits')
+            clist.append(fname)
+
+        tc = get_concat_class(self['concat_type'])
+        tc = tc(self['run'],
+                files['ngmix_config'],
+                clist,
+                files['main_output_dir'],
+                files['coadd_tile'],
+                bands=self['bands'],
+                blind=False,
+                clobber=False,
+                skip_errors=False)
+
+        # now copy to proper spot in DESDATA
+        collated_file = tc.collated_file
+        moff = self.get_mof_file(coadd_tile,files['DESDATA'],self['run'])
+        odir = os.path.split(moff)[0]
+        if not os.path.exists(odir):
+            os.makedirs(odir)
+            
+        if os.path.exists(moff):
+            if clobber:
+                try:
+                    os.remove(moff)
+                except:
+                    pass
+            else:
+                raise IOError("MOF output file '%s' already exists in DESDATA!" % moff)
+
+        print("    moving '%s' -> '%s'"%(collated_file,moff))
+        os.system('cp %s %s' % (collated_file,moff))            
+
     def write_job_script(self,files,i,rng):
         """
         method that writes a script to run the runchunk.sh script

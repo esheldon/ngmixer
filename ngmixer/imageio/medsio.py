@@ -547,6 +547,9 @@ class MEDSImageIO(ImageIO):
         if self.conf['reject_outliers'] and len(obs_list) > 0:
             self._reject_outliers(obs_list)
 
+        obs_list.update_meta_data({'band_num':band})
+        coadd_obs_list.update_meta_data({'band_num':band})
+
         return coadd_obs_list, obs_list
 
     def _get_meds_orig_filename(self, meds, mindex, icut):
@@ -595,7 +598,7 @@ class MEDSImageIO(ImageIO):
         obs.weight_raw = wt_raw
         obs.seg = seg
         obs.filename=fname
-
+        
         return obs
 
     def _fill_obs_meta_data(self,obs, band, mindex, icut):
@@ -616,6 +619,7 @@ class MEDSImageIO(ImageIO):
         meta_row['file_id'][0]  = file_id
         meta_row['pixel_scale'][0] = obs.get_jacobian().get_scale()
         meta={'icut':icut,
+              'cutout_index':icut,
               'orig_start_row':meds['orig_start_row'][mindex, icut],
               'orig_start_col':meds['orig_start_col'][mindex, icut],
               'meta_data':meta_row,

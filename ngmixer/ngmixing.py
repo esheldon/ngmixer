@@ -147,15 +147,9 @@ class NGMixer(dict):
     def get_file_meta_data(self):
         return self.imageio.get_file_meta_data()
 
-    # FIXME move this method to the fitter class
     def _extract_nbrs_data(self,coadd_mb_obs_lists,mb_obs_lists):
         if 'mof_fit_data' not in self.extra_data:
             raise ValueError('MOF fit data must be given to extract nbrs_fit_data!')
-
-        if 'mof_nbrs_data' not in self.extra_data:
-            raise ValueError('MOF nbrs data must be given to fill in nbrs psfs and jacs!')
-        
-        # FIXME extract nbrs psfs, jacs and flags and set them in the obs lists here        
 
         cids = []
         for mb_obs_list in mb_obs_lists:
@@ -163,11 +157,11 @@ class NGMixer(dict):
         
         nbrs_fit_data = []
         for cid in cids:
-            q, = numpy.where(self.extra_data['mof_data']['id'] == cid)
+            q, = numpy.where(self.extra_data['mof_fit_data']['id'] == cid)
             if len(q) != 1:
                 raise ValueError('MOF data for object %d not found!' % cid)
-            nbrs_fit_data.append(self.extra_data['mof_data'][q[0]])
-        nbrs_fit_data = numpy.array(nbrs_fit_data,dtype=self.extra_data['mof_data'].dtype.descr)
+            nbrs_fit_data.append(self.extra_data['mof_fit_data'][q[0]])
+        nbrs_fit_data = numpy.array(nbrs_fit_data,dtype=self.extra_data['mof_fit_data'].dtype.descr)
 
         return nbrs_fit_data
 
@@ -196,9 +190,11 @@ class NGMixer(dict):
 
             if 'mof_fit_data' in self.extra_data:
                 nbrs_fit_data = self._extract_nbrs_data(coadd_mb_obs_lists,mb_obs_lists)
+                nbrs_meta_data = self.extra_data['mof_nbrs_data']
             else:
                 nbrs_fit_data = None
-            
+                nbrs_meta_data = None
+
             # fit the fof
             for coadd_mb_obs_list,mb_obs_list in zip(coadd_mb_obs_lists,mb_obs_lists):
                 if foflen > 1:
@@ -207,7 +203,7 @@ class NGMixer(dict):
 
                 num += 1
                 ti = time.time()
-                self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data)
+                self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data,nbrs_meta_data=nbrs_meta_data)
                 ti = time.time()-ti
                 print('    time: %f' % ti)
 
@@ -310,7 +306,9 @@ class NGMixer(dict):
 
         return flags
 
-    def fit_obj(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None,make_epoch_data=True,make_nbrs_data=False):
+    def fit_obj(self,coadd_mb_obs_list,mb_obs_list,
+                nbrs_fit_data=None,nbrs_meta_data=None,
+                make_epoch_data=True,make_nbrs_data=False):
         """
         fit a single object
         """
@@ -323,6 +321,7 @@ class NGMixer(dict):
         if flags == 0:
             fit_flags = self.fit_all_obs_lists(coadd_mb_obs_list,mb_obs_list,
                                                nbrs_fit_data=nbrs_fit_data,
+                                               nbrs_meta_data=nbrs_meta_data,
                                                make_epoch_data=make_epoch_data,
                                                make_nbrs_data=make_nbrs_data)
             flags |= fit_flags
@@ -378,7 +377,9 @@ class NGMixer(dict):
 
                     self.nbrs_data.extend(list(ed))
 
-    def fit_all_obs_lists(self,coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=None,make_epoch_data=True,make_nbrs_data=True):
+    def fit_all_obs_lists(self,coadd_mb_obs_list,mb_obs_list,
+                          nbrs_fit_data=None,nbrs_meta_data=None,
+                          make_epoch_data=True,make_nbrs_data=True):
         """
         fit all obs lists
         """
@@ -389,7 +390,10 @@ class NGMixer(dict):
             nfit=sum([len(ol) for ol in mb_obs_list])
             print('    fitting',nfit,'me galaxy')
             try:
-                me_fit_flags = self.fitter(mb_obs_list,coadd=False,nbrs_fit_data=nbrs_fit_data,make_epoch_data=make_epoch_data)
+                me_fit_flags = self.fitter(mb_obs_list,coadd=False,
+                                           nbrs_fit_data=nbrs_fit_data,
+                                           nbrs_meta_data=nbrs_meta_data,
+                                           make_epoch_data=make_epoch_data)
 
                 # fill in epoch data
                 if make_epoch_data:
@@ -413,7 +417,10 @@ class NGMixer(dict):
         if self['fit_coadd_galaxy']:
             print('    fitting coadd galaxy')
             try:
-                coadd_fit_flags = self.fitter(coadd_mb_obs_list,coadd=True,nbrs_fit_data=nbrs_fit_data,make_epoch_data=make_epoch_data)
+                coadd_fit_flags = self.fitter(coadd_mb_obs_list,coadd=True,
+                                              nbrs_fit_data=nbrs_fit_data,
+                                              nbrs_meta_data=nbrs_meta_data,
+                                              make_epoch_data=make_epoch_data)
 
                 # fill in epoch data
                 if make_epoch_data:

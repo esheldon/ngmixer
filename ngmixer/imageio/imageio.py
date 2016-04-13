@@ -38,12 +38,17 @@ class ImageIO(object):
         'meta_data': numpy array with meta data (same dtype as returned by get_meta_data_dtype)
         'obj_flags': non-zero if whole object should be ignored
 
+    Each list of obs per band needs to have the following meta data set
+    
+        'band_num': zero-indexed band 
+
     Each individual observation in the lists needs to have the following meta data fields set
 
         'id': unique id for object in obs
         'band_ind': id for object's cutout in the band
         'flags': non-zero if the observation should be ignored
         'meta_data': numpy array with epoch meta data (same dtype as returned by get_epoch_meta_data_dtype)
+        'cutout_index': index of cutout in the band (must be unique at least within this band)
 
     Each psf of each observation needs to have the meta data field
 
