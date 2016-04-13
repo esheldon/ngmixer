@@ -30,6 +30,11 @@ else:
     PSF_FLUX_FIT_FAILURE = 2**2
     LOW_PSF_FLUX         = 2**3
 
+# an overall flag for metacal fitting
+# this will be set if any flags in
+# the mcal_flags field are set
+METACAL_FLAG = 2**4
+
 ################################
 # flags used by MOF 
 MOF_NBR_NOT_CONVERGED            = 2**0

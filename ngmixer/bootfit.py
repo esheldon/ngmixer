@@ -1462,6 +1462,13 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         d=self.data
         res=self.gal_fitter.get_result()
 
+        mcal_flags=res['mcal_flags']
+        d['mcal_flags'][dindex] = mcal_flags
+
+        if res['mcal_flags'] != 0:
+            print("    metacal flags set:",mcal_flags)
+            d['flags'][dindex] |= METACAL_FAILURE
+
         for type in ngmix.metacal.METACAL_TYPES:
             tres=res[type]
             if type=='noshear':
@@ -1485,7 +1492,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         simple_npars=5+nband
         np=simple_npars
 
-        dt=[]
+        dt=[('mcal_flags','i8')]
 
         models=self._get_all_models(coadd)
         if len(models) > 1:
