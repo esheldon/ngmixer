@@ -154,13 +154,24 @@ if __name__ == '__main__':
 
                 # keep track of location in file
                 mindex += 1
-                
+
         # now compress fits file and write to final location
         print("fpacking '%s'" % f)
         cmd = 'fpack -t %d,%d {fname}' % tuple(fpack_dims)
         tmpdir = os.path.dirname(f)
-        fzf = f.replace('.fits','.fits.fz')
-        fzf = os.path.join(os.path.split(meds_files[0])[0],os.path.split(fzf)[-1])
+
+        # get new meds dir
+        new_meds_dir = os.path.split(meds_files[0])[0].split('/')
+        new_meds_dir[-2] += '-mof-%s' % ngmix_run
+        new_meds_dir = '/'.join(new_meds_dir)
+        try:
+            os.makedirs(new_meds_dir)
+        except:
+            pass
+        
+        # build new file path
+        fzf = f.replace('.fits','.fits.fz')        
+        fzf = os.path.join(new_meds_dir,os.path.split(fzf)[-1])
         
         # remove old file if needed
         if os.path.exists(fzf):
