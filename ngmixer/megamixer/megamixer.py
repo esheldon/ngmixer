@@ -452,6 +452,7 @@ fi
         self.clean_coadd_tile(coadd_tile)
         
         # tar (and maybe compress) the rest
+        files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
         if compress:
             tar_cmd = 'tar -czvf'
             tail = '.tar.gz'
