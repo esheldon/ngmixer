@@ -177,6 +177,11 @@ if __name__ == '__main__':
 
         # now compress fits file and write to final location
         if options.output_file is None:
+            if options.object_range is not None:
+                print("object range cannot be used when writing to DESDATA!\n")
+                parser.print_help()
+                sys.exit(45)
+
             # get new meds dir
             new_meds_dir = os.path.split(meds_files[0])[0].split('/')
             new_meds_dir[-2] += '-mof-%s' % ngmix_run
