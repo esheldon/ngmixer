@@ -79,6 +79,13 @@ class MEDSImageIO(ImageIO):
         # the masking can introduce asymmetries
         self.conf['symmetrize_bmask'] = self.conf.get('symmetrize_bmask',True)
 
+        # max fraction of image masked in bitmask
+        self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',0.1)
+
+        # check this region around the center
+        self.conf['central_bmask_radius'] = \
+                self.conf.get('central_bmask_radius',None)
+
     def _load_psf_data(self):
         pass
 
@@ -567,11 +574,15 @@ class MEDSImageIO(ImageIO):
         """
         meds=self.meds_list[band]
 
+        bmask,skip = self._get_meds_bmask(meds, mindex, icut)
+        if skip:
+            return None
+
         fname = self._get_meds_orig_filename(meds, mindex, icut)
         im = self._get_meds_image(meds, mindex, icut)
-        bmask = self._get_meds_bmask(meds, mindex, icut)
         wt,wt_us,wt_raw,seg = self._get_meds_weight(meds, mindex, icut)
         jacob = self._get_jacobian(meds, mindex, icut)
+
 
         if self.conf['ignore_zero_weights_images']:
             skip=False
@@ -579,7 +590,9 @@ class MEDSImageIO(ImageIO):
                 print("    image all zero, skipping")
                 skip=True
 
-            if wt.sum() == 0.0 or wt_raw.sum() == 0 or (wt_us is not None and wt_us.sum() == 0):
+            if (wt.sum() == 0.0
+                    or wt_raw.sum() == 0
+                    or (wt_us is not None and wt_us.sum() == 0) ):
                 print("    weight all zero, skipping")
                 skip=True
 
@@ -640,19 +653,54 @@ class MEDSImageIO(ImageIO):
         """
         Get an image cutout from the input MEDS file
         """
+
+        skip=False
         if 'bmask_cutouts' in meds._fits:
             bmask=meds.get_cutout(mindex, icut, type='bmask')
 
             if self.conf['symmetrize_bmask']:
                 if bmask.shape[0] == bmask.shape[1]:
+                    borig=bmask.copy()
                     rotmask=numpy.rot90(bmask)
                     bmask |= rotmask
+
+                    rad=self.conf['central_bmask_radius']
+
+                    w=numpy.where(bmask != 0)
+                    frac = float(w[0].size)/bmask.size
+                    if frac > self.conf['max_bmask_frac']:
+                        print("    skipping due to high bmask frac:",frac)
+                        skip=True
+
+                    if rad is not None:
+                        row0 = meds['cutout_row'][mindex,icut]
+                        col0 = meds['cutout_col'][mindex,icut]
+
+                        row_start = _clip_pixel(row0-rad, bmask.shape[0])
+                        row_end   = _clip_pixel(row0+rad, bmask.shape[0])
+                        col_start = _clip_pixel(col0-rad, bmask.shape[1])
+                        col_end   = _clip_pixel(col0+rad, bmask.shape[1])
+
+                        bmask_sub = bmask[row_start:row_end,
+                                          col_start:col_end]
+                        wcen=numpy.where(bmask_sub != 0)
+                        if wcen[0].size > 0:
+                            print("    skipping due center masked")
+                            skip=True
+
+                    if True and w[0].size > 0:
+                        import images
+                        plt=images.view_mosaic([borig, bmask],show=False)
+                        plt.write_img(800,800,'/astro/u/esheldon/www/tmp/tmp.png')
+                        if raw_input('hit a key: ')=='q':
+                            stop
+
                 else:
                     raise RuntimeError("cannot symmetrize non-square bmask")
         else:
             bmask=None
 
-        return bmask
+        return bmask, skip
 
     def _clip_weight(self,wt):
         wt = wt.astype('f8', copy=False)
@@ -754,3 +802,13 @@ class MEDSImageIO(ImageIO):
             self.meds_meta_list.append(medsi_meta)
 
         self.nobj_tot = self.meds_list[0].size
+
+def _clip_pixel(pixel, npix):
+    pixel=int(pixel)
+    if pixel < 0:
+        pixel=0
+    if pixel > (npix-1):
+        pixel = (npix-1)
+    return pixel
+
+
