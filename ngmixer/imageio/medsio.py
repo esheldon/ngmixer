@@ -646,7 +646,7 @@ class MEDSImageIO(ImageIO):
             if self.conf['symmetrize_bmask']:
                 if bmask.shape[0] == bmask.shape[1]:
                     rotmask=numpy.rot90(bmask)
-                    bmask += rotmask
+                    bmask |= rotmask
                 else:
                     raise RuntimeError("cannot symmetrize non-square bmask")
         else:
