@@ -688,7 +688,7 @@ class MEDSImageIO(ImageIO):
                             print("    skipping due center masked")
                             skip=True
 
-                    if True and w[0].size > 0:
+                    if False and w[0].size > 0:
                         import images
                         plt=images.view_mosaic([borig, bmask],show=False)
                         plt.write_img(800,800,'/astro/u/esheldon/www/tmp/tmp.png')
