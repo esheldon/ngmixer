@@ -76,6 +76,9 @@ class MEDSImageIO(ImageIO):
         self.conf['model_nbrs'] = self.conf.get('model_nbrs',False)
         self.conf['ignore_zero_weights_images'] = self.conf.get('ignore_zero_weights_images',False)
 
+        # the masking can introduce asymmetries
+        self.conf['symmetrize_bmask'] = self.conf.get('symmetrize_bmask',True)
+
     def _load_psf_data(self):
         pass
 
@@ -639,8 +642,17 @@ class MEDSImageIO(ImageIO):
         """
         if 'bmask_cutouts' in meds._fits:
             bmask=meds.get_cutout(mindex, icut, type='bmask')
+
+            if self.conf['symmetrize_bmask']:
+                if bmask.shape[0] == bmask.shape[1]:
+                    rotmask=numpy.rot90(bmask)
+                    bmask += rotmask
+                else:
+                    raise RuntimeError("cannot symmetrize non-square bmask")
         else:
             bmask=None
+
+        return bmask
 
     def _clip_weight(self,wt):
         wt = wt.astype('f8', copy=False)
@@ -648,7 +660,7 @@ class MEDSImageIO(ImageIO):
         if w[0].size > 0:
             wt[w] = 0.0
         wt=wt.clip(min=0.0)
-        return wt    
+        return wt
 
     def _get_meds_weight(self, meds, mindex, icut):
         """
@@ -675,7 +687,7 @@ class MEDSImageIO(ImageIO):
         wt_raw = self._clip_weight(wt_raw)
         if wt_us is not None:
             wt_us = self._clip_weight(wt_us)
-        
+
         try:
             seg = meds.interpolate_coadd_seg(mindex, icut)
         except:
