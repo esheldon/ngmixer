@@ -637,7 +637,10 @@ class MEDSImageIO(ImageIO):
         """
         Get an image cutout from the input MEDS file
         """
-        return meds.get_cutout(mindex, icut, type='bmask')
+        if 'bmask_cutouts' in meds._fits:
+            bmask=meds.get_cutout(mindex, icut, type='bmask')
+        else:
+            bmask=None
 
     def _clip_weight(self,wt):
         wt = wt.astype('f8', copy=False)
