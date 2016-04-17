@@ -1564,12 +1564,14 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         d=self.data
         res=self.gal_fitter.get_result()
 
+        n=self._get_namer(model, coadd)
+
         mcal_flags=res['mcal_flags']
         d['mcal_flags'][dindex] = mcal_flags
 
         if res['mcal_flags'] != 0:
             print("    metacal flags set:",mcal_flags)
-            d['flags'][dindex] |= METACAL_FAILURE
+            d[n('flags')][dindex] |= METACAL_FAILURE
 
         for type in ngmix.metacal.METACAL_TYPES:
             tres=res[type]
