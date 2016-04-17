@@ -6,7 +6,7 @@
     Possible commands are:
         setup - setup jobs
         run - run jobs
-        rerun - rerun jobs
+        rerun - rerun jobs: clean all output files and start jobs again
         collate - combine job outputs into a single file
         verify - verify that all job outputs are present and OK
         clean - clean all outputs from a run
