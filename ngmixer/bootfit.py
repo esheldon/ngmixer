@@ -1583,6 +1583,12 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             d['mcal_pars%s' % back][dindex] = tres['pars']
             d['mcal_g%s' % back][dindex] = tres['g']
             d['mcal_g_cov%s' % back][dindex] = tres['g_cov']
+
+            # no error for T_r
+            T_err = numpy.sqrt(tres['pars_cov'][4,4])
+            d['mcal_T_r%s' % back][dindex] = tres['T_r']
+            d['mcal_T_err%s' % back][dindex] = T_err
+
             d['mcal_s2n_r%s' % back][dindex] = tres['s2n_r']
 
             if type=='noshear':
@@ -1624,6 +1630,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 ]
 
             dt += [
+                ('mcal_T_r%s' % back,'f8'),
+                ('mcal_T_err%s' % back,'f8'),
                 ('mcal_s2n_r%s' % back,'f8'),
             ]
 
