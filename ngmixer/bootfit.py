@@ -10,7 +10,7 @@ from copy import deepcopy
 from .defaults import DEFVAL, NO_ATTEMPT, \
     PSF_FIT_FAILURE, GAL_FIT_FAILURE, \
     LOW_PSF_FLUX, PSF_FLUX_FIT_FAILURE, \
-    NBR_HAS_NO_PSF_FIT
+    NBR_HAS_NO_PSF_FIT, METACAL_FAILURE
 from .fitting import BaseFitter
 from .util import Namer, print_pars
 from .render_ngmix_nbrs import RenderNGmixNbrs
