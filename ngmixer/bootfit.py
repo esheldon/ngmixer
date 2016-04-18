@@ -1585,9 +1585,13 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             d['mcal_g_cov%s' % back][dindex] = tres['g_cov']
 
             # no error for T_r
+            T     = tres['pars'][4]
             T_err = numpy.sqrt(tres['pars_cov'][4,4])
-            d['mcal_T_r%s' % back][dindex] = tres['T_r']
+
+            d['mcal_T%s' % back][dindex] = T
             d['mcal_T_err%s' % back][dindex] = T_err
+
+            d['mcal_T_r%s' % back][dindex] = tres['T_r']
 
             d['mcal_s2n_r%s' % back][dindex] = tres['s2n_r']
 
@@ -1630,8 +1634,9 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 ]
 
             dt += [
-                ('mcal_T_r%s' % back,'f8'),
+                ('mcal_T%s' % back,'f8'),
                 ('mcal_T_err%s' % back,'f8'),
+                ('mcal_T_r%s' % back,'f8'),
                 ('mcal_s2n_r%s' % back,'f8'),
             ]
 
