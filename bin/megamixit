@@ -15,7 +15,10 @@
         collate-link - collate and link the final outputs
         install-mof - install outputs of MOF run to proper spot in DESDATA
         setup-nbrs - setup the nbrs jobs to build the FoFs
-        run-nbrs - run the nbrs jobs"""
+        run-nbrs - run the nbrs jobs
+"""
+
+from __future__ import print_function
 import os
 import sys
 import meds
@@ -100,7 +103,7 @@ if __name__ == '__main__':
         assert run == conf['run'], \
             "Specified run '%s' does not match name in file '%s'!" \
             % (run,conf['run'])
-    
+
     # get data to process
     coadd_run = args[2]
     if os.path.exists(coadd_run):
@@ -117,13 +120,18 @@ if __name__ == '__main__':
         if len(coadd_runs) == 0:
             # OK, let's assume this was a run
             coadd_runs = [coadd_run]
-    
+
     if options.queue is not None:
         conf['queue'] = options.queue
-    
+
     ngmm = MMixer(conf,extra_cmds=options.extra_cmds,seed=options.seed)
-    
-    for coadd_run in coadd_runs:
+
+    nrun=len(coadd_runs)
+
+    for i,coadd_run in enumerate(coadd_runs):
+
+        print("%d/%d" % (i+1,nrun),end=' ')
+
         if cmd == 'setup':
             ngmm.setup_coadd_tile(coadd_run)
         elif cmd == 'run':
