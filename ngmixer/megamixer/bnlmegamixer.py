@@ -272,6 +272,15 @@ Queue\n"""
             print "        total of",nwrite,"jobs"
         else:
             print "        wrote",nwrite,"jobs"
+            if nwrite==0:
+                print("            removing file")
+                for i in xrange(10):
+                    try:
+                        os.remove(fname)
+                        break
+                    except:
+                        pass
+
         return fname, nwrite
 
     def write_job_script(self,files,i,rng):
