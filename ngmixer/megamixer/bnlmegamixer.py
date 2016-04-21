@@ -241,7 +241,6 @@ Queue\n"""
 
         fname=self.get_condor_file(files,doall=doall)
 
-        print "    writing:",fname
         nwrite=0
         with open(fname,'w') as fobj:
             head=self.get_condor_head_template(files)
@@ -269,11 +268,10 @@ Queue\n"""
                     fobj.write(line)
 
         if doall:
-            print "        total of",nwrite,"jobs"
+            print "        total of",nwrite,"jobs",fname
         else:
-            print "        wrote",nwrite,"jobs"
+            print "        wrote",nwrite,"jobs",fname
             if nwrite==0:
-                print("            removing file")
                 for i in xrange(10):
                     try:
                         os.remove(fname)
