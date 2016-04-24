@@ -275,6 +275,9 @@ Queue\n"""
                 for i in xrange(10):
                     try:
                         os.remove(fname)
+                        tfile=fname+'.submitted'
+                        if os.path.exists(tfile):
+                            os.remove(tfile)
                         break
                     except:
                         pass
