@@ -77,9 +77,11 @@ class SVDESMEDSImageIO(MEDSImageIO):
                     band_meta.append(h)
                 self._image_metadata[band] = band_meta
 
+    '''
     def _get_offchip_nbr_psf_obs_and_jac(self,band,cen_ind,cen_mindex,cen_obs,nbr_ind,nbr_mindex,nbrs_obs_list):
         assert False,'        FIXME: off-chip nbr %d for cen %d' % (nbr_ind+1,cen_ind+1)
         return None,None
+    '''
 
     def get_file_meta_data(self):
         meds_meta_list = self.meds_meta_list

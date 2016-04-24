@@ -18,6 +18,7 @@ class BaseNGMegaMixer(dict):
         self.rng = np.random.RandomState(seed=seed)
         
     def get_mof_file(self,full_coadd_tile,DESDATA,mof_version):
+        coadd_run=full_coadd_tile.split('/')[-1]
         coadd_tile = full_coadd_tile.split('_')[-1]
         moff = os.path.join(DESDATA,
                             'EXTRA',
@@ -25,8 +26,9 @@ class BaseNGMegaMixer(dict):
                             self['meds_version'],
                             'mof-data',
                             mof_version,
-                            full_coadd_tile.split('/')[-1],
+                            coadd_run,
                             '%s-meds-%s-mof-%s.fits' % (coadd_tile,self['meds_version'],mof_version))
+
         return moff
 
     def get_files(self,full_coadd_tile):
