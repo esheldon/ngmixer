@@ -88,9 +88,6 @@ class NGMixBootFitter(BaseFitter):
 
         return n
 
-    def _get_nbrs_namer(self):
-        return Namer(self['nbrs_model'])
-
     def get_models_for_checking(self):
         models = [modl for modl in self['fit_models']]
         pars = [modl+'_max_pars' for modl in self['fit_models']]
@@ -217,14 +214,13 @@ class NGMixBootFitter(BaseFitter):
         return fit_flags
 
     def _guess_and_run_boot(self,model,new_mb_obs_list,coadd,nbrs_fit_data=None):
-        n=self._get_nbrs_namer()
+        n=self._get_namer(model, coadd)
 
         guess = None
         guess_errs = None
         guess_TdbyTe = 1.0
-
-        if (True==self.get('guess_from_nbrs',False)
-                and nbrs_fit_data is not None):
+ 
+        if nbrs_fit_data is not None:
 
             ind = new_mb_obs_list.meta['cen_ind']
 
@@ -232,7 +228,7 @@ class NGMixBootFitter(BaseFitter):
                 and nbrs_fit_data['flags'][ind] == 0):
 
                 guess = nbrs_fit_data[n('pars')][ind]
-
+                
                 # lots of pain to get good guesses...
                 # the ngmix ParsGuesser does this
                 #    for pars 0 through 3 inclusive - uniform between -width to +width
@@ -249,10 +245,10 @@ class NGMixBootFitter(BaseFitter):
                 w, = numpy.where(guess_errs < 0.0)
                 if w.size > 0:
                     guess_errs[w[:]] = 0.0
-
+                    
                 # take sqrt
                 guess_errs = numpy.sqrt(guess_errs)*scale
-
+                    
                 # get pars to scale by
                 # don't divide by zero! - if zero set to 0.1 (default val in ngmix)
                 w, = numpy.where(guess == 0.0)
@@ -263,85 +259,82 @@ class NGMixBootFitter(BaseFitter):
 
                 # final equation - need sqrt then apply scale and then divide by pars
                 guess_errs[w[:]] = guess_errs[w]/numpy.abs(guess_scale[w])
-
+                
                 # don't guess to wide for the shear
                 if guess_errs[2] > 0.1:
                     guess_errs[2] = 0.1
-
+                
                 if guess_errs[3] > 0.1:
-                    guess_errs[3] = 0.1
-
+                    guess_errs[3] = 0.1            
+                    
                 print_pars(guess,front='    guess pars:  ')
                 print_pars(guess_errs,front='    guess errs:  ')
-
+                
                 if model == 'cm':
                     guess_TdbyTe = nbrs_fit_data[n('TdByTe')][ind]
-
+            
         if model == 'cm':
             return self._run_boot(model,new_mb_obs_list,coadd,
                                   guess_TdbyTe=guess_TdbyTe,
-                                  guess=guess,
+                                  guess=guess,                                  
                                   guess_widths=guess_errs)
         else:
             return self._run_boot(model,new_mb_obs_list,coadd,
                                   guess=guess,
                                   guess_widths=guess_errs)
-
+        
     def _fill_nbrs_data(self,mb_obs_list):
         nd = len(mb_obs_list.meta['nbrs_ids'])
-
+        
         # if no nbrs, return
         if nd == 0:
             return
-
+        
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
                 # if we use this obs, grab nbrs
                 if obs.meta['flags'] == 0:
-                    #od = self.get_default_nbrs_data(nd+1)
-                    od = self.get_default_nbrs_data(nd)
-
+                    od = self.get_default_nbrs_data(nd+1)                
+                    
                     # do nbrs
                     for i in xrange(nd):
                         od['nbr_id'][i] = mb_obs_list.meta['nbrs_ids'][i]
                         od['nbr_flags'][i] = obs.meta['nbrs_flags'][i]
-
+                    
                         if od['nbr_flags'][i] == 0 and obs.meta['nbrs_psfs'][i].has_gmix():
                             od['nbr_jac_row0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[0]
                             od['nbr_jac_col0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[1]
-
+                            
                             od['nbr_jac_dudrow'][i] = obs.meta['nbrs_jacs'][i].get_dudrow()
                             od['nbr_jac_dudcol'][i] = obs.meta['nbrs_jacs'][i].get_dudcol()
-
+                            
                             od['nbr_jac_dvdrow'][i] = obs.meta['nbrs_jacs'][i].get_dvdrow()
                             od['nbr_jac_dvdcol'][i] = obs.meta['nbrs_jacs'][i].get_dvdcol()
-
+                            
                             od['nbr_psf_fit_pars'][i,:] = obs.meta['nbrs_psfs'][i].get_gmix().get_full_pars()
                         else:
                             od['nbr_flags'][i] |= NBR_HAS_NO_PSF_FIT
-
-                    '''
+                        
                     # add in cen as "nbr" of self
                     i = nd
                     od['nbr_id'][i] = mb_obs_list.meta['id']
-
+                    
                     jac = obs.get_jacobian()
                     od['nbr_jac_row0'][i] = jac.get_cen()[0]
-                    od['nbr_jac_col0'][i] = jac.get_cen()[1]
+                    od['nbr_jac_col0'][i] = jac.get_cen()[1]                    
                     od['nbr_jac_dudrow'][i] = jac.get_dudrow()
-                    od['nbr_jac_dudcol'][i] = jac.get_dudcol()
+                    od['nbr_jac_dudcol'][i] = jac.get_dudcol()                    
                     od['nbr_jac_dvdrow'][i] = jac.get_dvdrow()
-                    od['nbr_jac_dvdcol'][i] = jac.get_dvdcol()
+                    od['nbr_jac_dvdcol'][i] = jac.get_dvdcol()                    
 
                     if obs.has_psf_gmix():
                         flags = 0
                         od['nbr_psf_fit_pars'][i,:] = obs.get_psf_gmix().get_full_pars()
                     else:
                         flags |= NBR_HAS_NO_PSF_FIT
-
-                    od['nbr_flags'][i] = flags
-                    '''
-
+                        
+                    od['nbr_flags'][i] = flags                
+                    
                     # add to metadata
                     obs.update_meta_data({'nbrs_data':od})
 
@@ -433,7 +426,7 @@ class NGMixBootFitter(BaseFitter):
                                           'nbrs_psfs':nbrs_psfs,
                                           'nbrs_flags':nbrs_flags})
                         
-    def _render_nbrs(self,model_in,mb_obs_list,coadd,nbrs_fit_data):
+    def _render_nbrs(self,model,mb_obs_list,coadd,nbrs_fit_data):
         """
         render nbrs
         """
@@ -443,9 +436,7 @@ class NGMixBootFitter(BaseFitter):
         if len(mb_obs_list.meta['nbrs_inds']) == 0:
             return
 
-        model=self['nbrs_model']
-
-        n=self._get_nbrs_namer()
+        n=self._get_namer(model, coadd)
 
         pars_name = 'max_pars'
         if n(pars_name) not in nbrs_fit_data.dtype.names:
@@ -1081,13 +1072,7 @@ class NGMixBootFitter(BaseFitter):
                  scipy.stats.chi2.sf(mres['chi2per']*mres['dof'],mres['dof']))
             print("    s2n: %.1f s2n_r: %.1f chi2per: %.3f (chi2: %.3g dof: %.3g pval: %0.3g)" % tup)
 
-    def get_nbrs_num_pars_psf(self):
-        model=self['nbrs_psf_model']
-        return self.get_num_pars_psf(model=model)
-
-    def get_num_pars_psf(self, model=None):
-        if model is None:
-            model = self['psf_pars']['model'].lower()
+    def get_num_pars_psf(self):
         npdict = {'em1':6,
                   'em2':6*2,
                   'em3':6*3,
@@ -1095,6 +1080,7 @@ class NGMixBootFitter(BaseFitter):
                   'coellip3':6*3,
                   'turb':6*3,
                   'gauss':6}
+        model = self['psf_pars']['model'].lower()
         assert model in npdict,"psf model %s not allowed in NGMixBootFitter" % model
         return npdict[model]
 
@@ -1301,7 +1287,7 @@ class NGMixBootFitter(BaseFitter):
         return d
 
     def get_nbrs_data_dtype(self):
-        npars = self.get_nbrs_num_pars_psf()
+        npars = self.get_num_pars_psf()
         dt = [('nbr_id','i8'),
               ('nbr_flags','i4'),
               ('nbr_jac_row0','f8'),
