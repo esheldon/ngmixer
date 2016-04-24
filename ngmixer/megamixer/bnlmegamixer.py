@@ -17,7 +17,7 @@ class BNLCondorMegaMixer(NGMegaMixer):
 
     def setup_coadd_tile(self,coadd_tile):
         """
-        Clean up the condor script
+        Set up the condor script
         """
 
         # this makes the individual scripts
@@ -26,11 +26,11 @@ class BNLCondorMegaMixer(NGMegaMixer):
         # above sets self['work_output_dir']
         condor_script=self.get_condor_file(files)
         condor_script_all=self.get_condor_file(files,doall=True)
-        try:
-            os.remove(condor_script)
-            os.remove(condor_script_all)
-        except:
-            pass
+
+        _try_remove_file(condor_script)
+        _try_remove_file(condor_script+'.submitted')
+        _try_remove_file(condor_script_all)
+        _try_remove_file(condor_script_all+'.submitted')
 
         self.write_master_script(files)
 
@@ -46,18 +46,26 @@ class BNLCondorMegaMixer(NGMegaMixer):
         # after running setup
         self.write_condor(files,fof_ranges,doall=False)
 
+    def run_nbrs_coadd_tile(self,coadd_tile):
+        """
+        run the neighbors creation
+        """
+        self.run_coadd_tile(coadd_tile, nbrs=True)
 
-
-    def run_coadd_tile(self,coadd_tile):
+    def run_coadd_tile(self,coadd_tile, nbrs=False):
         """
         Write the condor file and submit it, only doing those
         for which the output file doesn't exist
         """
-        files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
-        fname,nwrite=self.write_condor(files,fof_ranges)
+        if nbrs:
+            files = self.get_files(coadd_tile)
+            fname,nwrite=self.write_nbrs_condor(files)
+        else:
+            files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
+            fname,nwrite=self.write_condor(files,fof_ranges)
 
-        if  nwrite == 0:
+        if nwrite == 0:
             print "    no unfinished jobs left to run"
             return
         fname=os.path.basename(fname)
@@ -66,6 +74,30 @@ class BNLCondorMegaMixer(NGMegaMixer):
         cmd='cd %s && condor_submit %s && cd -' % (dr,fname)
         print "condor command: '%s'" % cmd
         os.system(cmd)
+
+
+    def setup_nbrs_coadd_tile(self,coadd_tile):
+        """
+        Set up the condor script
+        """
+
+        # this makes the individual scripts
+        files=super(BNLCondorMegaMixer,self).setup_nbrs_coadd_tile(coadd_tile)
+
+        # above sets self['work_output_dir']
+        condor_script=self.get_nbrs_condor_file(files)
+        condor_script_all=self.get_nbrs_condor_file(files,doall=True)
+
+        _try_remove_file(condor_script)
+        _try_remove_file(condor_script+'.submitted')
+        _try_remove_file(condor_script_all)
+        _try_remove_file(condor_script_all+'.submitted')
+
+        # always written for posterity
+        self.write_nbrs_condor(files,doall=True)
+
+        # written only if the output file doesn't exist
+        self.write_nbrs_condor(files,doall=False)
 
 
     def get_tmp_dir(self):
@@ -140,6 +172,15 @@ popd
         path=os.path.join(files['work_output_dir'], 'master.sh')
         return path
 
+    def get_nbrs_master_script_file(self, files):
+
+        """
+        location of the master script
+        """
+        path=os.path.join(files['work_output_dir'], 'master.sh')
+        return path
+
+
     def get_master_script_text(self):
         """
         for condor we need to use the directory made by the system
@@ -198,16 +239,30 @@ popd
         path=os.path.join(files['work_output_dir'], name)
         return path
 
+    def get_nbrs_condor_file(self, files, doall=False):
+        """
+        need to have run get_files* to set the dir below
 
-    def get_condor_head_template(self,files):
-        master=self.get_master_script_file(files)
+        will hold a line for every job
+        """
+        if doall:
+            name='submit_all_nbrs.condor'
+        else:
+            name='submit_nbrs.condor'
+
+        path=os.path.join(files['work_output_dir'], name)
+        return path
+
+
+
+    def get_condor_head(self,script):
         text="""
 Universe        = vanilla
 
 Notification    = Never
 
 # Run this exe with these args
-Executable      = {master_script}
+Executable      = {script}
 
 #Image_Size      = 1000000
 Image_Size       =  500000
@@ -220,9 +275,9 @@ kill_sig        = SIGINT
 #requirements = (cpu_experiment == "star")
 
 +Experiment     = "astro"\n\n"""
-        return text.format(master_script=master)
+        return text.format(script=script)
 
-    def get_condor_job_line(self, jobname, script_file, log_file):
+    def get_condor_job_lines(self, jobname, script_file, log_file):
         text="""
 +job_name = "%(jobname)s"
 Arguments = %(script_file)s %(log_file)s
@@ -234,16 +289,28 @@ Queue\n"""
         )
         return text
 
+    def get_nbrs_condor_job_lines(self, jobname):
+        text="""
++job_name = "%(jobname)s"
+Arguments = ""
+Queue\n"""
+        text=text % dict(
+            jobname=jobname,
+        )
+        return text
+
+
     def write_condor(self,files,fof_ranges, doall=False):
         """
         write the condor submit file
         """
 
         fname=self.get_condor_file(files,doall=doall)
+        master=self.get_master_script_file(files)
 
         nwrite=0
         with open(fname,'w') as fobj:
-            head=self.get_condor_head_template(files)
+            head=self.get_condor_head(master)
             fobj.write(head)
 
             for chunk,rng in enumerate(fof_ranges):
@@ -263,9 +330,9 @@ Queue\n"""
                     script_file=self.get_chunk_script_file(files, chunk, rng)
                     log_file=self.get_chunk_log_file(files, chunk, rng)
 
-                    line=self.get_condor_job_line(jobname, script_file, log_file)
+                    lines=self.get_condor_job_lines(jobname, script_file, log_file)
 
-                    fobj.write(line)
+                    fobj.write(lines)
 
         if doall:
             print "        total of",nwrite,"jobs",fname
@@ -273,16 +340,91 @@ Queue\n"""
             print "        wrote",nwrite,"jobs",fname
             if nwrite==0:
                 for i in xrange(10):
-                    try:
-                        os.remove(fname)
-                        tfile=fname+'.submitted'
-                        if os.path.exists(tfile):
-                            os.remove(tfile)
-                        break
-                    except:
-                        pass
+                    _try_remove_file(fname)
+                    _try_remove_file(fname+'.submitted')
 
         return fname, nwrite
+
+    def write_nbrs_script(self,files):
+        fmt=r"""#!/bin/bash
+
+if [[ -n $_CONDOR_SCRATCH_DIR ]]; then
+    # the condor system creates a scratch directory for us,
+    # and cleans up afterward
+    tmpdir=$_CONDOR_SCRATCH_DIR
+    export TMPDIR=$tmpdir
+else
+    # otherwise use the TMPDIR
+    tmpdir=$TMPDIR
+    mkdir -p $tmpdir
+fi
+
+config=%(nbrs_config)s
+logfile=%(logfile)s
+meds_file=%(tile)s
+
+# make sure output dir exists
+odir=$(dirname $logfile)
+mkdir -p $odir
+
+# move the log file into that directory
+tmplog=$(basename $logfile)
+
+# any temp files written to cwd, plus log, go into the
+# temporary directory
+pushd $tmpdir
+
+ngmixer-meds-make-nbrs-data ${config} ${meds_file} &> ${tmplog}
+
+mv -v ${tmplog} ${logfile}
+popd
+"""
+        args = {}
+        args['nbrs_config'] = files['nbrs_config']
+        args['logfile'] = files['nbrs_log']
+        args['tile'] = files['meds_files'][0]
+
+        scr = fmt % args
+
+        script_file = self.get_nbrs_script_file(files)
+        with open(script_file,'w') as fobj:
+            fobj.write(scr)
+
+        os.system('chmod 755 %s' % script_file)
+
+    def write_nbrs_condor(self, files, doall=False):
+        """
+        write the condor submit file
+        """
+
+        nwrite=0
+        output_file=files['nbrs_file']
+        condor_file=self.get_nbrs_condor_file(files,doall=doall)
+        script_file = self.get_nbrs_script_file(files)
+        head=self.get_condor_head(script_file)
+
+        if doall:
+            dowrite=True
+        elif not os.path.exists(output_file):
+            dowrite=True
+        else:
+            dowrite=False
+
+        if not dowrite:
+            print("    output already exists")
+            return condor_file, nwrite
+
+        with open(condor_file,'w') as fobj:
+            fobj.write(head)
+
+            jobname=files['coadd_tile']
+            lines=self.get_nbrs_condor_job_lines(jobname)
+            fobj.write(lines)
+
+        nwrite=1
+        print "        wrote 1 jobs",condor_file
+
+        return condor_file, nwrite
 
     def write_job_script(self,files,i,rng):
         """
@@ -290,11 +432,27 @@ Queue\n"""
         """
         return
 
+    def write_nbrs_job_script(self, files):
+        """
+        for condor we don't have a separate job script
+        """
+        return
+
 
     def write_nbrs_job_script(self,files):
+        """
+        no individual job script in condor
+        """
         return
 
     def run_nbrs(self,files):
         raise NotImplementedError("set up run nbrs")
+
+
+def _try_remove_file(fname):
+    try:
+        os.remove(fname)
+    except:
+        pass
 
 

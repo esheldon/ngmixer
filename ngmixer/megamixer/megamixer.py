@@ -65,6 +65,7 @@ class BaseNGMegaMixer(dict):
                              files['full_coadd_tile'].split('/')[-1],
                              '%s-meds-%s-nbrslist-%s.fits' % (coadd_tile,self['meds_version'],self['nbrs_version']))
         files['nbrs_file'] = nbrsf
+        files['nbrs_log'] = nbrsf.replace('.fits','.log')
 
         # now look for mof
         if 'mof_version' in self:
@@ -135,7 +136,7 @@ class BaseNGMegaMixer(dict):
             ngmix_conf = self['ngmix_config']
         else:
             ngmix_conf = 'ngmix-'+self['run']+'.yaml'
-            
+
         return ngmix_conf
 
     def _get_nbrs_config(self):
@@ -160,7 +161,15 @@ class BaseNGMegaMixer(dict):
         os.system('cp %s %s' % (files['nbrs_config'],os.path.join(files['work_output_dir'],'.')))
         self.write_nbrs_script(files)
         self.write_nbrs_job_script(files)
-    
+
+        return files
+
+    def get_nbrs_script_file(self, files):
+        """
+        script to run the neighbors generation code
+        """
+        return os.path.join(files['work_output_dir'],'runnbrs.sh')
+
     def write_nbrs_script(self,files):
         fmt="""#!/bin/bash
 config={nbrs_config}
@@ -168,28 +177,22 @@ obase={base_name}
 lfile=$obase".log"
 meds_file={tile}
 
-# call with -u to avoid buffering
-cmd="`which {cmd}` \
- $config $meds_file"
-
-echo $cmd
-python -u $cmd &> $lfile
-
+ngmixer-meds-make-nbrs-data ${config} ${meds_file} &> $lfile
 """
         args = {}
         args['nbrs_config'] = files['nbrs_config']
         args['base_name'] = '%s-nbrs' % files['coadd_tile']
         args['tile'] = files['meds_files'][0]
         args['cmd'] = 'ngmixer-meds-make-nbrs-data'
-        
+
         scr = fmt.format(**args)
-        
-        scr_name = os.path.join(files['work_output_dir'],'runnbrs.sh')
+
+        src_name = get_nbrs_script_file(files)
         with open(scr_name,'w') as fp:
             fp.write(scr)
 
-        os.system('chmod 755 %s' % scr_name)        
-    
+        os.system('chmod 755 %s' % scr_name)
+
     def run_nbrs_coadd_tile(self,coadd_tile):
         print("running nbrs for tile '%s'" % coadd_tile)
         files = self.get_files(coadd_tile)
