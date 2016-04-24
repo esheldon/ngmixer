@@ -422,7 +422,11 @@ popd
             fobj.write(lines)
 
         nwrite=1
-        print "        wrote 1 jobs",condor_file
+
+        if doall:
+            print "        total of 1 job",condor_file
+        else:
+            print "        wrote 1 job",condor_file
 
         return condor_file, nwrite
 
