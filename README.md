@@ -1,6 +1,11 @@
 # ngmixer
 code to run ngmix on data
 
+documentation
+-----------------
+
+Please see the [wiki](https://github.com/esheldon/ngmixer/wiki) for detailed documentation
+
 Structure of Repo
 -----------------
 
