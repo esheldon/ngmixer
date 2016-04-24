@@ -161,6 +161,16 @@ class DESConcat(Concat):
 
         return models
 
+    def make_flux_tuple(self, name, dtype, nbands):
+        if nbands==1:
+            tup=(name, dtype)
+        else:
+            if cov in name:
+                tup=(name,dtype,(nbands,nbands))
+            else:
+                tup=(name,dtype,nbands)
+        return tup
+
     def pick_fields(self, data0, meta):
         """
         pick out some fields, add some fields, rename some fields
@@ -209,28 +219,23 @@ class DESConcat(Concat):
                 pars_cov_ind = names.index(n('pars_cov'))
 
                 offset = 1
-                dt.insert(pars_cov_ind+offset, (n('flux'), 'f8', nbands) )
-                names.insert(pars_cov_ind+offset,n('flux'))
 
-                offset += 1
-                dt.insert(pars_cov_ind+offset, (n('flux_cov'), 'f8', (nbands,nbands)) )
-                names.insert(pars_cov_ind+offset,n('flux_cov'))
+                for fi,name in enumerate(['flux','flux_cov']):
+                    tup=self.make_flux_tuple(n(name),'f8',nbands)
+                    dt.insert(pars_cov_ind+offset, tup)
+                    names.insert(pars_cov_ind+offset,n(name))
 
                 flux_ind = names.index(n('flux'))
 
             offset=1
-            dt.insert(flux_ind+offset, (n('flux_s2n'), 'f8', nbands) )
-            names.insert(flux_ind+offset,n('flux_s2n'))
 
-            offset += 1
-            magf = (n('mag'), 'f8', nbands)
-            dt.insert(flux_ind+offset, magf)
-            names.insert(flux_ind+offset, n('mag'))
+            for fi,name in enumerate(['flux_s2n','mag','logsb']):
+                tup=self.make_flux_tuple(n(name),'f8',nbands)
 
-            offset += 1
-            logsbf = (n('logsb'), 'f8', nbands)
-            dt.insert(flux_ind+offset, logsbf)
-            names.insert(flux_ind+offset, n('logsb'))
+                dt.insert(flux_ind+offset, tup)
+                names.insert(flux_ind+offset,n(name))
+
+                offset += 1
 
             if n('T') not in data0.dtype.names:
                 fadd=[(n('T'),'f8'),
@@ -304,6 +309,8 @@ class DESConcat(Concat):
         Get magnitudes
         """
 
+        do_flux_not_psf=(do_flux and 'psf' not in model)
+
         names = data.dtype.names
 
         n=Namer(model)
@@ -313,13 +320,13 @@ class DESConcat(Concat):
         if nband == 1:
             data[n('mag')] = -9999.
             data[n('flux_s2n')] = 0.0
-            if do_flux:
+            if do_flux_not_psf:
                 data[n('flux')] = -9999.
                 data[n('flux_cov')] = -9999.
         else:
             data[n('mag')][:,band] = -9999.
             data[n('flux_s2n')][:,band] = 0.0
-            if do_flux and 'psf' not in model:
+            if do_flux_not_psf:
                 data[n('flux')][:,band] = -9999.
                 data[n('flux_cov')][:,:,band] = -9999.
 
@@ -338,18 +345,19 @@ class DESConcat(Concat):
             w,=numpy.where(data[n('flags')] == 0)
 
         if w.size > 0:
-            if do_flux and 'psf' not in model:
+            if do_flux_not_psf:
                 if nband == 1:
                     data[n('flux')][w] = data[n('pars')][w,5]
-                    data[n('flux_cov')][w,1,1] = data[n('pars_cov')][w,5,5]
+                    data[n('flux_cov')][w] = data[n('pars_cov')][w,5,5]
                 else:
                     data[n('flux')][w,band] = data[n('pars')][w,5+band]
-                    data[n('flux_cov')][w,:,:] = data[n('pars_cov')][w,5:5+nband,5:5+nband]
+                    data[n('flux_cov')][w,band,band] = data[n('pars_cov')][w,5:5+nband,5:5+nband]
 
             if nband == 1:
                 flux = (data[n('flux')][w]).clip(min=0.001)
             else:
                 flux = (data[n('flux')][w,band]).clip(min=0.001)
+
             magzero=meta['magzp_ref'][band]
 
             if nband==1:
