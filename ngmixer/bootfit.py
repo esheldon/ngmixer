@@ -29,14 +29,14 @@ from pprint import pprint
 def get_bootstrapper(obs, type='boot', **keys):
     from ngmix.bootstrap import Bootstrapper
     from ngmix.bootstrap import CompositeBootstrapper
-    from ngmix.bootstrap import MetacalBootstrapper
+    from ngmix.bootstrap import MaxMetacalBootstrapper
 
     if type=='boot':
         boot=Bootstrapper(obs, **keys)
     elif type=='composite':
         boot=CompositeBootstrapper(obs, **keys)
     elif type=='metacal':
-        boot=MetacalBootstrapper(obs, **keys)
+        boot=MaxMetacalBootstrapper(obs, **keys)
     else:
         raise ValueError("bad bootstrapper type: '%s'" % type)
 
@@ -1529,6 +1529,11 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         max_pars=self['max_pars']
 
         try:
+
+            # needs to be inplace because Matt assumes some
+            # sharing of the obs list I think
+            boot.replace_masked_pixels(inplace=True)
+
             boot.fit_metacal(
                 ppars['model'],
                 model,
@@ -1540,9 +1545,6 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 metacal_pars=self['metacal_pars'],
                 use_original_weight=self['use_original_weight'],
             )
-            # needs to be inplace because Matt assumes some
-            # sharing of the obs list I think
-            boot.replace_masked_pixels(inplace=True)
 
         except BootPSFFailure as err:
             # the _run_boot code catches this one
