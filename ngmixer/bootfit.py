@@ -80,6 +80,10 @@ class NGMixBootFitter(BaseFitter):
         # add in estimate for intrinsic profile variance 
         self['intr_prof_var_fac'] = self.get('intr_prof_var_fac',0.0)
 
+        # this actually means calculating things like
+        # lensfit sens from samples or B&A PQR
+        self['do_shear'] = self.get('do_shear',False)
+
     def _get_namer(self, model, coadd):
         if coadd and (self['fit_me_galaxy'] or self['use_coadd_prefix']):
             n = Namer('coadd_%s' % model)
@@ -219,8 +223,12 @@ class NGMixBootFitter(BaseFitter):
         guess = None
         guess_errs = None
         guess_TdbyTe = 1.0
- 
-        if nbrs_fit_data is not None:
+
+        # should always be True for mof runs. But when just subtracting
+        # neighbors one ususally does not want to guess from the nbrs, since
+        # mof will generally use all bands
+        guess_from_nbrs=self.get('guess_from_nbrs',True)
+        if nbrs_fit_data is not None and guess_from_nbrs:
 
             ind = new_mb_obs_list.meta['cen_ind']
 
@@ -228,7 +236,7 @@ class NGMixBootFitter(BaseFitter):
                 and nbrs_fit_data['flags'][ind] == 0):
 
                 guess = nbrs_fit_data[n('pars')][ind]
-                
+
                 # lots of pain to get good guesses...
                 # the ngmix ParsGuesser does this
                 #    for pars 0 through 3 inclusive - uniform between -width to +width
@@ -245,10 +253,10 @@ class NGMixBootFitter(BaseFitter):
                 w, = numpy.where(guess_errs < 0.0)
                 if w.size > 0:
                     guess_errs[w[:]] = 0.0
-                    
+
                 # take sqrt
                 guess_errs = numpy.sqrt(guess_errs)*scale
-                    
+
                 # get pars to scale by
                 # don't divide by zero! - if zero set to 0.1 (default val in ngmix)
                 w, = numpy.where(guess == 0.0)
@@ -259,82 +267,82 @@ class NGMixBootFitter(BaseFitter):
 
                 # final equation - need sqrt then apply scale and then divide by pars
                 guess_errs[w[:]] = guess_errs[w]/numpy.abs(guess_scale[w])
-                
+
                 # don't guess to wide for the shear
                 if guess_errs[2] > 0.1:
                     guess_errs[2] = 0.1
-                
+
                 if guess_errs[3] > 0.1:
-                    guess_errs[3] = 0.1            
-                    
+                    guess_errs[3] = 0.1
+
                 print_pars(guess,front='    guess pars:  ')
                 print_pars(guess_errs,front='    guess errs:  ')
-                
+
                 if model == 'cm':
                     guess_TdbyTe = nbrs_fit_data[n('TdByTe')][ind]
-            
+
         if model == 'cm':
             return self._run_boot(model,new_mb_obs_list,coadd,
                                   guess_TdbyTe=guess_TdbyTe,
-                                  guess=guess,                                  
+                                  guess=guess,
                                   guess_widths=guess_errs)
         else:
             return self._run_boot(model,new_mb_obs_list,coadd,
                                   guess=guess,
                                   guess_widths=guess_errs)
-        
+
     def _fill_nbrs_data(self,mb_obs_list):
         nd = len(mb_obs_list.meta['nbrs_ids'])
-        
+
         # if no nbrs, return
         if nd == 0:
             return
-        
+
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
                 # if we use this obs, grab nbrs
                 if obs.meta['flags'] == 0:
-                    od = self.get_default_nbrs_data(nd+1)                
-                    
+                    od = self.get_default_nbrs_data(nd+1)
+
                     # do nbrs
                     for i in xrange(nd):
                         od['nbr_id'][i] = mb_obs_list.meta['nbrs_ids'][i]
                         od['nbr_flags'][i] = obs.meta['nbrs_flags'][i]
-                    
+
                         if od['nbr_flags'][i] == 0 and obs.meta['nbrs_psfs'][i].has_gmix():
                             od['nbr_jac_row0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[0]
                             od['nbr_jac_col0'][i] = obs.meta['nbrs_jacs'][i].get_cen()[1]
-                            
+
                             od['nbr_jac_dudrow'][i] = obs.meta['nbrs_jacs'][i].get_dudrow()
                             od['nbr_jac_dudcol'][i] = obs.meta['nbrs_jacs'][i].get_dudcol()
-                            
+
                             od['nbr_jac_dvdrow'][i] = obs.meta['nbrs_jacs'][i].get_dvdrow()
                             od['nbr_jac_dvdcol'][i] = obs.meta['nbrs_jacs'][i].get_dvdcol()
-                            
+
                             od['nbr_psf_fit_pars'][i,:] = obs.meta['nbrs_psfs'][i].get_gmix().get_full_pars()
                         else:
                             od['nbr_flags'][i] |= NBR_HAS_NO_PSF_FIT
-                        
+
                     # add in cen as "nbr" of self
                     i = nd
                     od['nbr_id'][i] = mb_obs_list.meta['id']
-                    
+
                     jac = obs.get_jacobian()
                     od['nbr_jac_row0'][i] = jac.get_cen()[0]
-                    od['nbr_jac_col0'][i] = jac.get_cen()[1]                    
+                    od['nbr_jac_col0'][i] = jac.get_cen()[1]
                     od['nbr_jac_dudrow'][i] = jac.get_dudrow()
-                    od['nbr_jac_dudcol'][i] = jac.get_dudcol()                    
+                    od['nbr_jac_dudcol'][i] = jac.get_dudcol()
                     od['nbr_jac_dvdrow'][i] = jac.get_dvdrow()
-                    od['nbr_jac_dvdcol'][i] = jac.get_dvdcol()                    
+                    od['nbr_jac_dvdcol'][i] = jac.get_dvdcol()
 
+                    flags=0
                     if obs.has_psf_gmix():
-                        flags = 0
                         od['nbr_psf_fit_pars'][i,:] = obs.get_psf_gmix().get_full_pars()
                     else:
                         flags |= NBR_HAS_NO_PSF_FIT
-                        
-                    od['nbr_flags'][i] = flags                
-                    
+
+                    od['nbr_flags'][i] = flags
+
                     # add to metadata
                     obs.update_meta_data({'nbrs_data':od})
 
@@ -838,16 +846,14 @@ class NGMixBootFitter(BaseFitter):
         if boot is None:
             boot=self.boot
 
-        psf_pars = {}
-        for k,v in self['psf_pars'].iteritems():
-            if k != 'model' and k != 'ntry':
-                psf_pars.update({k:v})
+        psf_pars=self['psf_pars']
+        fit_pars=psf_pars['fit_pars']
 
-        boot.fit_psfs(self['psf_pars']['model'],
+        boot.fit_psfs(psf_pars['model'],
                       None,
                       Tguess_key='Tguess',
-                      ntry=self['psf_pars']['ntry'],
-                      fit_pars=psf_pars,
+                      ntry=psf_pars['ntry'],
+                      fit_pars=fit_pars,
                       norm_key='psf_norm')
 
         # check for no obs in a band if PSF fit fails
@@ -1479,6 +1485,8 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
 
 class MetacalNGMixBootFitter(MaxNGMixBootFitter):
     def _setup(self):
+        from .priors import set_priors
+
         super(MetacalNGMixBootFitter,self)._setup()
 
         self['nrand'] = self.get('nrand',1)
@@ -1487,7 +1495,12 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         self['use_original_weight'] = self.get('use_original_weight',False)
 
-    def _get_bootstrapper(self, model, mb_obs_list):
+        self['metacal_pars']['nband'] = self['nband']
+        if 'model_pars' in self['metacal_pars']:
+            print("setting separate metacal prior")
+            set_priors(self['metacal_pars'])
+
+    def _get_metacal_bootstrapper(self, model, mb_obs_list):
         """
         get the bootstrapper for fitting psf through galaxy
         """
@@ -1502,6 +1515,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         return boot
 
+
     def _fit_galaxy(self, model, coadd, guess=None,**kwargs):
         mb_obs_list = self.boot.mb_obs_list
 
@@ -1509,12 +1523,35 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                                                        coadd,
                                                        guess=guess,
                                                        **kwargs)
-        self._do_metacal(model, self.boot)
 
-        metacal_res = self.boot.get_metacal_result()
+
+        self.mcal_boot=self._do_metacal(model, self.boot)
+
+        metacal_res = self.mcal_boot.get_metacal_result()
 
         res=self.gal_fitter.get_result()
         res.update(metacal_res)
+
+    def _get_metacal_stuff(self, model):
+        metacal_pars=self['metacal_pars']
+        model_pars=metacal_pars.get('model_pars',None)
+        if model_pars is not None:
+            print("getting model and priors from metacal pars")
+            model=list(model_pars.keys())[0]
+            prior=model_pars[model]['prior']
+        else:
+            # use main prior
+            prior=self['model_pars'][model]['prior']
+
+        psf_pars=metacal_pars.get('psf_pars',None)
+        if psf_pars is None:
+            # use main psf pars
+            psf_pars=self['psf_pars']
+        else:
+            print("getting psf pars from metacal")
+
+        psf_fit_pars = psf_pars.get('fit_pars',None)
+        return metacal_pars, model, prior, psf_pars, psf_fit_pars
 
     def _do_metacal(self,
                     model,
@@ -1524,22 +1561,40 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         the basic fitter for this class
         """
 
-        prior=self['model_pars'][model]['prior']
-
-        Tguess=boot.mb_obs_list[0][0].psf.gmix.get_T()
+        '''
+        metacal_pars=self['metacal_pars']
+        model_pars=metacal_pars.get('model_pars',None)
+        if model_pars is not None:
+            print("getting model and priors from metacal pars")
+            model=list(model_pars.keys())[0]
+            prior=model_pars[model]['prior']
+        else:
+            prior=self['model_pars'][model]['prior']
 
         ppars=self['psf_pars']
         psf_fit_pars = ppars.get('fit_pars',None)
+        '''
+
+        # needs to be inplace because Matt assumes some
+        # sharing of the obs list I think
+        boot.replace_masked_pixels(inplace=True)
+
+        metacal_pars, model, prior, psf_pars, psf_fit_pars = \
+                self._get_metacal_stuff(model)
         max_pars=self['max_pars']
+        Tguess=boot.mb_obs_list[0][0].psf.gmix.get_T()
+
+        # new bootstrapper for metacal
+        mcal_boot=self._get_metacal_bootstrapper(
+            model,
+            boot.mb_obs_list,
+        )
 
         try:
 
-            # needs to be inplace because Matt assumes some
-            # sharing of the obs list I think
-            boot.replace_masked_pixels(inplace=True)
 
-            boot.fit_metacal(
-                ppars['model'],
+            mcal_boot.fit_metacal(
+                psf_pars['model'],
                 model,
                 max_pars,
                 Tguess,
@@ -1554,6 +1609,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             # the _run_boot code catches this one
             raise BootGalFailure(str(err))
 
+        return mcal_boot
 
 
     def _get_fit_data_dtype(self,coadd):
