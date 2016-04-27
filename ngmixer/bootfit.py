@@ -777,6 +777,8 @@ class NGMixBootFitter(BaseFitter):
 
         try:
             self._fit_psfs(coadd)
+
+
             flags |= self._fit_psf_flux(coadd)
 
             if flags == 0:
@@ -802,6 +804,8 @@ class NGMixBootFitter(BaseFitter):
         return flags, boot
 
     def _fit_psf_flux(self,coadd):
+
+        print("    fitting psf flux")
         self.boot.fit_gal_psf_flux(normalize_psf=self['normalize_psf'])
 
         res=self.boot.get_psf_flux_result()

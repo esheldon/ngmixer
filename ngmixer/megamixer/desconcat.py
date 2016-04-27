@@ -165,7 +165,7 @@ class DESConcat(Concat):
         if nbands==1:
             tup=(name, dtype)
         else:
-            if cov in name:
+            if 'cov' in name:
                 tup=(name,dtype,(nbands,nbands))
             else:
                 tup=(name,dtype,nbands)
@@ -351,7 +351,7 @@ class DESConcat(Concat):
                     data[n('flux_cov')][w] = data[n('pars_cov')][w,5,5]
                 else:
                     data[n('flux')][w,band] = data[n('pars')][w,5+band]
-                    data[n('flux_cov')][w,band,band] = data[n('pars_cov')][w,5:5+nband,5:5+nband]
+                    data[n('flux_cov')][w,band,band] = data[n('pars_cov')][w,5+band,5+band]
 
             if nband == 1:
                 flux = (data[n('flux')][w]).clip(min=0.001)
