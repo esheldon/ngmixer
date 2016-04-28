@@ -66,8 +66,8 @@ class StagedOutFile(object):
             self.path=os.path.join(self.tmpdir, bname)
 
             # just be really sure...
-            assert os.path.samefile(os.path.split(self.path)[0],fpath) == False            
-            
+            assert os.path.samefile(os.path.split(self.path)[0],fpath) == False
+
     def stage_out(self):
         """
         if a tempdir was used, move the file to its final destination
