@@ -119,20 +119,37 @@ class MEDSImageIO(ImageIO):
             for f in self.meds_files:
                 print(f)
                 newf = self._get_sub_fname(f)
-                ex=meds.MEDSExtractor(f, self.fof_range[0], self.fof_range[1], newf, cleanup=True)
+                ex=meds.MEDSExtractor(
+                    f,
+                    self.fof_range[0],
+                    self.fof_range[1],
+                    newf,
+                    cleanup=True,
+                )
                 extracted.append(ex)
             extracted.append(None)
         else:
             # do the fofs first
             print(self.fof_file)
             newf = self._get_sub_fname(self.fof_file)
-            fofex = nbrsfofs.NbrsFoFExtractor(self.fof_file, self.fof_range[0], self.fof_range[1], newf, cleanup=True)
+            fofex = nbrsfofs.NbrsFoFExtractor(
+                self.fof_file,
+                self.fof_range[0],
+                self.fof_range[1],
+                newf,
+                cleanup=True,
+            )
 
             # now do the meds
             for f in self.meds_files:
                 print(f)
                 newf = self._get_sub_fname(f)
-                ex=meds.MEDSNumberExtractor(f, fofex.numbers, newf, cleanup=True)
+                ex=meds.MEDSNumberExtractor(
+                    f,
+                    fofex.numbers,
+                    newf,
+                    cleanup=True,
+                )
                 extracted.append(ex)
             extracted.append(fofex)
 
