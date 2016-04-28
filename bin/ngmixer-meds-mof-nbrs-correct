@@ -39,6 +39,10 @@ parser.add_option("--verbose", default=False, action='store_true',
 
 parser.add_option("--fpack", action='store_true', help=("fpack the file"))
 
+parser.add_option("--replace-bad", action='store_true',
+                  help=("replace bad pixels with model of the central"))
+parser.add_option("--min-weight", default=-9999.0, help=("min weight to consider zero"))
+
 
 # fpacking
 FPACK_DIMS = [10240,1]
@@ -225,6 +229,8 @@ if __name__ == '__main__':
 
     check_options(options)
 
+    min_weight=float(options.min_weight)
+
     # read ngmix output MOF data
     ngmix_output = args[0]
     meds_files = args[1:]
@@ -311,22 +317,35 @@ if __name__ == '__main__':
 
                         cen_img, nbrs_img, nbrs_mask, nbrs_ids, pixel_scale = res
 
-                        # correct image and write
-                        img = mfile.get_cutout(mindex, cutout_index, type='image')
-                        img -= nbrs_img*pixel_scale*pixel_scale
-                        fits['image_cutouts'].write(img.ravel(), start=[start_row[cutout_index]])
+                        img   = mfile.get_cutout(mindex, cutout_index, type='image')
+                        wgt   = mfile.get_cutout(mindex, cutout_index, type='weight')
+                        bmask = mfile.get_cutout(mindex, cutout_index, type='bmask')
 
-                        # correct weight and write 
-                        wgt = mfile.get_cutout(mindex, cutout_index, type='weight')
+                        # subtract neighbors
+                        img -= nbrs_img*pixel_scale*pixel_scale
+                        # possibly zero the weight
                         wgt *= nbrs_mask
+
+                        # set masked or zero weight pixels to the value of the central.
+                        # For codes that use the weight, such as max like, this makes
+                        # no difference, but it may be important for codes that 
+                        # take moments or use FFTs
+                        if options.replace_bad:
+                            wbad=numpy.where( (bmask != 0) | (wgt < min_weight) )
+                            if wbad[0].size > 0:
+                                print("            setting",wbad[0].size,
+                                      "bad bmask/wt pixels to central model")
+                                img[wbad] = cen_img[wbad]
+
+                        # now overwrite pixels on disk
+                        fits['image_cutouts'].write(img.ravel(), start=[start_row[cutout_index]])
                         fits['weight_cutouts'].write(wgt.ravel(), start=[start_row[cutout_index]])
 
                         # note in the bad pixel mask where we have masked a neighbor
                         # that failed to converge
                         w=numpy.where(nbrs_mask != 1)
                         if w[0].size > 0:
-                            print("    modifying",w[0].size,"bmask pixels")
-                            bmask=mfile.get_cutout(mindex, cutout_index, type='bmask')
+                            print("            modifying",w[0].size,"bmask pixels")
                             bmask[w] = 2**31-1
                             fits['bmask_cutouts'].write(bmask.ravel(), start=[start_row[cutout_index]])
                 else:

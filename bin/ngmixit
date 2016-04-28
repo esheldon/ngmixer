@@ -72,14 +72,21 @@ if __name__ == '__main__':
     else:
         seed = None
 
+    config = ngmixer.files.read_yaml(config_file)
+
     extra_data = {}
     if options.nbrs_file is not None:
         extra_data['nbrs'] = fitsio.read(os.path.expandvars(options.nbrs_file))
+
     if options.obj_flags is not None:
         extra_data['obj_flags'] = fitsio.read(os.path.expandvars(options.obj_flags))
+
     if options.psf_file is not None:
         extra_data['psf_file'] = options.psf_file
-    if options.mof_file is not None:
+
+    doMOF = config.get('model_nbrs',False)
+
+    if options.mof_file is not None and doMOF:
         extra_data['mof_fit_data'] = fitsio.read(os.path.expandvars(options.mof_file))
         extra_data['mof_nbrs_data'] = fitsio.read(os.path.expandvars(options.mof_file),
                                                   ext='nbrs_data')
@@ -87,8 +94,6 @@ if __name__ == '__main__':
     verbosity=int(options.verbosity)
     ngmixer.defaults.VERBOSITY.level = verbosity
 
-    config = ngmixer.files.read_yaml(config_file)
-    doMOF = config.get('model_nbrs',False)
 
     if doMOF and options.mof_file is None:
         MOFNGMixer(config_file,
@@ -109,6 +114,7 @@ if __name__ == '__main__':
                 output_file=out_file,
                 fof_range=fof_range,
                 fof_file=options.fof_file,
+                mof_file=options.mof_file,
                 work_dir=options.work_dir,
                 random_seed=seed,
                 extra_data=extra_data,

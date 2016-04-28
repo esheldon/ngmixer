@@ -12,6 +12,7 @@ from ngmix import Observation, ObsList, MultiBandObsList
 
 # local imports
 from .imageio import ImageIO
+from .extractor_corrector import MEDSExtractorCorrector
 from ..defaults import DEFVAL,IMAGE_FLAGS
 from .. import nbrsfofs
 
@@ -115,43 +116,69 @@ class MEDSImageIO(ImageIO):
         """
         extracted=[]
 
-        if self.fof_file is None:
-            for f in self.meds_files:
-                print(f)
-                newf = self._get_sub_fname(f)
-                ex=meds.MEDSExtractor(
-                    f,
+        make_corrected_meds=self.conf.get('make_corrected_meds',False)
+        if make_corrected_meds:
+            if self.mof_file is None:
+                raise ValueError(
+                    "you must send mof outputs to make "
+                    "corrected MEDS files"
+                )
+
+            min_weight=self.conf.get('min_weight',-9999.9)
+            for meds_file in self.meds_files:
+                print(meds_file)
+                newf = self._get_sub_fname(meds_file)
+                ex=MEDSExtractorCorrector(
+                    self.mof_file,
+                    meds_file,
+                    self.fof_range[0],
+                    self.fof_range[1],
+                    newf,
+                    replace_bad=True,
+                    min_weight=min_weight,
+                    cleanup=True,
+                )
+                extracted.append(ex)
+            extracted.append(None)
+
+        else:
+            if self.fof_file is None:
+                for meds_file in self.meds_files:
+                    print(meds_file)
+                    newf = self._get_sub_fname(meds_file)
+                    ex=meds.MEDSExtractor(
+                        meds_file,
+                        self.fof_range[0],
+                        self.fof_range[1],
+                        newf,
+                        cleanup=True,
+                    )
+                    extracted.append(ex)
+                extracted.append(None)
+            else:
+                # do the fofs first
+                print(self.fof_file)
+                newf = self._get_sub_fname(self.fof_file)
+                fofex = nbrsfofs.NbrsFoFExtractor(
+                    self.fof_file,
                     self.fof_range[0],
                     self.fof_range[1],
                     newf,
                     cleanup=True,
                 )
-                extracted.append(ex)
-            extracted.append(None)
-        else:
-            # do the fofs first
-            print(self.fof_file)
-            newf = self._get_sub_fname(self.fof_file)
-            fofex = nbrsfofs.NbrsFoFExtractor(
-                self.fof_file,
-                self.fof_range[0],
-                self.fof_range[1],
-                newf,
-                cleanup=True,
-            )
 
-            # now do the meds
-            for f in self.meds_files:
-                print(f)
-                newf = self._get_sub_fname(f)
-                ex=meds.MEDSNumberExtractor(
-                    f,
-                    fofex.numbers,
-                    newf,
-                    cleanup=True,
-                )
-                extracted.append(ex)
-            extracted.append(fofex)
+                # now do the meds
+                for meds_file in self.meds_files:
+                    print(meds_file)
+                    newf = self._get_sub_fname(meds_file)
+                    ex=meds.MEDSNumberExtractor(
+                        meds_file,
+                        fofex.numbers,
+                        newf,
+                        cleanup=True,
+                    )
+                    extracted.append(ex)
+                extracted.append(fofex)
 
         return extracted
 

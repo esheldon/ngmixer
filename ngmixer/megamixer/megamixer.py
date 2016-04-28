@@ -13,10 +13,19 @@ class BaseNGMegaMixer(dict):
     def __init__(self,conf,extra_cmds='',seed=None):
         self.update(conf)
         self.ngmix_conf = read_yaml(os.path.expandvars(self._get_ngmix_config()))
+
+        # set this
+        self['make_corrected_meds'] = self.ngmix_conf.get('make_corrected_meds',False)
+
+        # do not set this to subtract neighbors
         self['model_nbrs'] = self.ngmix_conf.get('model_nbrs',False)
-        self['extra_cmds'] = extra_cmds        
+
+        if self['model_nbrs'] and self['make_corrected_meds']:
+            raise ValueError("do not set both 'make_corrected_meds' and 'model_nbrs'")
+
+        self['extra_cmds'] = extra_cmds
         self.rng = np.random.RandomState(seed=seed)
-        
+
     def get_mof_file(self,full_coadd_tile,DESDATA,mof_version):
         coadd_run=full_coadd_tile.split('/')[-1]
         coadd_tile = full_coadd_tile.split('_')[-1]
@@ -39,7 +48,7 @@ class BaseNGMegaMixer(dict):
         files['full_coadd_tile'] = full_coadd_tile
         coadd_tile = full_coadd_tile.split('_')[-1]
         files['coadd_tile'] = coadd_tile
-        
+
         # desdata
         DESDATA = os.environ.get('DESDATA')
         files['DESDATA'] = DESDATA
@@ -334,7 +343,7 @@ fi
         args['fof_opt'] = ''
         args['nbrs_opt'] = ''
         args['flags_opt'] = ''
-        
+
         if self['model_nbrs']:
             if os.path.exists(files['fof_file']):
                 args['fof_opt'] = '--fof-file=%s'% files['fof_file'].replace(files['DESDATA'],'${DESDATA}')
@@ -346,6 +355,8 @@ fi
                 args['flags_opt'] = '--obj-flags=%s'% files['obj_flags'].replace(files['DESDATA'],'${DESDATA}')
 
         if 'mof_version' in self:
+            # for example will be used when 'make_corrected_meds' is set in the
+            # ngmix config
             if os.path.exists(files['mof_file']):
                 args['mof_opt'] = "--mof-file=%s"% files['mof_file'].replace(files['DESDATA'],'${DESDATA}')
         else:

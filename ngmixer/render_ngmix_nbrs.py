@@ -706,3 +706,5 @@ class DESRenderNGmixNbrs(RenderNGmixNbrs):
         for m in self.meds_list:
             m.close()            
         return False
+
+

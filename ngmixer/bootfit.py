@@ -1495,7 +1495,12 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         self['use_original_weight'] = self.get('use_original_weight',False)
 
+        defpars={'step':0.01}
+        self['metacal_pars'] = self.get('metacal_pars',defpars)
         self['metacal_pars']['nband'] = self['nband']
+        print("metacal pars:")
+        pprint(self['metacal_pars'])
+
         if 'model_pars' in self['metacal_pars']:
             print("setting separate metacal prior")
             set_priors(self['metacal_pars'])
@@ -1536,19 +1541,20 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         metacal_pars=self['metacal_pars']
         model_pars=metacal_pars.get('model_pars',None)
         if model_pars is not None:
-            print("getting model and priors from metacal pars")
+            #print("getting model and priors from metacal pars")
             model=list(model_pars.keys())[0]
             prior=model_pars[model]['prior']
         else:
-            # use main prior
+            #print("using main prior")
             prior=self['model_pars'][model]['prior']
 
         psf_pars=metacal_pars.get('psf_pars',None)
         if psf_pars is None:
-            # use main psf pars
+            #print("using main psf model")
             psf_pars=self['psf_pars']
         else:
-            print("getting psf pars from metacal")
+            #print("getting psf pars from metacal")
+            pass
 
         psf_fit_pars = psf_pars.get('fit_pars',None)
         return metacal_pars, model, prior, psf_pars, psf_fit_pars
@@ -1561,23 +1567,14 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         the basic fitter for this class
         """
 
-        '''
-        metacal_pars=self['metacal_pars']
-        model_pars=metacal_pars.get('model_pars',None)
-        if model_pars is not None:
-            print("getting model and priors from metacal pars")
-            model=list(model_pars.keys())[0]
-            prior=model_pars[model]['prior']
+        mcorr=self.get('make_corrected_meds',False)
+        if not mcorr:
+            #print("        replacing masked pixels")
+            boot.replace_masked_pixels(inplace=True)
         else:
-            prior=self['model_pars'][model]['prior']
-
-        ppars=self['psf_pars']
-        psf_fit_pars = ppars.get('fit_pars',None)
-        '''
-
-        # needs to be inplace because Matt assumes some
-        # sharing of the obs list I think
-        boot.replace_masked_pixels(inplace=True)
+            # we have already replaced them if we corrected the meds file
+            #print("        not replacing masked pixels")
+            pass
 
         metacal_pars, model, prior, psf_pars, psf_fit_pars = \
                 self._get_metacal_stuff(model)
@@ -1592,7 +1589,6 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         try:
 
-
             mcal_boot.fit_metacal(
                 psf_pars['model'],
                 model,
@@ -1602,7 +1598,6 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 prior=prior,
                 ntry=max_pars['ntry'],
                 metacal_pars=self['metacal_pars'],
-                use_original_weight=self['use_original_weight'],
             )
 
         except BootPSFFailure as err:
