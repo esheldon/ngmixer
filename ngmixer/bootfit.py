@@ -1569,11 +1569,11 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         mcorr=self.get('make_corrected_meds',False)
         if not mcorr:
-            #print("        replacing masked pixels")
+            print("        replacing masked pixels")
             boot.replace_masked_pixels(inplace=True)
         else:
             # we have already replaced them if we corrected the meds file
-            #print("        not replacing masked pixels")
+            print("        not replacing masked pixels")
             pass
 
         metacal_pars, model, prior, psf_pars, psf_fit_pars = \

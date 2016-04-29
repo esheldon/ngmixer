@@ -11,6 +11,9 @@ from ..render_ngmix_nbrs import RenderNGmixNbrs
 # should test against the corrector script
 #
 
+NBRS_MASKED = 2**31-1
+CEN_MODEL_MISSING = 2**30-1
+
 class MEDSExtractorCorrector(meds.MEDSExtractor):
     def __init__(self,
                  mof_file,
@@ -68,12 +71,10 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                 box_size=cat['box_size'][mindex]
                 start_row=cat['start_row'][mindex]
 
-                # print even if not verbose
                 print("%d/%d  %d" % (mindex+1, nobj, coadd_object_id))
                 if ncutout > 1 and box_size > 0:
                     for cutout_index in xrange(1,ncutout):
 
-                        # get seg map
                         try:
                             seg = mfile.interpolate_coadd_seg(mindex, cutout_index)
                         except:
@@ -116,11 +117,15 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                         # no difference, but it may be important for codes that 
                         # take moments or use FFTs
                         if self.replace_bad:
-                            wbad=numpy.where( (bmask != 0) | (wgt < self.min_weight) )
-                            if wbad[0].size > 0:
-                                print("            setting",wbad[0].size,
-                                      "bad bmask/wt pixels to central model")
-                                img[wbad] = cen_img[wbad]
+                            if cen_img is None:
+                                print("    could not replace bad pixels, cen_img is None")
+                                bmask[wbad] |= CEN_MODEL_MISSING
+                            else:
+                                wbad=numpy.where( (bmask != 0) | (wgt < self.min_weight) )
+                                if wbad[0].size > 0:
+                                    print("            setting",wbad[0].size,
+                                          "bad bmask/wt pixels to central model")
+                                    img[wbad] = cen_img[wbad]
 
                         # now overwrite pixels on disk
                         fits['image_cutouts'].write(img.ravel(), start=[start_row[cutout_index]])
@@ -131,7 +136,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                         w=numpy.where(nbrs_mask != 1)
                         if w[0].size > 0:
                             print("            modifying",w[0].size,"bmask pixels")
-                            bmask[w] = 2**31-1
+                            bmask[w] |= NBRS_MASKED
                             fits['bmask_cutouts'].write(bmask.ravel(), start=[start_row[cutout_index]])
                 else:
                     # we always want to see this

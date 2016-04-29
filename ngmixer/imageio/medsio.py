@@ -80,8 +80,9 @@ class MEDSImageIO(ImageIO):
         # the masking can introduce asymmetries
         self.conf['symmetrize_bmask'] = self.conf.get('symmetrize_bmask',True)
 
-        # max fraction of image masked in bitmask
-        self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',0.1)
+        # max fraction of image masked in bitmask or that has zero weight
+        #self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',0.1)
+        #self.conf['max_zero_weight_frac'] = self.conf.get('max_zero_weight_frac',0.1)
 
         # check this region around the center
         self.conf['central_bmask_radius'] = \
@@ -616,15 +617,20 @@ class MEDSImageIO(ImageIO):
         """
         Get an Observation for a single band.
         """
+
         meds=self.meds_list[band]
 
         bmask,skip = self._get_meds_bmask(meds, mindex, icut)
         if skip:
             return None
 
-        fname = self._get_meds_orig_filename(meds, mindex, icut)
+
+        wt,wt_us,wt_raw,seg,skip = self._get_meds_weight(meds, mindex, icut)
+        if skip:
+            return None
+
         im = self._get_meds_image(meds, mindex, icut)
-        wt,wt_us,wt_raw,seg = self._get_meds_weight(meds, mindex, icut)
+
         jacob = self._get_jacobian(meds, mindex, icut)
 
 
@@ -657,8 +663,10 @@ class MEDSImageIO(ImageIO):
 
         obs.weight_raw = wt_raw
         obs.seg = seg
+
+        fname = self._get_meds_orig_filename(meds, mindex, icut)
         obs.filename=fname
-        
+
         return obs
 
     def _fill_obs_meta_data(self,obs, band, mindex, icut):
@@ -785,7 +793,41 @@ class MEDSImageIO(ImageIO):
         except:
             seg = meds.get_cutout(mindex, icut, type='seg')
 
-        return wt,wt_us,wt_raw,seg
+
+        # check raw weight map for zero pixels
+        wzero=numpy.where(wt_raw == 0.0)
+        skip=False
+        frac=wzero[0].size/float(wt_raw.size)
+        if frac > self.conf['max_zero_weight_frac']:
+            print("    skipping due to high zero "
+                  "weight frac: %d/%d: %g" % (wzero[0].size, wt_raw.size,frac))
+            skip=True
+
+            if False:
+                import images
+                f=meds._image_info['image_path'][meds['file_id'][mindex,icut]].strip()
+                print("original image:",f)
+                f=os.path.basename(f).replace('.fits.fz','')
+                title='%d %s' % (meds['id'][mindex], f)
+                plt=images.multiview(
+                    wt_raw,
+                    width=1200,
+                    height=1200,
+                    show=False,
+                )
+                plt.aspect_ratio=0.5
+                plt.title=title
+                pngf=os.path.join(
+                    '$HOME/www/tmp/plots/wtmaps',
+                    '%s-%s.png' % (f, meds['id'][mindex]),
+                )
+                pngf=os.path.expandvars(pngf)
+                print("writing png:",pngf)
+                plt.write_img(800,800,pngf)
+                #if raw_input('hit a key (q to quit): ')=='q':
+                #    stop
+
+        return wt,wt_us,wt_raw,seg, skip
 
     def _get_jacobian(self, meds, mindex, icut):
         """
