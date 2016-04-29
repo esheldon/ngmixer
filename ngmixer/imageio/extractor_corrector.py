@@ -11,10 +11,54 @@ from ..render_ngmix_nbrs import RenderNGmixNbrs
 # should test against the corrector script
 #
 
-NBRS_MASKED = 2**31-1
-CEN_MODEL_MISSING = 2**30-1
+# these are higher than anything in Y1 DES masks
+NBRS_MASKED = 2**14
+CEN_MODEL_MISSING = 2**13
 
 class MEDSExtractorCorrector(meds.MEDSExtractor):
+    """
+    parameters
+    ----------
+    mof_file: string
+        Result from an mof run on this tile.  It is assumed the
+        model was 'cm', cmodel
+    meds_file: string
+        The MEDS file from which to extract a subset
+    start: integer
+        First index to extract
+    end: intege
+        Last index to extract
+    sub_file: string
+        Where to write the result
+
+    replace_bad: bool
+        If True, replace pixels with bits set in the bmask,
+        or with zero weight, with the central model.  If the
+        central model did not converge (bad fit) then set
+        the flag CEN_MODEL_MISSING in the bmask.  Default True.
+
+    reset_bmask_and_weight: bool
+        If True, reset bits to zero in the bit mask after replacement
+        (replace_bad==True) and set the weight to the max weight
+        in the weight map.  The exception will be if the model
+        of the central did not converge, then the bitmask and
+        weight are not reset.  Default False.
+
+    min_weight: float
+        Min weight to consider "bad".  If the compression preserves
+        zeros, this can be left at zero.  Default 0.0
+
+    model: string
+        Model used in the MOF, default 'cm'.  We will soon add
+        this strig to the MOF outputs so we don't need the
+        keyword.
+
+    cleanup: bool
+        Set to True to clean up the file when this object is
+        cleaned up.
+    verbose: bool
+        Be verbose
+    """
     def __init__(self,
                  mof_file,
                  meds_file,
@@ -22,7 +66,8 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                  end,
                  sub_file,
                  replace_bad=True,
-                 min_weight=-9999.0,
+                 reset_bmask_and_weight=False,
+                 min_weight=0.0,
                  # these are the bands in the mof
                  band_names = ['g','r','i','z'],
                  model='cm',
@@ -35,6 +80,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         self.model=model
 
         self.replace_bad=replace_bad
+        self.reset_bmask_and_weight=reset_bmask_and_weight
         self.min_weight=min_weight
         self.verbose=verbose
 
@@ -73,71 +119,136 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
 
                 print("%d/%d  %d" % (mindex+1, nobj, coadd_object_id))
                 if ncutout > 1 and box_size > 0:
-                    for cutout_index in xrange(1,ncutout):
+                    for icut in xrange(1,ncutout):
 
                         try:
-                            seg = mfile.interpolate_coadd_seg(mindex, cutout_index)
+                            seg = mfile.interpolate_coadd_seg(mindex, icut)
                         except:
-                            seg = mfile.get_cutout(mindex, cutout_index, type='seg')
+                            seg = mfile.get_cutout(mindex, icut, type='seg')
 
-                        if self.verbose:
-                            print('    doing nbrs for object at '
-                                  'index %d, cutout %d' % (mindex,cutout_index))
+                        print("  cutout %d/%d" % (icut+1,ncutout))
 
                         res = self.renderer.render_nbrs(
                             coadd_object_id,
-                            cutout_index,
+                            icut,
                             seg,
                             self.model,
                             self.band,
                             total=True,
                             verbose=self.verbose,
                         )
-                        if res is None:
+                        if res is not None:
+                            cen_img, nbrs_img, nbrs_mask, nbrs_ids, pixel_scale = res
+
+                            if cen_img is None:
+                                print("    bad central fit")
+                            elif False:
+                                tres = self.renderer.render_central(
+                                    coadd_object_id,
+                                    mfile,
+                                    mindex,
+                                    icut,
+                                    self.model,
+                                    self.band,
+                                    seg.shape,
+                                )
+                                if tres is not None:
+                                    import images
+                                    tcen_img,tpixel_scale=tres
+                                    tdiff=cen_img - tcen_img
+                                    print("MAX DIFF:",numpy.abs(tdiff).max())
+                                    images.compare_images(
+                                        cen_img,
+                                        tcen_img,
+                                    )
+                                    if 'q'==raw_input('hit a key: '):
+                                        stop
+
+
+
+                        else:
                             if self.verbose:
-                                print('        no nbrs')
-                            continue
+                                print('    no nbrs, rendering central')
+                            nbrs_img=None
+                            nbrs_mask=None
+                            nbrs_ids=None
+                            pixel_scale=None
 
-                        if self.verbose:
-                            print('        found nbrs - correcting images and weight maps')
+                            res = self.renderer.render_central(
+                                coadd_object_id,
+                                mfile,
+                                mindex,
+                                icut,
+                                self.model,
+                                self.band,
+                                seg.shape,
+                            )
+                            if res is None:
+                                cen_img,pixel_scale=None,None
+                            else:
+                                cen_img, pixel_scale=res
 
-                        cen_img, nbrs_img, nbrs_mask, nbrs_ids, pixel_scale = res
+                        img    = mfile.get_cutout(mindex, icut, type='image')
+                        weight = mfile.get_cutout(mindex, icut, type='weight')
+                        bmask  = mfile.get_cutout(mindex, icut, type='bmask')
 
-                        img   = mfile.get_cutout(mindex, cutout_index, type='image')
-                        wgt   = mfile.get_cutout(mindex, cutout_index, type='weight')
-                        bmask = mfile.get_cutout(mindex, cutout_index, type='bmask')
-
-                        # subtract neighbors
-                        img -= nbrs_img*pixel_scale*pixel_scale
-                        # possibly zero the weight
-                        wgt *= nbrs_mask
+                        if nbrs_img is not None:
+                            # subtract neighbors if they exist
+                            img -= nbrs_img*pixel_scale**2
+                            # possibly zero the weight
+                            weight *= nbrs_mask
 
                         # set masked or zero weight pixels to the value of the central.
                         # For codes that use the weight, such as max like, this makes
                         # no difference, but it may be important for codes that 
                         # take moments or use FFTs
                         if self.replace_bad:
-                            if cen_img is None:
-                                print("    could not replace bad pixels, cen_img is None")
-                                bmask[wbad] |= CEN_MODEL_MISSING
-                            else:
-                                wbad=numpy.where( (bmask != 0) | (wgt < self.min_weight) )
-                                if wbad[0].size > 0:
-                                    print("            setting",wbad[0].size,
-                                          "bad bmask/wt pixels to central model")
-                                    img[wbad] = cen_img[wbad]
+                            bmask_logic  = (bmask != 0)
+                            weight_logic = (weight <= self.min_weight)
+
+                            wbad=numpy.where( bmask_logic | weight_logic )
+                            if wbad[0].size > 0:
+                                if cen_img is None:
+                                    print("         could not replace bad pixels "
+                                          "for cutout",icut," cen_img is None")
+                                    bmask[wbad] |= CEN_MODEL_MISSING
+                                else:
+
+                                    scaled_cen = cen_img*pixel_scale**2
+                                    print("         setting",wbad[0].size,
+                                          "bad bmask/wt pixels in cutout",icut,
+                                          "to central model")
+                                    img[wbad] = scaled_cen[wbad]
+
+                                    if self.reset_bmask_and_weight:
+                                        print("         resetting bmask and weight")
+                                        bmask[:,:] = 0
+                                        wwt=numpy.where(weight_logic)
+                                        if wwt[0].size > 0:
+                                            weight[wwt] = weight.max()
+
+
+                        if not self.reset_bmask_and_weight and nbrs_mask is not None:
+                            w=numpy.where(nbrs_mask != 1)
+                            if w[0].size > 0:
+                                print("         modifying",w[0].size,
+                                      "bmask pixels in cutout",icut)
+                                bmask[w] |= NBRS_MASKED
 
                         # now overwrite pixels on disk
-                        fits['image_cutouts'].write(img.ravel(), start=[start_row[cutout_index]])
-                        fits['weight_cutouts'].write(wgt.ravel(), start=[start_row[cutout_index]])
+                        fits['image_cutouts'].write(img.ravel(),     start=start_row[icut])
+                        fits['weight_cutouts'].write(weight.ravel(), start=start_row[icut])
+                        fits['bmask_cutouts'].write(bmask.ravel(),   start=start_row[icut])
 
-                        # note in the bad pixel mask where we have masked a neighbor
-                        # that failed to converge
-                        w=numpy.where(nbrs_mask != 1)
-                        if w[0].size > 0:
-                            print("            modifying",w[0].size,"bmask pixels")
-                            bmask[w] |= NBRS_MASKED
-                            fits['bmask_cutouts'].write(bmask.ravel(), start=[start_row[cutout_index]])
+                        if False and cen_img is not None:
+                            import images
+                            images.compare_images(
+                                img,
+                                cen_img*pixel_scale**2,
+                            )
+                            if 'q'==raw_input('hit a key: '):
+                                stop
+
                 else:
                     # we always want to see this
                     print("    not writing ncutout:",ncutout,"box_size:",box_size)
@@ -145,6 +256,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
     def _load_ngmix_data(self):
         self.fit_data = fitsio.read(self.mof_file)
         self.nbrs_data = fitsio.read(self.mof_file,ext='nbrs_data')
+        self.epoch_data = fitsio.read(self.mof_file,ext='epoch_data')
 
     def _set_renderer(self):
         self._load_ngmix_data()
@@ -154,6 +266,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         self.renderer = RenderNGmixNbrs(
             self.fit_data,
             self.nbrs_data,
+            epoch_data=self.epoch_data,
             **conf
         )
 

@@ -125,7 +125,7 @@ class MEDSImageIO(ImageIO):
                     "corrected MEDS files"
                 )
 
-            min_weight=self.conf.get('min_weight',-9999.9)
+            min_weight=self.conf.get('min_weight',0.0)
             for meds_file in self.meds_files:
                 print(meds_file)
                 newf = self._get_sub_fname(meds_file)
@@ -136,8 +136,10 @@ class MEDSImageIO(ImageIO):
                     self.fof_range[1],
                     newf,
                     replace_bad=True,
+                    reset_bmask_and_weight=True,
                     min_weight=min_weight,
                     cleanup=True,
+                    verbose=False,
                 )
                 extracted.append(ex)
             extracted.append(None)
@@ -721,7 +723,7 @@ class MEDSImageIO(ImageIO):
                     w=numpy.where(bmask != 0)
                     frac = float(w[0].size)/bmask.size
                     if frac > self.conf['max_bmask_frac']:
-                        print("    skipping due to high bmask frac:",frac)
+                        print("    skipping cutout",icut,"due to high bmask frac:",frac)
                         skip=True
 
                     if rad is not None:
@@ -737,7 +739,7 @@ class MEDSImageIO(ImageIO):
                                           col_start:col_end]
                         wcen=numpy.where(bmask_sub != 0)
                         if wcen[0].size > 0:
-                            print("    skipping due center masked")
+                            print("    skipping cutout",icut,"due center masked")
                             skip=True
 
                     if False and w[0].size > 0:
@@ -799,7 +801,7 @@ class MEDSImageIO(ImageIO):
         skip=False
         frac=wzero[0].size/float(wt_raw.size)
         if frac > self.conf['max_zero_weight_frac']:
-            print("    skipping due to high zero "
+            print("    skipping cutout",icut,"due to high zero "
                   "weight frac: %d/%d: %g" % (wzero[0].size, wt_raw.size,frac))
             skip=True
 
