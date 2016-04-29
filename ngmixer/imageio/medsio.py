@@ -136,7 +136,7 @@ class MEDSImageIO(ImageIO):
                     self.fof_range[1],
                     newf,
                     replace_bad=True,
-                    reset_bmask_and_weight=True,
+                    reset_bmask_and_weight=False,
                     min_weight=min_weight,
                     cleanup=True,
                     verbose=False,
