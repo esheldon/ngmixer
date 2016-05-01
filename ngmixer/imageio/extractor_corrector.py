@@ -15,6 +15,10 @@ from ..render_ngmix_nbrs import RenderNGmixNbrs
 NBRS_MASKED = 2**14
 CEN_MODEL_MISSING = 2**13
 
+# we didn't always set the bmask when we made the
+# weight zero in the meds maker
+ZERO_WEIGHT = 2**13
+
 class MEDSExtractorCorrector(meds.MEDSExtractor):
     """
     parameters
@@ -36,13 +40,6 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         or with zero weight, with the central model.  If the
         central model did not converge (bad fit) then set
         the flag CEN_MODEL_MISSING in the bmask.  Default True.
-
-    reset_bmask_and_weight: bool
-        If True, reset bits to zero in the bit mask after replacement
-        (replace_bad==True) and set the weight to the max weight
-        in the weight map.  The exception will be if the model
-        of the central did not converge, then the bitmask and
-        weight are not reset.  Default False.
 
     min_weight: float
         Min weight to consider "bad".  If the compression preserves
@@ -66,12 +63,12 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                  end,
                  sub_file,
                  replace_bad=True,
-                 reset_bmask_and_weight=False,
                  min_weight=0.0,
                  # these are the bands in the mof
                  band_names = ['g','r','i','z'],
                  model='cm',
                  cleanup=False,
+                 make_plots=False,
                  verbose=False):
 
         self.mof_file=mof_file
@@ -80,11 +77,13 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         self.model=model
 
         self.replace_bad=replace_bad
-        self.reset_bmask_and_weight=reset_bmask_and_weight
         self.min_weight=min_weight
+        self.make_plots=make_plots
         self.verbose=verbose
 
         self._set_band(meds_file)
+
+        self._setup_plotting(meds_file)
 
         # this will run extraction
         super(MEDSExtractorCorrector,self).__init__(
@@ -94,6 +93,18 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
             sub_file,
             cleanup=cleanup,
         )
+
+
+    def _setup_plotting(self, meds_file):
+        if self.make_plots:
+            self.pdir='plots'
+            if not os.path.exists(self.pdir):
+                os.makedirs(self.pdir)
+
+            bname=os.path.basename(meds_file)
+            front=bname.replace('.fits.fz','').replace('.fits','')
+            self.front=front
+
 
     def _extract(self):
         # first do the ordinary extraction
@@ -188,15 +199,34 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                             else:
                                 cen_img, pixel_scale=res
 
-                        img    = mfile.get_cutout(mindex, icut, type='image')
-                        weight = mfile.get_cutout(mindex, icut, type='weight')
-                        bmask  = mfile.get_cutout(mindex, icut, type='bmask')
+                        img_orig = mfile.get_cutout(mindex, icut, type='image')
+                        weight   = mfile.get_cutout(mindex, icut, type='weight')
+                        bmask    = mfile.get_cutout(mindex, icut, type='bmask')
 
+                        img=img_orig.copy()
                         if nbrs_img is not None:
-                            # subtract neighbors if they exist
-                            img -= nbrs_img*pixel_scale**2
-                            # possibly zero the weight
+
+                            # don't subtract in regions where the weight
+                            # is zero; this is currently a bug workaround because
+                            # in the MEDS maker we are including cutouts that
+                            # cross the edge
+                            pw=numpy.where(weight > self.min_weight)
+                            if pw[0].size > 0:
+                                # subtract neighbors if they exist
+                                img[pw] -= nbrs_img[pw]*pixel_scale**2
+
+                            # if the nbr fit failed, nbrs_mask will be set to
+                            # zero in the seg map of the neighbor
                             weight *= nbrs_mask
+
+                        # mark zero weight pizels in the mask; this is to
+                        # deal with forgetting to do so in the meds code
+                        # when we set the weight to zero
+                        # we should do this in the meds reader
+                        weight_logic = (weight <= self.min_weight)
+                        zwt=numpy.where(weight_logic)
+                        if zwt[0].size > 0:
+                            bmask[zwt] |= ZERO_WEIGHT 
 
                         # set masked or zero weight pixels to the value of the central.
                         # For codes that use the weight, such as max like, this makes
@@ -204,7 +234,6 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                         # take moments or use FFTs
                         if self.replace_bad:
                             bmask_logic  = (bmask != 0)
-                            weight_logic = (weight <= self.min_weight)
 
                             wbad=numpy.where( bmask_logic | weight_logic )
                             if wbad[0].size > 0:
@@ -220,15 +249,8 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                                           "to central model")
                                     img[wbad] = scaled_cen[wbad]
 
-                                    if self.reset_bmask_and_weight:
-                                        print("         resetting bmask and weight")
-                                        bmask[:,:] = 0
-                                        wwt=numpy.where(weight_logic)
-                                        if wwt[0].size > 0:
-                                            weight[wwt] = weight.max()
 
-
-                        if not self.reset_bmask_and_weight and nbrs_mask is not None:
+                        if nbrs_mask is not None:
                             w=numpy.where(nbrs_mask != 1)
                             if w[0].size > 0:
                                 print("         modifying",w[0].size,
@@ -240,14 +262,12 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                         fits['weight_cutouts'].write(weight.ravel(), start=start_row[icut])
                         fits['bmask_cutouts'].write(bmask.ravel(),   start=start_row[icut])
 
-                        if False and cen_img is not None:
-                            import images
-                            images.compare_images(
-                                img,
-                                cen_img*pixel_scale**2,
+                        if self.make_plots:
+                            self._doplots(
+                                coadd_object_id,
+                                mindex, icut, img_orig, img, bmask, weight,
                             )
-                            if 'q'==raw_input('hit a key: '):
-                                stop
+
 
                 else:
                     # we always want to see this
@@ -283,6 +303,31 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
 
         self.band = band
 
+    def _doplots(self, id, mindex, icut, img_orig, img, bmask, weight):
+        import images
+        imdiff = img_orig-img
+
+        lbmask = numpy.log10( 1.0 + bmask )
+        imlist=[img_orig, img, imdiff, lbmask, weight]
+        imlist=[t - t.min() for t in imlist]
+
+        titles=['image','imfix','image-imfix','bmask','weight']
+
+        title='%d-%06d-%02d' % (id, mindex, icut)
+        pname='%s-%d-%06d-%02d.png' % (self.front,id, mindex, icut)
+        pname=os.path.join(self.pdir, pname)
+        tab=images.view_mosaic(
+            imlist,
+            titles=titles,
+            show=False,
+        )
+        tab.title=title
+
+        ctab=images.multiview(img,show=False)
+        tab[1,2] = ctab[0,1]
+
+        print("    writing:",pname)
+        tab.write_img(800,800,pname)
 
 class RefMeds(meds.MEDS):
     """

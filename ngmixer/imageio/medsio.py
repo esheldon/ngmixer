@@ -133,11 +133,11 @@ class MEDSImageIO(ImageIO):
                     self.fof_range[0],
                     self.fof_range[1],
                     newf,
-                    replace_bad=True,
-                    reset_bmask_and_weight=False,
+                    replace_bad=self.conf['nbrs_replace_bad'],
                     min_weight=min_weight,
                     cleanup=True,
                     verbose=False,
+                    make_plots=self.conf['make_plots'],
                 )
                 extracted.append(ex)
             extracted.append(None)
@@ -701,12 +701,27 @@ class MEDSImageIO(ImageIO):
         """
         return meds.get_cutout(mindex, icut)
 
+    def _badfrac_too_high(self, icut, nbad, shape, maxfrac, type):
+        ntot=shape[0]*shape[1]
+        frac = float(nbad)/ntot
+
+        if maxfrac=='one-over-side':
+            maxfrac=1.0/min(shape)
+
+        if frac > maxfrac:
+            print("    skipping cutout",icut,"due to high ",type,"frac:",frac)
+            return True
+        else:
+            return False
+
+
     def _get_meds_bmask(self, meds, mindex, icut):
         """
         Get an image cutout from the input MEDS file
         """
-
+        maxfrac=self.conf['max_bmask_frac']
         skip=False
+
         if 'bmask_cutouts' in meds._fits:
             bmask=meds.get_cutout(mindex, icut, type='bmask')
 
@@ -719,9 +734,11 @@ class MEDSImageIO(ImageIO):
                     raise RuntimeError("cannot symmetrize non-square bmask")
 
             w=numpy.where(bmask != 0)
-            frac = float(w[0].size)/bmask.size
-            if frac > self.conf['max_bmask_frac']:
-                print("    skipping cutout",icut,"due to high bmask frac:",frac)
+
+            notok=self._badfrac_too_high(
+                icut, w[0].size, bmask.shape, maxfrac, 'bmask'
+            )
+            if notok:
                 skip=True
                 return None,skip
 
@@ -769,6 +786,8 @@ class MEDSImageIO(ImageIO):
         """
         Get a weight map from the input MEDS file
         """
+        maxfrac=self.conf['max_zero_weight_frac']
+        skip=False
 
         wt_raw = meds.get_cutout(mindex, icut, type='weight')
         if self.conf['region'] == 'mof':
@@ -807,11 +826,11 @@ class MEDSImageIO(ImageIO):
 
         # check raw weight map for zero pixels
         wzero=numpy.where(wt_raw == 0.0)
-        skip=False
-        frac=wzero[0].size/float(wt_raw.size)
-        if frac > self.conf['max_zero_weight_frac']:
-            print("    skipping cutout",icut,"due to high zero "
-                  "weight frac: %d/%d: %g" % (wzero[0].size, wt_raw.size,frac))
+
+        notok=self._badfrac_too_high(
+            icut, wzero[0].size, wt_raw.shape, maxfrac, 'zero weight'
+        )
+        if notok:
             skip=True
 
         return wt,wt_us,wt_raw,seg, skip
