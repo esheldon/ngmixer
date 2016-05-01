@@ -170,7 +170,8 @@ class RenderNGmixNbrs(object):
             return None
 
         fit_data = self.fit_data[wfit]
-        if fit_data['flags'][0] != 0:
+        cen_flags=fit_data['flags'][0]
+        if cen_flags != 0:
             print("    bad central fit:",cen_flags)
             return None
 
