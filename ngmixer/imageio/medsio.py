@@ -77,8 +77,6 @@ class MEDSImageIO(ImageIO):
         self.conf['model_nbrs'] = self.conf.get('model_nbrs',False)
         self.conf['ignore_zero_weights_images'] = self.conf.get('ignore_zero_weights_images',False)
 
-        # the masking can introduce asymmetries
-        self.conf['symmetrize_bmask'] = self.conf.get('symmetrize_bmask',True)
 
         # max fraction of image masked in bitmask or that has zero weight
         #self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',0.1)
@@ -717,40 +715,43 @@ class MEDSImageIO(ImageIO):
                     borig=bmask.copy()
                     rotmask=numpy.rot90(bmask)
                     bmask |= rotmask
-
-                    rad=self.conf['central_bmask_radius']
-
-                    w=numpy.where(bmask != 0)
-                    frac = float(w[0].size)/bmask.size
-                    if frac > self.conf['max_bmask_frac']:
-                        print("    skipping cutout",icut,"due to high bmask frac:",frac)
-                        skip=True
-
-                    if rad is not None:
-                        row0 = meds['cutout_row'][mindex,icut]
-                        col0 = meds['cutout_col'][mindex,icut]
-
-                        row_start = _clip_pixel(row0-rad, bmask.shape[0])
-                        row_end   = _clip_pixel(row0+rad, bmask.shape[0])
-                        col_start = _clip_pixel(col0-rad, bmask.shape[1])
-                        col_end   = _clip_pixel(col0+rad, bmask.shape[1])
-
-                        bmask_sub = bmask[row_start:row_end,
-                                          col_start:col_end]
-                        wcen=numpy.where(bmask_sub != 0)
-                        if wcen[0].size > 0:
-                            print("    skipping cutout",icut,"due center masked")
-                            skip=True
-
-                    if False and w[0].size > 0:
-                        import images
-                        plt=images.view_mosaic([borig, bmask],show=False)
-                        plt.write_img(800,800,'/astro/u/esheldon/www/tmp/tmp.png')
-                        if raw_input('hit a key: ')=='q':
-                            stop
-
                 else:
                     raise RuntimeError("cannot symmetrize non-square bmask")
+
+            w=numpy.where(bmask != 0)
+            frac = float(w[0].size)/bmask.size
+            if frac > self.conf['max_bmask_frac']:
+                print("    skipping cutout",icut,"due to high bmask frac:",frac)
+                skip=True
+                return None,skip
+
+            if 'bmask_skip_flags' in self.conf:
+                w=numpy.where( (bmask & self.conf['bmask_skip_flags']) != 0)
+                if w[0].size > 0:
+                    print("    skipping cutout",icut,
+                          "because mask bits set:",
+                          self.conf['bmask_skip_flags'])
+                    skip=True
+                    return None,skip
+
+            rad=self.conf['central_bmask_radius']
+            if rad is not None:
+                row0 = meds['cutout_row'][mindex,icut]
+                col0 = meds['cutout_col'][mindex,icut]
+
+                row_start = _clip_pixel(row0-rad, bmask.shape[0])
+                row_end   = _clip_pixel(row0+rad, bmask.shape[0])
+                col_start = _clip_pixel(col0-rad, bmask.shape[1])
+                col_end   = _clip_pixel(col0+rad, bmask.shape[1])
+
+                bmask_sub = bmask[row_start:row_end,
+                                  col_start:col_end]
+                wcen=numpy.where(bmask_sub != 0)
+                if wcen[0].size > 0:
+                    print("    skipping cutout",icut,"due center masked")
+                    skip=True
+                    return None,skip
+
         else:
             bmask=None
 
@@ -796,6 +797,14 @@ class MEDSImageIO(ImageIO):
             seg = meds.get_cutout(mindex, icut, type='seg')
 
 
+        if self.conf['symmetrize_weight']:
+            wt     = wt     + numpy.rot90(wt)
+            wt_raw = wt_raw + numpy.rot90(wt_raw)
+
+            if wt_us is not None:
+                wt_us  = wt_us  + numpy.rot90(wt_us)
+
+
         # check raw weight map for zero pixels
         wzero=numpy.where(wt_raw == 0.0)
         skip=False
@@ -804,30 +813,6 @@ class MEDSImageIO(ImageIO):
             print("    skipping cutout",icut,"due to high zero "
                   "weight frac: %d/%d: %g" % (wzero[0].size, wt_raw.size,frac))
             skip=True
-
-            if False:
-                import images
-                f=meds._image_info['image_path'][meds['file_id'][mindex,icut]].strip()
-                print("original image:",f)
-                f=os.path.basename(f).replace('.fits.fz','')
-                title='%d %s' % (meds['id'][mindex], f)
-                plt=images.multiview(
-                    wt_raw,
-                    width=1200,
-                    height=1200,
-                    show=False,
-                )
-                plt.aspect_ratio=0.5
-                plt.title=title
-                pngf=os.path.join(
-                    '$HOME/www/tmp/plots/wtmaps',
-                    '%s-%s.png' % (f, meds['id'][mindex]),
-                )
-                pngf=os.path.expandvars(pngf)
-                print("writing png:",pngf)
-                plt.write_img(800,800,pngf)
-                #if raw_input('hit a key (q to quit): ')=='q':
-                #    stop
 
         return wt,wt_us,wt_raw,seg, skip
 
