@@ -232,7 +232,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                             w=numpy.where(nbrs_mask != 1)
                             if w[0].size > 0:
                                 print("         modifying",w[0].size,
-                                      "bmask pixels in cutout",icut)
+                                      "bmask pixels in cutout",icut,"for nbrs_mask")
                                 bmask[w] |= NBRS_MASKED
 
                         # now overwrite pixels on disk
