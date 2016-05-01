@@ -244,7 +244,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                                 else:
 
                                     scaled_cen = cen_img*pixel_scale**2
-                                    print("         setting",wbad[0].size,
+                                    print("     setting",wbad[0].size,
                                           "bad bmask/wt pixels in cutout",icut,
                                           "to central model")
                                     img[wbad] = scaled_cen[wbad]
@@ -253,7 +253,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                         if nbrs_mask is not None:
                             w=numpy.where(nbrs_mask != 1)
                             if w[0].size > 0:
-                                print("         modifying",w[0].size,
+                                print("     modifying",w[0].size,
                                       "bmask pixels in cutout",icut,"for nbrs_mask")
                                 bmask[w] |= NBRS_MASKED
 
