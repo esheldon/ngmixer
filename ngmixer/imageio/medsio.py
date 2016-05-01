@@ -776,9 +776,17 @@ class MEDSImageIO(ImageIO):
 
     def _clip_weight(self,wt):
         wt = wt.astype('f8', copy=False)
+
         w = numpy.where(wt < self.conf['min_weight'])
         if w[0].size > 0:
             wt[w] = 0.0
+
+            if self.conf['symmetrize_weight']:
+                print("    symmetrizing weight")
+                wt_rot = numpy.rot90(wt)
+                w_rot = numpy.where(wt_rot < self.conf['min_weight'])
+                wt[w_rot] = 0.0
+
         wt=wt.clip(min=0.0)
         return wt
 
@@ -816,13 +824,15 @@ class MEDSImageIO(ImageIO):
             seg = meds.get_cutout(mindex, icut, type='seg')
 
 
+        '''
         if self.conf['symmetrize_weight']:
+            raise RuntimeError("this is bogus!  Need to zero the map not add")
             wt     = wt     + numpy.rot90(wt)
             wt_raw = wt_raw + numpy.rot90(wt_raw)
 
             if wt_us is not None:
                 wt_us  = wt_us  + numpy.rot90(wt_us)
-
+        '''
 
         # check raw weight map for zero pixels
         wzero=numpy.where(wt_raw == 0.0)
