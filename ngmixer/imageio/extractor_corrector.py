@@ -153,29 +153,6 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
 
                             if cen_img is None:
                                 print("    bad central fit")
-                            elif False:
-                                tres = self.renderer.render_central(
-                                    coadd_object_id,
-                                    mfile,
-                                    mindex,
-                                    icut,
-                                    self.model,
-                                    self.band,
-                                    seg.shape,
-                                )
-                                if tres is not None:
-                                    import images
-                                    tcen_img,tpixel_scale=tres
-                                    tdiff=cen_img - tcen_img
-                                    print("MAX DIFF:",numpy.abs(tdiff).max())
-                                    images.compare_images(
-                                        cen_img,
-                                        tcen_img,
-                                    )
-                                    if 'q'==raw_input('hit a key: '):
-                                        stop
-
-
 
                         else:
                             if self.verbose:
@@ -223,7 +200,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                             # zero in the seg map of the neighbor
                             weight *= nbrs_mask
 
-                        # mark zero weight pizels in the mask; this is to
+                        # mark zero weight pixels in the mask; this is to
                         # deal with forgetting to do so in the meds code
                         # when we set the weight to zero
                         # we should do this in the meds reader
@@ -246,28 +223,27 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                         # note zero weight has been marked in the bmask
                         if self.replace_bad:
 
-
                             # working with unravelled images for efficiency
                             bmask_logic  = (bmravel != 0)
                             wbad,=numpy.where(bmask_logic)
 
                             if wbad.size > 0:
-
-                                wgood_wt=numpy.where(weight_logic == False)
-                                if wgood_wt[0].size > 0 and wbad_wt[0].size > 0:
-                                    # fix the weight map.  We are going to add noise
-                                    # as well as signal in the bad pixels.  The problem
-                                    # pixels will still be marked in the bad pixel mask
-                                    print("        replacing",wbad_wt[0].size,
-                                          "weight in replaced pixels")
-                                    medwt = numpy.median(weight[wgood_wt])
-                                    weight[wbad_wt] = medwt
-
                                 if cen_img is None:
-                                    print("        could not replace bad pixels "
-                                          "for cutout",icut," cen_img is None")
+                                    print("        bad central fit for",icut,
+                                          "could not replace bad pixels")
                                     bmravel[wbad] = bmravel[wbad] | CEN_MODEL_MISSING
+
                                 else:
+
+                                    wgood_wt=numpy.where(weight_logic == False)
+                                    if wgood_wt[0].size > 0 and wbad_wt[0].size > 0:
+                                        # fix the weight map.  We are going to add noise
+                                        # as well as signal in the bad pixels.  The problem
+                                        # pixels will still be marked in the bad pixel mask
+                                        print("        replacing",wbad_wt[0].size,
+                                              "weight in replaced pixels")
+                                        medwt = numpy.median(weight[wgood_wt])
+                                        weight[wbad_wt] = medwt
 
                                     scaled_cen = cen_img.ravel()*pixel_scale**2
                                     print("        setting",wbad.size,
@@ -276,15 +252,15 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                                     imravel[wbad] = scaled_cen[wbad]
 
 
-                                print("        adding noise to",wbad.size,"replaced")
-                                err = numpy.sqrt( 1.0/wtravel[wbad] )
-                                rand = numpy.random.normal(
-                                    loc=0.0,
-                                    scale=1.0,
-                                    size=err.size,
-                                )
-                                rand *= err
-                                imravel[wbad] += rand
+                                    print("        adding noise to",wbad.size,"replaced")
+                                    err = numpy.sqrt( 1.0/wtravel[wbad] )
+                                    rand = numpy.random.normal(
+                                        loc=0.0,
+                                        scale=1.0,
+                                        size=err.size,
+                                    )
+                                    rand *= err
+                                    imravel[wbad] = imravel[wbad] + rand
 
 
                         # now overwrite pixels on disk
