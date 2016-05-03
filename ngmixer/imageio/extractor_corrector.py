@@ -204,6 +204,10 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                         bmask    = mfile.get_cutout(mindex, icut, type='bmask')
 
                         img=img_orig.copy()
+                        imravel = img.ravel()
+                        wtravel = weight.ravel()
+                        bmravel = bmask.ravel()
+
                         if nbrs_img is not None:
 
                             # don't subtract in regions where the weight
@@ -213,7 +217,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                             pw=numpy.where(weight > self.min_weight)
                             if pw[0].size > 0:
                                 # subtract neighbors if they exist
-                                img[pw] -= nbrs_img[pw]*pixel_scale**2
+                                img[pw] = img[pw] - nbrs_img[pw]*pixel_scale**2
 
                             # if the nbr fit failed, nbrs_mask will be set to
                             # zero in the seg map of the neighbor
@@ -224,43 +228,69 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                         # when we set the weight to zero
                         # we should do this in the meds reader
                         weight_logic = (weight <= self.min_weight)
-                        zwt=numpy.where(weight_logic)
-                        if zwt[0].size > 0:
-                            bmask[zwt] |= ZERO_WEIGHT 
-
-                        # set masked or zero weight pixels to the value of the central.
-                        # For codes that use the weight, such as max like, this makes
-                        # no difference, but it may be important for codes that 
-                        # take moments or use FFTs
-                        if self.replace_bad:
-                            bmask_logic  = (bmask != 0)
-
-                            wbad=numpy.where( bmask_logic | weight_logic )
-                            if wbad[0].size > 0:
-                                if cen_img is None:
-                                    print("         could not replace bad pixels "
-                                          "for cutout",icut," cen_img is None")
-                                    bmask[wbad] |= CEN_MODEL_MISSING
-                                else:
-
-                                    scaled_cen = cen_img*pixel_scale**2
-                                    print("     setting",wbad[0].size,
-                                          "bad bmask/wt pixels in cutout",icut,
-                                          "to central model")
-                                    img[wbad] = scaled_cen[wbad]
-
+                        wbad_wt=numpy.where(weight_logic)
+                        if wbad_wt[0].size > 0:
+                            bmask[wbad_wt] = bmask[wbad_wt] | ZERO_WEIGHT
 
                         if nbrs_mask is not None:
                             w=numpy.where(nbrs_mask != 1)
                             if w[0].size > 0:
                                 print("     modifying",w[0].size,
                                       "bmask pixels in cutout",icut,"for nbrs_mask")
-                                bmask[w] |= NBRS_MASKED
+                                bmask[w] = bmask[w] | NBRS_MASKED
+
+                        # set masked or zero weight pixels to the value of the central.
+                        # For codes that use the weight, such as max like, this makes
+                        # no difference, but it may be important for codes that 
+                        # take moments or use FFTs
+                        # note zero weight has been marked in the bmask
+                        if self.replace_bad:
+
+
+                            # working with unravelled images for efficiency
+                            bmask_logic  = (bmravel != 0)
+                            wbad,=numpy.where(bmask_logic)
+
+                            if wbad.size > 0:
+
+                                wgood_wt=numpy.where(weight_logic == False)
+                                if wgood_wt[0].size > 0 and wbad_wt[0].size > 0:
+                                    # fix the weight map.  We are going to add noise
+                                    # as well as signal in the bad pixels.  The problem
+                                    # pixels will still be marked in the bad pixel mask
+                                    print("        replacing",wbad_wt[0].size,
+                                          "weight in replaced pixels")
+                                    medwt = numpy.median(weight[wgood_wt])
+                                    weight[wbad_wt] = medwt
+
+                                if cen_img is None:
+                                    print("        could not replace bad pixels "
+                                          "for cutout",icut," cen_img is None")
+                                    bmravel[wbad] = bmravel[wbad] | CEN_MODEL_MISSING
+                                else:
+
+                                    scaled_cen = cen_img.ravel()*pixel_scale**2
+                                    print("        setting",wbad.size,
+                                          "bad pixels in cutout",icut,
+                                          "to central model")
+                                    imravel[wbad] = scaled_cen[wbad]
+
+
+                                print("        adding noise to",wbad.size,"replaced")
+                                err = numpy.sqrt( 1.0/wtravel[wbad] )
+                                rand = numpy.random.normal(
+                                    loc=0.0,
+                                    scale=1.0,
+                                    size=err.size,
+                                )
+                                rand *= err
+                                imravel[wbad] += rand
+
 
                         # now overwrite pixels on disk
-                        fits['image_cutouts'].write(img.ravel(),     start=start_row[icut])
-                        fits['weight_cutouts'].write(weight.ravel(), start=start_row[icut])
-                        fits['bmask_cutouts'].write(bmask.ravel(),   start=start_row[icut])
+                        fits['image_cutouts'].write(imravel,  start=start_row[icut])
+                        fits['weight_cutouts'].write(wtravel, start=start_row[icut])
+                        fits['bmask_cutouts'].write(bmravel,  start=start_row[icut])
 
                         if self.make_plots:
                             self._doplots(
