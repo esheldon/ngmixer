@@ -62,7 +62,8 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                  start,
                  end,
                  sub_file,
-                 replace_bad=True,
+                 reject_outliers=False,
+                 replace_bad=False,
                  min_weight=0.0,
                  # these are the bands in the mof
                  band_names = ['g','r','i','z'],
@@ -76,7 +77,9 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         self.band_names=band_names
         self.model=model
 
+        self.reject_outliers=reject_outliers
         self.replace_bad=replace_bad
+
         self.min_weight=min_weight
         self.make_plots=make_plots
         self.verbose=verbose
@@ -105,8 +108,254 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
             front=bname.replace('.fits.fz','').replace('.fits','')
             self.front=front
 
+    def _reject_outliers(self, imlist, wtlist):
+        """
+        See meds.reject_outliers for the algorithm
+        """
+        nreject=meds.reject_outliers(imlist, wtlist)
+        if nreject > 0:
+            print("    rejected",nreject,"outliers")
+
+    def _do_render_nbrs(self, mfile, mindex, icut):
+        """
+        render the neighbor and central galaxy
+
+        Deal specially with the case of no neighbors, when
+        there is not central fit in the neighbors structure
+        """
+        try:
+            seg = mfile.interpolate_coadd_seg(mindex, icut)
+        except:
+            seg = mfile.get_cutout(mindex, icut, type='seg')
+
+        ncutout=mfile['ncutout'][mindex]
+        coadd_object_id=mfile['id'][mindex]
+
+        print("  cutout %d/%d" % (icut+1,ncutout))
+
+        res = self.renderer.render_nbrs(
+            coadd_object_id,
+            icut,
+            seg,
+            self.model,
+            self.band,
+            total=True,
+            verbose=self.verbose,
+        )
+        if res is not None:
+            cen_img, nbrs_img, nbrs_mask, nbrs_ids, pixel_scale = res
+
+            if cen_img is None:
+                print("    bad central fit")
+
+        else:
+            if self.verbose:
+                print('    no nbrs, rendering central')
+            nbrs_img=None
+            nbrs_mask=None
+            pixel_scale=None
+
+            res = self.renderer.render_central(
+                coadd_object_id,
+                mfile,
+                mindex,
+                icut,
+                self.model,
+                self.band,
+                seg.shape,
+            )
+            if res is None:
+                cen_img,pixel_scale=None,None
+            else:
+                cen_img, pixel_scale=res
+
+        return cen_img, nbrs_img, nbrs_mask, pixel_scale
+
+    def _sub_nbrs(self, img, weight, nbrs_img, nbrs_mask, pixel_scale):
+        """
+        Subtract off the neighbor image and modify
+        the weight map if any neighbor could not be rendered
+        """
+        # don't subtract in regions where the weight
+        # is zero; this is currently a bug workaround because
+        # in the MEDS maker we are including cutouts that
+        # cross the edge
+        pw=numpy.where(weight > self.min_weight)
+        if pw[0].size > 0:
+            # subtract neighbors if they exist
+            img[pw] = img[pw] - nbrs_img[pw]*pixel_scale**2
+
+        # if the nbr fit failed, nbrs_mask will be set to
+        # zero in the seg map of the neighbor
+        weight *= nbrs_mask
+
+    def _mask_zero_weight(self, weight, bmask):
+        """
+        Set the ZERO_WEIGHT flag in the bitmask where
+        the weight is zero
+        """
+        # mark zero weight pixels in the mask; this is to
+        # deal with forgetting to do so in the meds code
+        # when we set the weight to zero
+        # we should do this in the meds reader
+        weight_logic = (weight <= self.min_weight)
+        wbad_wt=numpy.where(weight_logic)
+        if wbad_wt[0].size > 0:
+            bmask[wbad_wt] = bmask[wbad_wt] | ZERO_WEIGHT
+
+        return wbad_wt, weight_logic
+
+    def _mask_nbrs_mask(self, icut, nbrs_mask, bmask):
+        """
+        set the NBRS_MASKED flag in the bitmask where
+        the neighbors could not be rendered
+        """
+        if nbrs_mask is not None:
+            w=numpy.where(nbrs_mask != 1)
+            if w[0].size > 0:
+                print("     modifying",w[0].size,
+                      "bmask pixels in cutout",icut,"for nbrs_mask")
+                bmask[w] = bmask[w] | NBRS_MASKED
+
+    def _replace_bad_pixels(self,
+                            icut,
+                            img, weight, bmask, cen_img, pixel_scale,
+                            wbad_wt, weight_logic):
+        """
+        set masked or zero weight pixels to the value of the central.
+        For codes that use the weight, such as max like, this makes
+        no difference, but it may be important for codes that
+        take moments or use FFTs
+        note zero weight has been marked in the bmask
+        """
+
+        imravel = img.ravel()
+        wtravel = weight.ravel()
+        bmravel = bmask.ravel()
+
+        # working with unravelled images for efficiency
+        bmask_logic  = (bmravel != 0)
+        wbad,=numpy.where(bmask_logic)
+
+        if wbad.size > 0:
+            if cen_img is None:
+                print("        bad central fit for",icut,
+                      "could not replace bad pixels")
+                bmravel[wbad] = bmravel[wbad] | CEN_MODEL_MISSING
+
+            else:
+
+                wgood_wt=numpy.where(weight_logic == False)
+                if wgood_wt[0].size > 0 and wbad_wt[0].size > 0:
+                    # fix the weight map.  We are going to add noise
+                    # as well as signal in the bad pixels.  The problem
+                    # pixels will still be marked in the bad pixel mask
+                    print("        replacing",wbad_wt[0].size,
+                          "weight in replaced pixels")
+                    medwt = numpy.median(weight[wgood_wt])
+                    weight[wbad_wt] = medwt
+
+                scaled_cen = cen_img.ravel()*pixel_scale**2
+                print("        setting",wbad.size,
+                      "bad pixels in cutout",icut,
+                      "to central model")
+                imravel[wbad] = scaled_cen[wbad]
+
+
+                print("        adding noise to",wbad.size,"replaced")
+                err = numpy.sqrt( 1.0/wtravel[wbad] )
+                rand = numpy.random.normal(
+                    loc=0.0,
+                    scale=1.0,
+                    size=err.size,
+                )
+                rand *= err
+                imravel[wbad] = imravel[wbad] + rand
+
 
     def _extract(self):
+        # first do the ordinary extraction
+        super(MEDSExtractorCorrector,self)._extract()
+
+        # self.sub_file should now have been closed
+        time.sleep(2)
+        self._set_renderer()
+
+        with fitsio.FITS(self.sub_file,mode='rw') as fits:
+            mfile = RefMeds(fits)
+            cat = mfile.get_cat()
+
+            nobj=cat.size
+
+            # loop through objects and correct each
+            for mindex in xrange(cat['id'].size):
+
+                coadd_object_id=cat['id'][mindex]
+                ncutout=cat['ncutout'][mindex]
+                box_size=cat['box_size'][mindex]
+                start_row=cat['start_row'][mindex]
+
+                print("%d/%d  %d" % (mindex+1, nobj, coadd_object_id))
+                if ncutout > 1 and box_size > 0:
+
+                    imlist = mfile.get_cutout_list(mindex, type='image')[1:]
+                    wtlist = mfile.get_cutout_list(mindex, type='weight')[1:]
+                    bmlist = mfile.get_cutout_list(mindex, type='bmask')[1:]
+
+                    if self.reject_outliers:
+                        self._reject_outliers(imlist, wtlist)
+
+                    for icut in xrange(1,ncutout):
+
+                        img_orig = imlist[icut-1]
+                        weight   = wtlist[icut-1]
+                        bmask    = bmlist[icut-1]
+
+                        img=img_orig.copy()
+
+                        cen_img, nbrs_img, nbrs_mask, pixel_scale= \
+                                self._do_render_nbrs(mfile, mindex, icut)
+
+                        if nbrs_img is not None:
+                            self._sub_nbrs(
+                                img, weight, nbrs_img, nbrs_mask, pixel_scale,
+                            )
+
+                        wbad_wt, weight_logic = \
+                                self._mask_zero_weight(weight, bmask)
+
+                        self._mask_nbrs_mask(icut, nbrs_mask, bmask)
+
+                        if self.replace_bad:
+                            self._replace_bad_pixels(
+                                icut,
+                                img, weight, bmask, cen_img,
+                                pixel_scale,
+                                wbad_wt,
+                                weight_logic,
+                            )
+
+                        # now overwrite pixels on disk
+                        fits['image_cutouts'].write(img.ravel(),
+                                                    start=start_row[icut])
+                        fits['weight_cutouts'].write(weight.ravel(),
+                                                     start=start_row[icut])
+                        fits['bmask_cutouts'].write(bmask.ravel(),
+                                                    start=start_row[icut])
+
+                        if self.make_plots:
+                            self._doplots(
+                                coadd_object_id,
+                                mindex, icut, img_orig, img, bmask, weight,
+                            )
+
+
+                else:
+                    # we always want to see this
+                    print("    not writing ncutout:",ncutout,"box_size:",box_size)
+
+
+    def _extract_old(self):
         # first do the ordinary extraction
         super(MEDSExtractorCorrector,self)._extract()
 

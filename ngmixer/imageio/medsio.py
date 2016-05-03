@@ -134,6 +134,7 @@ class MEDSImageIO(ImageIO):
                     self.fof_range[1],
                     newf,
                     replace_bad=self.conf['nbrs_replace_bad'],
+                    reject_outliers=self.conf['nbrs_reject_outliers'],
                     min_weight=min_weight,
                     cleanup=True,
                     verbose=False,
