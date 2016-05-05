@@ -8,6 +8,8 @@ from .medsio import MEDSImageIO
 from .desmedsio import SVDESMEDSImageIO, MOFSVDESMEDSImageIO, Y1DESMEDSImageIO
 from .simpsimmedsio import SimpSimMEDSImageIO
 
+from . import extractor_corrector
+
 #######################################################
 # setup image i/o dict
 # each time you create a new image i/o class, add it to this dict

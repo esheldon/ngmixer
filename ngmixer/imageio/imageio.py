@@ -64,6 +64,7 @@ class ImageIO(object):
         fof_range - range of FoF's (or objects if each object is a FoF) to yeild
         fof_file - a file (user defined) that possibly breaks the set of objects into subsets to
                    sent back from __next__ all at once
+        mof_file - a MOF output file
         extra_data - a dict with extra data fields that can be used by the image i/o class
 
     The basic idea here is the user can define subsets of objects to all be dealt with by the calling class at once.
@@ -101,6 +102,8 @@ class ImageIO(object):
             self.fof_file = kwargs['fof_file']
         else:
             self.fof_file = None
+
+        self.mof_file=kwargs.get('mof_file',None)
 
         if 'extra_data' in kwargs:
             self.extra_data = kwargs['extra_data']

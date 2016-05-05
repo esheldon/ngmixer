@@ -12,6 +12,7 @@ from ngmix import Observation, ObsList, MultiBandObsList
 
 # local imports
 from .imageio import ImageIO
+from .extractor_corrector import MEDSExtractorCorrector
 from ..defaults import DEFVAL,IMAGE_FLAGS
 from .. import nbrsfofs
 
@@ -76,11 +77,10 @@ class MEDSImageIO(ImageIO):
         self.conf['model_nbrs'] = self.conf.get('model_nbrs',False)
         self.conf['ignore_zero_weights_images'] = self.conf.get('ignore_zero_weights_images',False)
 
-        # the masking can introduce asymmetries
-        self.conf['symmetrize_bmask'] = self.conf.get('symmetrize_bmask',True)
 
-        # max fraction of image masked in bitmask
-        self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',0.1)
+        # max fraction of image masked in bitmask or that has zero weight
+        #self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',0.1)
+        #self.conf['max_zero_weight_frac'] = self.conf.get('max_zero_weight_frac',0.1)
 
         # check this region around the center
         self.conf['central_bmask_radius'] = \
@@ -115,26 +115,72 @@ class MEDSImageIO(ImageIO):
         """
         extracted=[]
 
-        if self.fof_file is None:
-            for f in self.meds_files:
-                print(f)
-                newf = self._get_sub_fname(f)
-                ex=meds.MEDSExtractor(f, self.fof_range[0], self.fof_range[1], newf, cleanup=True)
+        make_corrected_meds=self.conf.get('make_corrected_meds',False)
+        if make_corrected_meds:
+            if self.mof_file is None:
+                raise ValueError(
+                    "you must send mof outputs to make "
+                    "corrected MEDS files"
+                )
+
+            min_weight=self.conf.get('min_weight',0.0)
+            for meds_file in self.meds_files:
+                print(meds_file)
+                newf = self._get_sub_fname(meds_file)
+                ex=MEDSExtractorCorrector(
+                    self.mof_file,
+                    meds_file,
+                    self.fof_range[0],
+                    self.fof_range[1],
+                    newf,
+                    replace_bad=self.conf['nbrs_replace_bad'],
+                    reject_outliers=self.conf['nbrs_reject_outliers'],
+                    min_weight=min_weight,
+                    cleanup=True,
+                    verbose=False,
+                    make_plots=self.conf['make_plots'],
+                )
                 extracted.append(ex)
             extracted.append(None)
-        else:
-            # do the fofs first
-            print(self.fof_file)
-            newf = self._get_sub_fname(self.fof_file)
-            fofex = nbrsfofs.NbrsFoFExtractor(self.fof_file, self.fof_range[0], self.fof_range[1], newf, cleanup=True)
 
-            # now do the meds
-            for f in self.meds_files:
-                print(f)
-                newf = self._get_sub_fname(f)
-                ex=meds.MEDSNumberExtractor(f, fofex.numbers, newf, cleanup=True)
-                extracted.append(ex)
-            extracted.append(fofex)
+        else:
+            if self.fof_file is None:
+                for meds_file in self.meds_files:
+                    print(meds_file)
+                    newf = self._get_sub_fname(meds_file)
+                    ex=meds.MEDSExtractor(
+                        meds_file,
+                        self.fof_range[0],
+                        self.fof_range[1],
+                        newf,
+                        cleanup=True,
+                    )
+                    extracted.append(ex)
+                extracted.append(None)
+            else:
+                # do the fofs first
+                print(self.fof_file)
+                newf = self._get_sub_fname(self.fof_file)
+                fofex = nbrsfofs.NbrsFoFExtractor(
+                    self.fof_file,
+                    self.fof_range[0],
+                    self.fof_range[1],
+                    newf,
+                    cleanup=True,
+                )
+
+                # now do the meds
+                for meds_file in self.meds_files:
+                    print(meds_file)
+                    newf = self._get_sub_fname(meds_file)
+                    ex=meds.MEDSNumberExtractor(
+                        meds_file,
+                        fofex.numbers,
+                        newf,
+                        cleanup=True,
+                    )
+                    extracted.append(ex)
+                extracted.append(fofex)
 
         return extracted
 
@@ -572,15 +618,20 @@ class MEDSImageIO(ImageIO):
         """
         Get an Observation for a single band.
         """
+
         meds=self.meds_list[band]
 
         bmask,skip = self._get_meds_bmask(meds, mindex, icut)
         if skip:
             return None
 
-        fname = self._get_meds_orig_filename(meds, mindex, icut)
+
+        wt,wt_us,wt_raw,seg,skip = self._get_meds_weight(meds, mindex, icut)
+        if skip:
+            return None
+
         im = self._get_meds_image(meds, mindex, icut)
-        wt,wt_us,wt_raw,seg = self._get_meds_weight(meds, mindex, icut)
+
         jacob = self._get_jacobian(meds, mindex, icut)
 
 
@@ -613,8 +664,10 @@ class MEDSImageIO(ImageIO):
 
         obs.weight_raw = wt_raw
         obs.seg = seg
+
+        fname = self._get_meds_orig_filename(meds, mindex, icut)
         obs.filename=fname
-        
+
         return obs
 
     def _fill_obs_meta_data(self,obs, band, mindex, icut):
@@ -649,12 +702,27 @@ class MEDSImageIO(ImageIO):
         """
         return meds.get_cutout(mindex, icut)
 
+    def _badfrac_too_high(self, icut, nbad, shape, maxfrac, type):
+        ntot=shape[0]*shape[1]
+        frac = float(nbad)/ntot
+
+        if maxfrac=='one-over-side':
+            maxfrac=1.0/min(shape)
+
+        if frac > maxfrac:
+            print("    skipping cutout",icut,"due to high ",type,"frac:",frac)
+            return True
+        else:
+            return False
+
+
     def _get_meds_bmask(self, meds, mindex, icut):
         """
         Get an image cutout from the input MEDS file
         """
-
+        maxfrac=self.conf['max_bmask_frac']
         skip=False
+
         if 'bmask_cutouts' in meds._fits:
             bmask=meds.get_cutout(mindex, icut, type='bmask')
 
@@ -663,40 +731,45 @@ class MEDSImageIO(ImageIO):
                     borig=bmask.copy()
                     rotmask=numpy.rot90(bmask)
                     bmask |= rotmask
-
-                    rad=self.conf['central_bmask_radius']
-
-                    w=numpy.where(bmask != 0)
-                    frac = float(w[0].size)/bmask.size
-                    if frac > self.conf['max_bmask_frac']:
-                        print("    skipping due to high bmask frac:",frac)
-                        skip=True
-
-                    if rad is not None:
-                        row0 = meds['cutout_row'][mindex,icut]
-                        col0 = meds['cutout_col'][mindex,icut]
-
-                        row_start = _clip_pixel(row0-rad, bmask.shape[0])
-                        row_end   = _clip_pixel(row0+rad, bmask.shape[0])
-                        col_start = _clip_pixel(col0-rad, bmask.shape[1])
-                        col_end   = _clip_pixel(col0+rad, bmask.shape[1])
-
-                        bmask_sub = bmask[row_start:row_end,
-                                          col_start:col_end]
-                        wcen=numpy.where(bmask_sub != 0)
-                        if wcen[0].size > 0:
-                            print("    skipping due center masked")
-                            skip=True
-
-                    if False and w[0].size > 0:
-                        import images
-                        plt=images.view_mosaic([borig, bmask],show=False)
-                        plt.write_img(800,800,'/astro/u/esheldon/www/tmp/tmp.png')
-                        if raw_input('hit a key: ')=='q':
-                            stop
-
                 else:
                     raise RuntimeError("cannot symmetrize non-square bmask")
+
+            w=numpy.where(bmask != 0)
+
+            notok=self._badfrac_too_high(
+                icut, w[0].size, bmask.shape, maxfrac, 'bmask'
+            )
+            if notok:
+                skip=True
+                return None,skip
+
+            if 'bmask_skip_flags' in self.conf:
+                w=numpy.where( (bmask & self.conf['bmask_skip_flags']) != 0)
+                if w[0].size > 0:
+                    print("    skipping cutout",icut,
+                          "because mask bits set:",
+                          self.conf['bmask_skip_flags'])
+                    skip=True
+                    return None,skip
+
+            rad=self.conf['central_bmask_radius']
+            if rad is not None:
+                row0 = meds['cutout_row'][mindex,icut]
+                col0 = meds['cutout_col'][mindex,icut]
+
+                row_start = _clip_pixel(row0-rad, bmask.shape[0])
+                row_end   = _clip_pixel(row0+rad, bmask.shape[0])
+                col_start = _clip_pixel(col0-rad, bmask.shape[1])
+                col_end   = _clip_pixel(col0+rad, bmask.shape[1])
+
+                bmask_sub = bmask[row_start:row_end,
+                                  col_start:col_end]
+                wcen=numpy.where(bmask_sub != 0)
+                if wcen[0].size > 0:
+                    print("    skipping cutout",icut,"due center masked")
+                    skip=True
+                    return None,skip
+
         else:
             bmask=None
 
@@ -704,9 +777,17 @@ class MEDSImageIO(ImageIO):
 
     def _clip_weight(self,wt):
         wt = wt.astype('f8', copy=False)
+
         w = numpy.where(wt < self.conf['min_weight'])
         if w[0].size > 0:
             wt[w] = 0.0
+
+            if self.conf['symmetrize_weight']:
+                print("    symmetrizing weight")
+                wt_rot = numpy.rot90(wt)
+                w_rot = numpy.where(wt_rot < self.conf['min_weight'])
+                wt[w_rot] = 0.0
+
         wt=wt.clip(min=0.0)
         return wt
 
@@ -714,6 +795,8 @@ class MEDSImageIO(ImageIO):
         """
         Get a weight map from the input MEDS file
         """
+        maxfrac=self.conf['max_zero_weight_frac']
+        skip=False
 
         wt_raw = meds.get_cutout(mindex, icut, type='weight')
         if self.conf['region'] == 'mof':
@@ -741,7 +824,27 @@ class MEDSImageIO(ImageIO):
         except:
             seg = meds.get_cutout(mindex, icut, type='seg')
 
-        return wt,wt_us,wt_raw,seg
+
+        '''
+        if self.conf['symmetrize_weight']:
+            raise RuntimeError("this is bogus!  Need to zero the map not add")
+            wt     = wt     + numpy.rot90(wt)
+            wt_raw = wt_raw + numpy.rot90(wt_raw)
+
+            if wt_us is not None:
+                wt_us  = wt_us  + numpy.rot90(wt_us)
+        '''
+
+        # check raw weight map for zero pixels
+        wzero=numpy.where(wt_raw == 0.0)
+
+        notok=self._badfrac_too_high(
+            icut, wzero[0].size, wt_raw.shape, maxfrac, 'zero weight'
+        )
+        if notok:
+            skip=True
+
+        return wt,wt_us,wt_raw,seg, skip
 
     def _get_jacobian(self, meds, mindex, icut):
         """

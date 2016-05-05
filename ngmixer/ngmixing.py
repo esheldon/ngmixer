@@ -22,6 +22,7 @@ class NGMixer(dict):
                  output_file=None,
                  fof_range=None,
                  fof_file=None,
+                 mof_file=None,
                  extra_data={},
                  random_seed=None,
                  init_only=False,
@@ -49,7 +50,7 @@ class NGMixer(dict):
         seed_numpy(random_seed)
 
         self._set_defaults()
-        self._set_imageio(data_files, fof_range, fof_file, extra_data)
+        self._set_imageio(data_files, fof_range, fof_file, mof_file, extra_data)
         self._set_priors()
         self._set_fitter_and_data()
 
@@ -96,7 +97,7 @@ class NGMixer(dict):
         else:
             self['verbose'] = self.get('verbose',False)
 
-    def _set_imageio(self, data_files, fof_range, fof_file, extra_data):
+    def _set_imageio(self, data_files, fof_range, fof_file, mof_file, extra_data):
         """
         determine and instantiate the imageio class.  Set some file
         related attributes
@@ -107,6 +108,7 @@ class NGMixer(dict):
                                      data_files,
                                      fof_range=fof_range,
                                      fof_file=fof_file,
+                                     mof_file=mof_file,
                                      extra_data=extra_data)
         self.curr_fofindex = 0
         self['nband'] = self.imageio.get_num_bands()
