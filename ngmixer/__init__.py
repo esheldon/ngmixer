@@ -22,6 +22,10 @@ FITTERS['max-ngmix-boot'] = bootfit.MaxNGMixBootFitter
 FITTERS['metacal-ngmix-boot'] = bootfit.MetacalNGMixBootFitter
 FITTERS['isamp-ngmix-boot'] = bootfit.ISampNGMixBootFitter
 
+from . import deconvolvers
+FITTERS['deconv'] = deconvolvers.Deconvolver
+
+
 try:
     from .githash import hash as __gitrepohash__
 except:

@@ -1,6 +1,9 @@
 # ngmixer
 code to run ngmix on data
 
+Much of this code was written by Matt Becker based on my original `gmix_meds`
+code base.  I'm still learning it and adapting it - ESS
+
 documentation
 -----------------
 
