@@ -14,6 +14,10 @@ def set_priors(conf):
     from ngmix.joint_prior import PriorSimpleSep
     from ngmix.priors import ZDisk2D
 
+    if 'model_pars' not in conf:
+        print("no model_pars set, not setting priors")
+        return
+
     g_prior_flat=ZDisk2D(1.0)
     model_pars=conf['model_pars']
 
