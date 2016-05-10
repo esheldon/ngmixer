@@ -193,12 +193,15 @@ class DESConcat(Concat):
             names.insert(flux_ind+2,'coadd_psf_mag')
 
 
-        flux_ind = names.index('psf_flux_err')
-        dt.insert(flux_ind+1, ('psf_flux_s2n','f8',nbands) )
-        names.insert(flux_ind+1,'psf_flux_s2n')
+        tmpind = names.index('psf_flux_err')
+        if 'psf_flux_s2n' not in names:
+            tmpind += 1
+            dt.insert(tmpind, ('psf_flux_s2n','f8',nbands) )
+            names.insert(tmpind,'psf_flux_s2n')
 
-        dt.insert(flux_ind+2, ('psf_mag','f8',nbands) )
-        names.insert(flux_ind+2,'psf_mag')
+        tmpind += 1
+        dt.insert(tmpind, ('psf_mag','f8',nbands) )
+        names.insert(tmpind,'psf_mag')
 
         do_T=False
         do_flux=False
@@ -248,7 +251,6 @@ class DESConcat(Concat):
                     ind += 1
 
                 do_T=True
-
 
         data=numpy.zeros(data0.size, dtype=dt)
         eu.numpy_util.copy_fields(data0, data)
