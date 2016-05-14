@@ -752,23 +752,24 @@ class MEDSImageIO(ImageIO):
                     skip=True
                     return None,skip
 
-            rad=self.conf['central_bmask_radius']
-            if rad is not None:
-                row0 = meds['cutout_row'][mindex,icut]
-                col0 = meds['cutout_col'][mindex,icut]
+            if 'central_bmask_radius' in self.conf:
+                rad=self.conf['central_bmask_radius']
+                if rad is not None:
+                    row0 = meds['cutout_row'][mindex,icut]
+                    col0 = meds['cutout_col'][mindex,icut]
 
-                row_start = _clip_pixel(row0-rad, bmask.shape[0])
-                row_end   = _clip_pixel(row0+rad, bmask.shape[0])
-                col_start = _clip_pixel(col0-rad, bmask.shape[1])
-                col_end   = _clip_pixel(col0+rad, bmask.shape[1])
+                    row_start = _clip_pixel(row0-rad, bmask.shape[0])
+                    row_end   = _clip_pixel(row0+rad, bmask.shape[0])
+                    col_start = _clip_pixel(col0-rad, bmask.shape[1])
+                    col_end   = _clip_pixel(col0+rad, bmask.shape[1])
 
-                bmask_sub = bmask[row_start:row_end,
-                                  col_start:col_end]
-                wcen=numpy.where(bmask_sub != 0)
-                if wcen[0].size > 0:
-                    print("    skipping cutout",icut,"due center masked")
-                    skip=True
-                    return None,skip
+                    bmask_sub = bmask[row_start:row_end,
+                                      col_start:col_end]
+                    wcen=numpy.where(bmask_sub != 0)
+                    if wcen[0].size > 0:
+                        print("    skipping cutout",icut,"due center masked")
+                        skip=True
+                        return None,skip
 
         else:
             bmask=None
