@@ -225,7 +225,27 @@ class SVDESMEDSImageIO(MEDSImageIO):
         cen=pex.get_center(row,col)
         sigma_pix=pex.get_sigma()
 
+        if 'trim_psf' in self.conf:
+            im,cen=self._trim_psf(im, cen)
+
         return im, cen, sigma_pix, pex['filename']
+
+    def _trim_psf(self, im, cen):
+        dims=self.conf['trim_psf']['dims']
+        print("Trimming psf to:",dims)
+
+        rowstart=int(cen[0]-dims[0]/2.0+0.5)
+        rowend=int(cen[0]+dims[0]/2.0+0.5)
+
+        colstart=int(cen[1]-dims[1]/2.0+0.5)
+        colend=int(cen[1]+dims[1]/2.0+0.5)
+
+        newim = im[rowstart:rowend, colstart:colend]
+        newcen=cen.copy()
+        newcen[0]=cen[0]-rowstart
+        newcen[1]=cen[1]-rowstart
+
+        return newim, newcen
 
     def _get_blacklist_dir(self):
         """
