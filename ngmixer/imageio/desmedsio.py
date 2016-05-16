@@ -225,14 +225,13 @@ class SVDESMEDSImageIO(MEDSImageIO):
         cen=pex.get_center(row,col)
         sigma_pix=pex.get_sigma()
 
-        if 'trim_psf' in self.conf:
+        if 'trim_psf' in self.conf and icut > 0:
             im,cen=self._trim_psf(im, cen)
 
         return im, cen, sigma_pix, pex['filename']
 
     def _trim_psf(self, im, cen):
         dims=self.conf['trim_psf']['dims']
-        print("Trimming psf to:",dims)
 
         rowstart=int(cen[0]-dims[0]/2.0+0.5)
         rowend=int(cen[0]+dims[0]/2.0+0.5)
@@ -244,6 +243,13 @@ class SVDESMEDSImageIO(MEDSImageIO):
         newcen=cen.copy()
         newcen[0]=cen[0]-rowstart
         newcen[1]=cen[1]-rowstart
+
+        '''
+        print("Trimming psf to:",dims)
+        print("new center:",newcen)
+        w=numpy.where(newim == 0.0)
+        print("number of zeros:",w[0].size)
+        '''
 
         return newim, newcen
 
