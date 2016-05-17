@@ -75,7 +75,7 @@ class MEDSImageIO(ImageIO):
         self.conf['min_weight'] = self.conf.get('min_weight',-numpy.inf)
         self.conf['reject_outliers'] = self.conf.get('reject_outliers',True) # from cutouts
         self.conf['model_nbrs'] = self.conf.get('model_nbrs',False)
-        self.conf['ignore_zero_weights_images'] = self.conf.get('ignore_zero_weights_images',False)
+        self.conf['ignore_zero_images'] = self.conf.get('ignore_zero_images',False)
 
 
         # max fraction of image masked in bitmask or that has zero weight
@@ -115,8 +115,10 @@ class MEDSImageIO(ImageIO):
         """
         extracted=[]
 
-        make_corrected_meds=self.conf.get('make_corrected_meds',False)
-        if make_corrected_meds:
+
+        corrmeds=self.conf.get('correct_meds',None)
+
+        if corrmeds is not None:
             if self.mof_file is None:
                 raise ValueError(
                     "you must send mof outputs to make "
@@ -133,8 +135,8 @@ class MEDSImageIO(ImageIO):
                     self.fof_range[0],
                     self.fof_range[1],
                     newf,
-                    replace_bad=self.conf['nbrs_replace_bad'],
-                    reject_outliers=self.conf['nbrs_reject_outliers'],
+                    replace_bad=corrmeds['replace_bad'],
+                    reject_outliers=corrmeds['reject_outliers'],
                     min_weight=min_weight,
                     cleanup=True,
                     verbose=False,
@@ -635,20 +637,9 @@ class MEDSImageIO(ImageIO):
         jacob = self._get_jacobian(meds, mindex, icut)
 
 
-        if self.conf['ignore_zero_weights_images']:
-            skip=False
-            if im.sum()==0.0:
-                print("    image all zero, skipping")
-                skip=True
-
-            if (wt.sum() == 0.0
-                    or wt_raw.sum() == 0
-                    or (wt_us is not None and wt_us.sum() == 0) ):
-                print("    weight all zero, skipping")
-                skip=True
-
-            if skip:
-                return None
+        if self.conf['ignore_zero_images'] and 0.0==im.sum():
+            print("    image all zero, skipping")
+            return None
 
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
 
