@@ -30,6 +30,9 @@ else:
     PSF_FLUX_FIT_FAILURE = 2**2
     LOW_PSF_FLUX         = 2**3
 
+object_blacklist=[3126629751,3126910598]
+OBJECT_IN_BLACKLIST = 2**24
+
 # an overall flag for metacal fitting
 # this will be set if any flags in
 # the mcal_flags field are set
