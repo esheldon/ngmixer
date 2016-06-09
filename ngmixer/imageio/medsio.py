@@ -691,6 +691,7 @@ class MEDSImageIO(ImageIO):
         """
         Get an image cutout from the input MEDS file
         """
+        self.imname= os.path.basename(meds.get_source_path(mindex,icut))
         return meds.get_cutout(mindex, icut)
 
     def _badfrac_too_high(self, icut, nbad, shape, maxfrac, type):

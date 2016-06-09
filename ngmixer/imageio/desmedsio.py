@@ -217,6 +217,11 @@ class SVDESMEDSImageIO(MEDSImageIO):
         file_id=meds['file_id'][mindex,icut]
 
         pex=self.psfex_lists[band][file_id]
+        self.psfname=os.path.basename(pex['filename'])
+        if icut > 0:
+            if self.psfname[0:17] != self.imname[0:17]:
+                raise RuntimeError("im and psf mismatch: %s "
+                                   "vs %s" % (self.psfname,self.imname))
 
         row=meds['orig_row'][mindex,icut]
         col=meds['orig_col'][mindex,icut]
