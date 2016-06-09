@@ -775,7 +775,7 @@ class MEDSImageIO(ImageIO):
             wt[w] = 0.0
 
             if self.conf['symmetrize_weight']:
-                print("    symmetrizing weight")
+                #print("    symmetrizing weight")
                 wt_rot = numpy.rot90(wt)
                 w_rot = numpy.where(wt_rot < self.conf['min_weight'])
                 wt[w_rot] = 0.0
