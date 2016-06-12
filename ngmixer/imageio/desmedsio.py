@@ -226,7 +226,13 @@ class SVDESMEDSImageIO(MEDSImageIO):
         row=meds['orig_row'][mindex,icut]
         col=meds['orig_col'][mindex,icut]
 
-        im=pex.get_rec(row,col).astype('f8', copy=False)
+        if self.conf['center_psf']:
+            im=pex.get_rec(round(row),round(col))
+        else:
+            im=pex.get_rec(row,col)
+
+        im=im.astype('f8', copy=False)
+
         cen=pex.get_center(row,col)
         sigma_pix=pex.get_sigma()
 

@@ -836,6 +836,10 @@ class NGMixBootFitter(BaseFitter):
 
             print("        psf flux(%s): %g +/- %g" % (band,flux,flux_err))
 
+        if flagsall != 0:
+            # we only propagate this bit to the main 'flags' field
+            flagsall = PSF_FLUX_FIT_FAILURE
+
         return flagsall
 
     def _fit_psfs(self,coadd, boot=None):
