@@ -227,13 +227,13 @@ class SVDESMEDSImageIO(MEDSImageIO):
         col=meds['orig_col'][mindex,icut]
 
         if self.conf['center_psf']:
-            im=pex.get_rec(round(row),round(col))
-        else:
-            im=pex.get_rec(row,col)
+            use_row,use_col=round(row),round(col)
+
+        im=pex.get_rec(use_row,use_col)
+        cen=pex.get_center(use_row,use_col)
 
         im=im.astype('f8', copy=False)
 
-        cen=pex.get_center(row,col)
         sigma_pix=pex.get_sigma()
 
         if 'trim_psf' in self.conf and icut > 0:
