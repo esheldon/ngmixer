@@ -25,19 +25,19 @@ class BNLCondorMegaMixer(NGMegaMixer):
 
         # above sets self['work_output_dir']
         condor_script=self.get_condor_file(files)
-        condor_script_all=self.get_condor_file(files,doall=True)
+        #condor_script_all=self.get_condor_file(files,doall=True)
 
         _try_remove_file(condor_script)
         _try_remove_file(condor_script+'.submitted')
-        _try_remove_file(condor_script_all)
-        _try_remove_file(condor_script_all+'.submitted')
+        #_try_remove_file(condor_script_all)
+        #_try_remove_file(condor_script_all+'.submitted')
 
         self.write_master_script(files)
 
         # this holds everything and is not automatically used.
         # when using the megamixer run command, another file
         # is written just for those outputs that don't exist
-        self.write_condor(files,fof_ranges,doall=True)
+        #self.write_condor(files,fof_ranges,doall=True)
 
         # this one just holds the jobs for which the output file
         # was not found.
