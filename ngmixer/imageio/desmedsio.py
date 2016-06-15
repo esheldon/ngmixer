@@ -228,6 +228,8 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         if self.conf['center_psf']:
             use_row,use_col=round(row),round(col)
+        else:
+            use_row,use_col=row,col
 
         im=pex.get_rec(use_row,use_col)
         cen=pex.get_center(use_row,use_col)
