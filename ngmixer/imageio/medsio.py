@@ -659,7 +659,55 @@ class MEDSImageIO(ImageIO):
         fname = self._get_meds_orig_filename(meds, mindex, icut)
         obs.filename=fname
 
+        if 'trim_image' in self.conf:
+            self._trim_obs(obs)
+
         return obs
+
+    def _get_trimmed_startstop(self, dim, cen, new_dim):
+        start=int(cen-new_dim/2.0+0.5)
+        end=int(cen+new_dim/2.0+0.5)
+
+        if start < 0:
+            start=0
+        if end > (dim-1):
+            end=dim-1
+
+        return start,end
+
+    def _trim_obs(self, obs):
+        dims=obs.image.shape
+        new_dims=self.conf['trim_image']['dims']
+        print("trimming obs:",new_dims)
+
+        j=obs.jacobian
+        cen=j.get_cen()
+
+        rowstart, rowend=self._get_trimmed_startstop(
+            dims[0],
+            cen[0],
+            new_dims[0],
+        )
+        colstart, colend=self._get_trimmed_startstop(
+            dims[1],
+            cen[1],
+            new_dims[1],
+        )
+
+        obs.image  = obs.image[rowstart:rowend, colstart:colend]
+        obs.weight = obs.weight[rowstart:rowend, colstart:colend]
+        obs.weight_raw = obs.weight_raw[rowstart:rowend, colstart:colend]
+        if obs.weight_us is not None:
+            obs.weight_us = obs.weight_us[rowstart:rowend, colstart:colend]
+
+        j.set_cen(
+            row=cen[0]-rowstart,
+            col=cen[1]-colstart,
+        )
+
+        print("new dims:",obs.image.shape)
+
+
 
     def _fill_obs_meta_data(self,obs, band, mindex, icut):
         """
