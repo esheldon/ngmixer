@@ -108,7 +108,7 @@ class BNLCondorMegaMixer(NGMegaMixer):
     #                        'chunk%06d' % (chunk+1))
 
     def get_chunk_jobname(self, files, rng):
-        return '%s-%05d-%05d' % (files['coadd_tile'], rng[0], rng[1])
+        return '%s-%s-%05d-%05d' % (self['run'],files['coadd_tile'], rng[0], rng[1])
 
     def get_chunk_output_dir(self,files,chunk,rng):
         return os.path.join(files['work_output_dir'], \

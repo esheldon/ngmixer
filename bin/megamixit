@@ -61,7 +61,7 @@ from ngmixer.megamixer import SLACNGMegaMixer,SLACArrayNGMegaMixer
 from ngmixer.megamixer import CakeNGMegaMixer
 import ngmixer
 
-if __name__ == '__main__':
+def main():
     from ngmixer.files import read_yaml
 
     options, args = parser.parse_args(sys.argv[1:])
@@ -181,3 +181,7 @@ if __name__ == '__main__':
             ngmm.run_nbrs_coadd_tile(coadd_run)
         else:
             raise ValueError("cmd %s not valid!" % cmd)
+
+
+if __name__ == '__main__':
+    main()

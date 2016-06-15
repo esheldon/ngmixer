@@ -8,6 +8,8 @@ import numpy as np
 import glob
 from ..files import read_yaml
 from .concat_io import get_concat_class
+from . import concat
+import time
 
 class BaseNGMegaMixer(dict):
     def __init__(self,conf,extra_cmds='',seed=None):
@@ -93,7 +95,7 @@ class BaseNGMegaMixer(dict):
                             files['full_coadd_tile'].split('/')[-1],
                             '%s-meds-%s-nbrsfofs-%s.fits' % (coadd_tile,self['meds_version'],self['nbrs_version']))
         files['fof_file'] = foff
-        
+
         # finally look for flags
         flagsf = os.path.join(DESDATA,
                               'EXTRA',
@@ -104,13 +106,13 @@ class BaseNGMegaMixer(dict):
                               files['full_coadd_tile'].split('/')[-1],
                               '%s-meds-%s-flags-%s.fits' % (coadd_tile,self['meds_version'],self['obj_flags_version']))
         files['obj_flags'] = flagsf
-        
+
         # get output files
         self._set_output_files(files)
-        
+
         # ngmix config
         files['ngmix_config'] = self._get_ngmix_config() 
-        
+
         # nbrs config
         files['nbrs_config'] = self._get_nbrs_config()
 
@@ -123,17 +125,17 @@ class BaseNGMegaMixer(dict):
         elif 'output_dir' in self:
             odir = self['output_dir']
         else:
-            odir = '.'   
-        
+            odir = '.'
+
         files['main_output_dir'] = os.path.join(odir,
                                                 self['run'],
                                                 files['full_coadd_tile'])
-            
+
         files['work_output_dir'] = os.path.join(files['main_output_dir'],
                                                 'work')
 
         files['run_output_dir'] = os.path.join(odir,self['run'])
-            
+
     def _get_ngmix_config(self):
         if 'NGMIXER_CONFIG_DIR' in os.environ:
             ngmix_conf = os.path.join(os.environ['NGMIXER_CONFIG_DIR'],
@@ -213,7 +215,7 @@ ngmixer-meds-make-nbrs-data ${config} ${meds_file} &> $lfile
 
     def get_chunk_output_basename(self,files,chunk,rng):
         return '%s-%s-%d-%d' % (files['coadd_tile'],self['run'],rng[0],rng[1])
-    
+
     def get_fof_ranges(self,files):
         if self['model_nbrs']:
             fofs = fitsio.read(files['fof_file'])
@@ -434,7 +436,27 @@ fi
         # then run
         self.run_coadd_tile(coadd_tile)
 
+    def get_collated_file(self, coadd_tile, blind=True):
+        files = self.get_files(coadd_tile)
+        collated_file = concat._get_collated_file(
+            files['main_output_dir'],
+            files['coadd_tile'],
+            self['run'],
+            blind=blind,
+        )
+
+        return collated_file, files
+
     def collate_coadd_tile(self,coadd_tile,verify=False,blind=True,clobber=True,skip_errors=False):
+
+
+        collated_file, files=self.get_collated_file(coadd_tile, blind=blind)
+
+        if not clobber and os.path.exists(collated_file):
+            print('file',collated_file,'already exists, skipping')
+            return
+
+        # fof ranges is the slow part
         print("collating tile '%s'" % coadd_tile)
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
@@ -463,12 +485,13 @@ fi
 
     def archive_coadd_tile(self,coadd_tile,compress=True):
         print("archiving tile '%s'" % coadd_tile)
-                
+
         # remove outputs
         self.clean_coadd_tile(coadd_tile)
-        
+
         # tar (and maybe compress) the rest
-        files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
+        #files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
+        files = self.get_files(coadd_tile)
         if compress:
             tar_cmd = 'tar -czvf'
             tail = '.tar.gz'
@@ -481,38 +504,17 @@ fi
             os.remove(ofile)
         cmd = '%s %s %s' % (tar_cmd,ofile,work_dir)
         os.system(cmd)
-        
+
         # remove untarred work dir
         os.system('rm -rf %s' % work_dir)
 
     def link_coadd_tile(self,coadd_tile,verify=False,blind=True,clobber=True,skip_errors=False):
         print("linking tile '%s'" % coadd_tile)
-        
-        # startup concat to get output name
-        files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
-        
-        clist = []
-        for chunk,rng in enumerate(fof_ranges):
-            dr = self.get_chunk_output_dir(files,chunk,rng)
-            base = self.get_chunk_output_basename(files,self['run'],rng)
-            fname = os.path.join(dr,base+'.fits')
-            clist.append(fname)
 
-        tc = get_concat_class(self['concat_type'])
-        tc = tc(self['run'],
-                files['ngmix_config'],
-                clist,
-                files['main_output_dir'],
-                files['coadd_tile'],
-                bands=self['bands'],
-                blind=blind,
-                clobber=clobber,
-                skip_errors=skip_errors)        
-        
-        # make symlink
-        collated_file = tc.collated_file
+        collated_file, files=self.get_collated_file(coadd_tile, blind=blind)
+
         bname = os.path.basename(collated_file)
-        
+
         odir = '/'.join(files['main_output_dir'].split('/')[:-1])
         odir = os.path.join(odir,'output')
         if not os.path.exists(odir):
@@ -522,17 +524,26 @@ fi
 
         cfile = collated_file.split('/')
         cfile = os.path.join('..',cfile[-2],cfile[-1])
-        
+
         try:
             os.chdir(odir)
-            os.system('rm -f %s && ln -s %s %s' % (bname,cfile,bname))        
+            #os.system('rm -f %s && ln -s %s %s' % (bname,cfile,bname))
+            os.system('rm -f %s' % bname)
+            if os.path.exists(cfile):
+                print("linking to:",os.path.join(odir,bname))
+                os.system('ln -s %s %s' % (cfile,bname))
+            else:
+                print("missing")
             os.chdir(cwd)
         except:
             print("failed to link tile '%s'" % coadd_tile)
-        
+
     def install_mof_outputs(self,coadd_tile,clobber=True):
         print("installing MOF outputs for tile '%s'" % coadd_tile)
 
+        collated_file, files=self.get_collated_file(coadd_tile, blind=blind)
+
+        '''
         # startup concat to get output name
         files,fof_ranges = self.get_files_fof_ranges(coadd_tile)
 
@@ -556,11 +567,13 @@ fi
 
         # now copy to proper spot in DESDATA
         collated_file = tc.collated_file
+        '''
+
         moff = self.get_mof_file(coadd_tile,files['DESDATA'],self['run'])
         odir = os.path.split(moff)[0]
         if not os.path.exists(odir):
             os.makedirs(odir)
-            
+
         if os.path.exists(moff):
             if clobber:
                 try:
@@ -571,7 +584,7 @@ fi
                 raise IOError("MOF output file '%s' already exists in DESDATA!" % moff)
 
         print("    moving '%s' -> '%s'"%(collated_file,moff))
-        os.system('cp %s %s' % (collated_file,moff))            
+        os.system('cp %s %s' % (collated_file,moff))
 
     def write_job_script(self,files,i,rng):
         """
