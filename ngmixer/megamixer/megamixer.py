@@ -198,7 +198,7 @@ ngmixer-meds-make-nbrs-data $config $meds_file &> $lfile
 
         scr = fmt.format(**args)
 
-        src_name = get_nbrs_script_file(files)
+        src_name = self.get_nbrs_script_file(files)
         with open(scr_name,'w') as fp:
             fp.write(scr)
 
