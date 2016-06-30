@@ -188,7 +188,7 @@ obase={base_name}
 lfile=$obase".log"
 meds_file={tile}
 
-ngmixer-meds-make-nbrs-data ${config} ${meds_file} &> $lfile
+ngmixer-meds-make-nbrs-data $config $meds_file &> $lfile
 """
         args = {}
         args['nbrs_config'] = files['nbrs_config']
