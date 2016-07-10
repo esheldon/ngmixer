@@ -16,9 +16,13 @@ from ..util import print_with_verbosity, \
 
 import meds
 
+from pprint import pprint
+
 # flagging
 IMAGE_FLAGS_SET=2**0
 PSF_IN_BLACKLIST=2**1
+PSF_MISSING_S2N=2**2
+PSF_LOW_S2N=2**3
 
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
@@ -28,6 +32,9 @@ class SVDESMEDSImageIO(MEDSImageIO):
         if conf['use_psf_rerun']:
             rerun=conf['psf_rerun_version']
             self._load_psfex_blacklist(rerun)
+
+        if 'psf_s2n_checks' in conf:
+            self._load_psf_s2n(conf)
 
         super(SVDESMEDSImageIO,self).__init__(*args, **kw)
 
@@ -314,6 +321,11 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         self._psfex_blacklist=blacklist
 
+    def _load_psf_s2n(self, conf):
+        fname=conf['psf_s2n_checks']['file']
+        print("loading psf s/n:",fname)
+        self._psf_s2n = fitsio.read(fname)
+
     def _get_psfex_lists(self):
         """
         Load psfex objects for each of the SE images
@@ -373,6 +385,20 @@ class SVDESMEDSImageIO(MEDSImageIO):
             if key in self._psfex_blacklist:
                 print("   psfex in blacklist, flagging:",psfpath)
                 flags |= PSF_IN_BLACKLIST
+
+            if flags == 0 and 'psf_s2n_checks' in self.conf:
+                pc=self.conf['psf_s2n_checks']
+                pkey=self._psf_s2n['key']
+                w,=numpy.where(key==pkey)
+                if w.size == 0:
+                    print("   psfex bad s2n, flagging:",psfpath)
+                    flags |= PSF_MISSING_S2N
+                else:
+                    s2n_key=pc['key']
+                    s2n=self._psf_s2n[s2n_key][w]
+                    if s2n < pc['s2n_min']:
+                        print("   psfex %s %g < %g" % (s2n_key,s2n,pc['s2n_min']))
+                        flags |= PSF_LOW_S2N
 
         if flags == 0:
             # we expect a well-formed, existing file if there are no flags set
