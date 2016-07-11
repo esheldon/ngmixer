@@ -571,9 +571,6 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
             info = self.meds_list[band].get_image_info()
             nimage = info.size
 
-
-            meta = self.meds_meta_list[band]
-
             # get coadd file ID            
             # a total hack, but should work!
             # assumes all objects from the same coadd!

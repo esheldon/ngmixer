@@ -304,23 +304,22 @@ lfile=$obase".log"
 meds="{meds_files}"
 tmpdir={tmpcmd}
 
-# call with -u to avoid buffering
-cmd="`which {cmd}` \
-    --fof-range={start},{stop} \
-    --work-dir=$tmpdir \
-    {fof_opt} \
-    {nbrs_opt} \
-    {flags_opt} \
-    {seed_opt} \
-    {mof_opt} \
-    $config $ofile $meds"
 
+# call with -u to avoid buffering
 if [ ! -f "$ofile" ]
 then
-    echo $cmd
-    python -u $cmd &> $lfile
-fi
+    python -u `which {cmd}` \
+        --fof-range={start},{stop} \
+        --work-dir=$tmpdir \
+        {fof_opt} \
+        {nbrs_opt} \
+        {flags_opt} \
+        {seed_opt} \
+        {mof_opt} \
+        $config $ofile $meds &> $tmpdir/$lfile
 
+    mv -v $tmpdir/$lfile .
+fi
 """
         return template
 
