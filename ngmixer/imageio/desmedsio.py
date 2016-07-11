@@ -542,23 +542,62 @@ class MOFSVDESMEDSImageIO(SVDESMEDSImageIO):
 class Y1DESMEDSImageIO(SVDESMEDSImageIO):
     def __init__(self,*args,**kwargs):
         super(Y1DESMEDSImageIO,self).__init__(*args,**kwargs)
-        read_wcs = self.conf.get('read_wcs',False)
-        if read_wcs:
-            self._load_wcs_data()
+
+        self._load_wcs_data()
 
     def _set_defaults(self):
         super(Y1DESMEDSImageIO,self)._set_defaults()
         self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
         self.conf['prop_sat_starpix'] = self.conf.get('prop_sat_starpix',False)
         self.conf['flag_y1_stellarhalo_masked'] = self.conf.get('flag_y1_stellarhalo_masked',False)
-        
+
     def _load_wcs_data(self):
+        # should we read from the original file?
+        read_wcs = self.conf.get('read_wcs',False)
+        if read_wcs:
+            self._load_wcs_from_files()
+        else:
+            self._load_wcs_from_meds()
+
+    def _load_wcs_from_meds(self):
+        from esutil.wcsutil import WCS
+        import json
+
+        print('loading WCS from meds')
+        wcs_transforms = {}
+        for band in self.iband:
+            wcs_transforms[band] = {}
+
+            info = self.meds_list[band].get_image_info()
+            nimage = info.size
+
+
+            meta = self.meds_meta_list[band]
+
+            # get coadd file ID            
+            # a total hack, but should work!
+            # assumes all objects from the same coadd!
+            coadd_file_id = numpy.max(numpy.unique(self.meds_list[band]['file_id'][:,0]))
+            assert coadd_file_id >= 0,"Could not get coadd_file_id from MEDS file!"
+
+            wcs_dict = json.loads( info['wcs'][0] )
+            wcs_transforms[band][coadd_file_id] = WCS(wcs_dict)
+
+            for i in xrange(nimage):
+                if i != coadd_file_id:
+
+                    wcs_dict = json.loads( info['wcs'][i] )
+                    wcs_transforms[band][i] = WCS(wcs_dict)
+
+        self.wcs_transforms = wcs_transforms
+
+    def _load_wcs_from_files(self):
         """
         Load the WCS transforms for each meds file
         """
         from esutil.wcsutil import WCS
 
-        print('loading WCS')
+        print('loading WCS from original files')
         wcs_transforms = {}
         for band in self.iband:
             wcs_transforms[band] = {}
