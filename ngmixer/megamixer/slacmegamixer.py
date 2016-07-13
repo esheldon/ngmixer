@@ -17,19 +17,29 @@ class SLACNGMegaMixer(NGMegaMixer):
     def get_tmp_dir(self):
         return '${TMPDIR}'
 
-    def write_job_script(self,files,i,rng):
-        fname = os.path.join(self.get_chunk_output_dir(files,i,rng),'job.sh')
-        jobname = self.get_chunk_output_basename(files,self['run'],rng)
+    def write_job_script(self,files,chunk,rng):
+        fname = os.path.join(self.get_chunk_output_dir(files,chunk,rng),'job.sh')
+        if os.path.exists(fname):
+            os.remove(fname)
+        subf=fname+'.submitted'
+        if os.path.exists(subf):
+            os.remove(subf)
 
-        if len(self['extra_cmds']) > 0:
-            with open(self['extra_cmds'],'r') as f:
-                ec = f.readlines()
-            ec = '\n'.join([e.strip() for e in ec])
-        else:
-            ec = ''
+        output_file=self.get_chunk_output_file(files,chunk, rng)
 
-        with open(fname,'w') as fp:
-            fp.write("""#!/bin/bash
+        if not os.path.exists(output_file):
+
+            jobname = self.get_chunk_output_basename(files,self['run'],rng)
+
+            if len(self['extra_cmds']) > 0:
+                with open(self['extra_cmds'],'r') as f:
+                    ec = f.readlines()
+                ec = '\n'.join([e.strip() for e in ec])
+            else:
+                ec = ''
+
+            with open(fname,'w') as fp:
+                fp.write("""#!/bin/bash
 #BSUB -J {jobname}
 #BSUB -oo ./{jobname}.oe
 #BSUB -R "linux64 && rhel60 && scratch > 6"
@@ -45,7 +55,7 @@ rm -rf $TMPDIR
 
 """.format(extracmds=ec,jobname=jobname))
 
-        os.system('chmod 755 %s' % fname)
+            os.system('chmod 755 %s' % fname)
 
     def run_chunk(self,files,chunk,rng):
         dr = self.get_chunk_output_dir(files,chunk,rng)
