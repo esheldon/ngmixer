@@ -175,7 +175,7 @@ def main():
         elif cmd == 'install-mof':
             ngmm.install_mof_outputs(coadd_run, clobber=options.clobber)
         elif cmd == 'setup-nbrs':
-            ngmm.setup_nbrs_coadd_tile(coadd_run, clobber=options.clobber)
+            ngmm.setup_nbrs_coadd_tile(coadd_run)
         elif cmd == 'run-nbrs':
             ngmm.run_nbrs_coadd_tile(coadd_run)
         else:
