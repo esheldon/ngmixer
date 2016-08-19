@@ -75,7 +75,7 @@ class MEDSImageIO(ImageIO):
         self.conf['min_weight'] = self.conf.get('min_weight',-numpy.inf)
         self.conf['reject_outliers'] = self.conf.get('reject_outliers',True) # from cutouts
         self.conf['model_nbrs'] = self.conf.get('model_nbrs',False)
-        self.conf['ignore_zero_weights_images'] = self.conf.get('ignore_zero_weights_images',False)
+        self.conf['ignore_zero_images'] = self.conf.get('ignore_zero_images',False)
 
 
         # max fraction of image masked in bitmask or that has zero weight
@@ -115,8 +115,10 @@ class MEDSImageIO(ImageIO):
         """
         extracted=[]
 
-        make_corrected_meds=self.conf.get('make_corrected_meds',False)
-        if make_corrected_meds:
+
+        corrmeds=self.conf.get('correct_meds',None)
+
+        if corrmeds is not None:
             if self.mof_file is None:
                 raise ValueError(
                     "you must send mof outputs to make "
@@ -133,8 +135,8 @@ class MEDSImageIO(ImageIO):
                     self.fof_range[0],
                     self.fof_range[1],
                     newf,
-                    replace_bad=self.conf['nbrs_replace_bad'],
-                    reject_outliers=self.conf['nbrs_reject_outliers'],
+                    replace_bad=corrmeds['replace_bad'],
+                    reject_outliers=corrmeds['reject_outliers'],
                     min_weight=min_weight,
                     cleanup=True,
                     verbose=False,
@@ -635,20 +637,9 @@ class MEDSImageIO(ImageIO):
         jacob = self._get_jacobian(meds, mindex, icut)
 
 
-        if self.conf['ignore_zero_weights_images']:
-            skip=False
-            if im.sum()==0.0:
-                print("    image all zero, skipping")
-                skip=True
-
-            if (wt.sum() == 0.0
-                    or wt_raw.sum() == 0
-                    or (wt_us is not None and wt_us.sum() == 0) ):
-                print("    weight all zero, skipping")
-                skip=True
-
-            if skip:
-                return None
+        if self.conf['ignore_zero_images'] and 0.0==im.sum():
+            print("    image all zero, skipping")
+            return None
 
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
 
@@ -668,7 +659,55 @@ class MEDSImageIO(ImageIO):
         fname = self._get_meds_orig_filename(meds, mindex, icut)
         obs.filename=fname
 
+        if 'trim_image' in self.conf:
+            self._trim_obs(obs)
+
         return obs
+
+    def _get_trimmed_startstop(self, dim, cen, new_dim):
+        start=int(cen-new_dim/2.0+0.5)
+        end=int(cen+new_dim/2.0+0.5)
+
+        if start < 0:
+            start=0
+        if end > (dim-1):
+            end=dim-1
+
+        return start,end
+
+    def _trim_obs(self, obs):
+        dims=obs.image.shape
+        new_dims=self.conf['trim_image']['dims']
+        print("trimming obs:",new_dims)
+
+        j=obs.jacobian
+        cen=j.get_cen()
+
+        rowstart, rowend=self._get_trimmed_startstop(
+            dims[0],
+            cen[0],
+            new_dims[0],
+        )
+        colstart, colend=self._get_trimmed_startstop(
+            dims[1],
+            cen[1],
+            new_dims[1],
+        )
+
+        obs.image  = obs.image[rowstart:rowend, colstart:colend]
+        obs.weight = obs.weight[rowstart:rowend, colstart:colend]
+        obs.weight_raw = obs.weight_raw[rowstart:rowend, colstart:colend]
+        if obs.weight_us is not None:
+            obs.weight_us = obs.weight_us[rowstart:rowend, colstart:colend]
+
+        j.set_cen(
+            row=cen[0]-rowstart,
+            col=cen[1]-colstart,
+        )
+
+        print("new dims:",obs.image.shape)
+
+
 
     def _fill_obs_meta_data(self,obs, band, mindex, icut):
         """
@@ -700,6 +739,7 @@ class MEDSImageIO(ImageIO):
         """
         Get an image cutout from the input MEDS file
         """
+        self.imname= os.path.basename(meds.get_source_path(mindex,icut))
         return meds.get_cutout(mindex, icut)
 
     def _badfrac_too_high(self, icut, nbad, shape, maxfrac, type):
@@ -784,7 +824,7 @@ class MEDSImageIO(ImageIO):
             wt[w] = 0.0
 
             if self.conf['symmetrize_weight']:
-                print("    symmetrizing weight")
+                #print("    symmetrizing weight")
                 wt_rot = numpy.rot90(wt)
                 w_rot = numpy.where(wt_rot < self.conf['min_weight'])
                 wt[w_rot] = 0.0

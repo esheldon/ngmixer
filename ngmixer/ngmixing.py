@@ -10,8 +10,10 @@ import fitsio
 from . import imageio
 from . import fitting
 from . import files
+from .defaults import object_blacklist
 from .defaults import DEFVAL,_CHECKPOINTS_DEFAULT_MINUTES
-from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS,BAD_OBJ,UTTER_FAILURE
+from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS,BAD_OBJ,UTTER_FAILURE,OBJECT_IN_BLACKLIST
+
 from .util import UtterFailure, seed_numpy
 
 class NGMixer(dict):
@@ -230,6 +232,9 @@ class NGMixer(dict):
 
     def _check_basic_things(self, coadd_mb_obs_list, mb_obs_list):
 
+        if mb_obs_list.meta['id'] in object_blacklist:
+            print("    skipping bad object:",mb_obs_list.meta['id'])
+            return OBJECT_IN_BLACKLIST
         # get the box size
         for obsl in [coadd_mb_obs_list, mb_obs_list]:
             box_size = self._get_box_size(obsl)

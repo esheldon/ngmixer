@@ -191,6 +191,9 @@ class RenderNGmixNbrs(object):
             fracdev_tag=fracdev_tag,TdByTe_tag=TdByTe_tag,
         )
 
+        if cen_img is None:
+            return None
+
         return cen_img, pixel_scale
 
     def render_nbrs(self,cen_id,
@@ -521,11 +524,13 @@ class RenderNGmixNbrs(object):
                 if verbose:
                     print('        rendered nbr: %d' % (nbr_ind+1))
 
-                curr_nbrsim = RenderNGmixNbrs._render_single(model, band, img_shape,
-                                                             pars_tag,
-                                                             nbrs_fit_data[nbr_ind:nbr_ind+1],
-                                                             nbr_psf_gmix, nbr_jac,
-                                                             fracdev_tag=fracdev_tag, TdByTe_tag=TdByTe_tag)
+                curr_nbrsim = RenderNGmixNbrs._render_single(
+                    model, band, img_shape,
+                    pars_tag,
+                    nbrs_fit_data[nbr_ind:nbr_ind+1],
+                    nbr_psf_gmix, nbr_jac,
+                    fracdev_tag=fracdev_tag, TdByTe_tag=TdByTe_tag,
+                )
                 nbrs_imgs.append(curr_nbrsim)
                 nbrs_masks.append(numpy.ones(img_shape))
 
@@ -608,22 +613,19 @@ class RenderNGmixNbrs(object):
                                       fit_data[TdByTe_tag][0],
                                       band_pars_obj)
                 gmix_image = gmix_sky.convolve(psf_gmix)
-            except GMixRangeError as err:
+            except GMixRangeError:
                 if i==1:
-                    print("        caught GMixRangeError: '%s'" % str(err))
                     print('        setting T=0 for nbr!')
                     band_pars_obj[4] = 0.0 # set T to zero and try again
-                    print_pars(band_pars_obj, front="        new pars:")
-                    print("        fracdev:", fit_data[fracdev_tag][0])
-                    print("        TdByTe:",fit_data[TdByTe_tag][0])
-                    print("        psf gmix:")
-                    print(psf_gmix)
-
+                    print_pars(band_pars_obj,front="        new pars: ")
                 else:
-                    raise err
+                    gmix_image=None
 
-        image = gmix_image.make_image(img_shape, jacobian=jac, fast_exp=True)
-        return image
+        if gmix_image is None:
+            return None
+        else:
+            image = gmix_image.make_image(img_shape, jacobian=jac, fast_exp=True)
+            return image
 
     @staticmethod
     def _mask_nbr_seg(seg,nbr_number,masked_pix,unmodeled_nbrs_masking_type='nbrs-seg'):

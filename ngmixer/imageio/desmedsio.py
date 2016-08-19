@@ -16,9 +16,13 @@ from ..util import print_with_verbosity, \
 
 import meds
 
+from pprint import pprint
+
 # flagging
 IMAGE_FLAGS_SET=2**0
 PSF_IN_BLACKLIST=2**1
+PSF_MISSING_S2N=2**2
+PSF_LOW_S2N=2**3
 
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
@@ -28,6 +32,9 @@ class SVDESMEDSImageIO(MEDSImageIO):
         if conf['use_psf_rerun']:
             rerun=conf['psf_rerun_version']
             self._load_psfex_blacklist(rerun)
+
+        if 'psf_s2n_checks' in conf:
+            self._load_psf_s2n(conf)
 
         super(SVDESMEDSImageIO,self).__init__(*args, **kw)
 
@@ -217,15 +224,54 @@ class SVDESMEDSImageIO(MEDSImageIO):
         file_id=meds['file_id'][mindex,icut]
 
         pex=self.psfex_lists[band][file_id]
+        self.psfname=os.path.basename(pex['filename'])
+        if icut > 0:
+            if self.psfname[0:17] != self.imname[0:17]:
+                raise RuntimeError("im and psf mismatch: %s "
+                                   "vs %s" % (self.psfname,self.imname))
 
         row=meds['orig_row'][mindex,icut]
         col=meds['orig_col'][mindex,icut]
 
-        im=pex.get_rec(row,col).astype('f8', copy=False)
-        cen=pex.get_center(row,col)
+        if self.conf['center_psf']:
+            use_row,use_col=round(row),round(col)
+        else:
+            use_row,use_col=row,col
+
+        im=pex.get_rec(use_row,use_col)
+        cen=pex.get_center(use_row,use_col)
+
+        im=im.astype('f8', copy=False)
+
         sigma_pix=pex.get_sigma()
 
+        if 'trim_psf' in self.conf and icut > 0:
+            im,cen=self._trim_psf(im, cen)
+
         return im, cen, sigma_pix, pex['filename']
+
+    def _trim_psf(self, im, cen):
+        dims=self.conf['trim_psf']['dims']
+
+        rowstart=int(cen[0]-dims[0]/2.0+0.5)
+        rowend=int(cen[0]+dims[0]/2.0+0.5)
+
+        colstart=int(cen[1]-dims[1]/2.0+0.5)
+        colend=int(cen[1]+dims[1]/2.0+0.5)
+
+        newim = im[rowstart:rowend, colstart:colend]
+        newcen=cen.copy()
+        newcen[0]=cen[0]-rowstart
+        newcen[1]=cen[1]-rowstart
+
+        '''
+        print("Trimming psf to:",dims)
+        print("new center:",newcen)
+        w=numpy.where(newim == 0.0)
+        print("number of zeros:",w[0].size)
+        '''
+
+        return newim, newcen
 
     def _get_blacklist_dir(self):
         """
@@ -274,6 +320,11 @@ class SVDESMEDSImageIO(MEDSImageIO):
                 blacklist[key] = flags
 
         self._psfex_blacklist=blacklist
+
+    def _load_psf_s2n(self, conf):
+        fname=conf['psf_s2n_checks']['file']
+        print("loading psf s/n:",fname)
+        self._psf_s2n = fitsio.read(fname)
 
     def _get_psfex_lists(self):
         """
@@ -334,6 +385,20 @@ class SVDESMEDSImageIO(MEDSImageIO):
             if key in self._psfex_blacklist:
                 print("   psfex in blacklist, flagging:",psfpath)
                 flags |= PSF_IN_BLACKLIST
+
+            if flags == 0 and 'psf_s2n_checks' in self.conf:
+                pc=self.conf['psf_s2n_checks']
+                pkey=self._psf_s2n['key']
+                w,=numpy.where(key==pkey)
+                if w.size == 0:
+                    print("   psfex bad s2n, flagging:",psfpath)
+                    flags |= PSF_MISSING_S2N
+                else:
+                    s2n_key=pc['key']
+                    s2n=self._psf_s2n[s2n_key][w]
+                    if s2n < pc['s2n_min']:
+                        print("   psfex %s %g < %g" % (s2n_key,s2n,pc['s2n_min']))
+                        flags |= PSF_LOW_S2N
 
         if flags == 0:
             # we expect a well-formed, existing file if there are no flags set
@@ -477,23 +542,59 @@ class MOFSVDESMEDSImageIO(SVDESMEDSImageIO):
 class Y1DESMEDSImageIO(SVDESMEDSImageIO):
     def __init__(self,*args,**kwargs):
         super(Y1DESMEDSImageIO,self).__init__(*args,**kwargs)
-        read_wcs = self.conf.get('read_wcs',False)
-        if read_wcs:
-            self._load_wcs_data()
+
+        self._load_wcs_data()
 
     def _set_defaults(self):
         super(Y1DESMEDSImageIO,self)._set_defaults()
         self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
         self.conf['prop_sat_starpix'] = self.conf.get('prop_sat_starpix',False)
         self.conf['flag_y1_stellarhalo_masked'] = self.conf.get('flag_y1_stellarhalo_masked',False)
-        
+
     def _load_wcs_data(self):
+        # should we read from the original file?
+        read_wcs = self.conf.get('read_wcs',False)
+        if read_wcs:
+            self._load_wcs_from_files()
+        else:
+            self._load_wcs_from_meds()
+
+    def _load_wcs_from_meds(self):
+        from esutil.wcsutil import WCS
+        import json
+
+        print('loading WCS from meds')
+        wcs_transforms = {}
+        for band in self.iband:
+            wcs_transforms[band] = {}
+
+            info = self.meds_list[band].get_image_info()
+            nimage = info.size
+
+            # get coadd file ID            
+            # a total hack, but should work!
+            # assumes all objects from the same coadd!
+            coadd_file_id = numpy.max(numpy.unique(self.meds_list[band]['file_id'][:,0]))
+            assert coadd_file_id >= 0,"Could not get coadd_file_id from MEDS file!"
+
+            wcs_dict = json.loads( info['wcs'][0] )
+            wcs_transforms[band][coadd_file_id] = WCS(wcs_dict)
+
+            for i in xrange(nimage):
+                if i != coadd_file_id:
+
+                    wcs_dict = json.loads( info['wcs'][i] )
+                    wcs_transforms[band][i] = WCS(wcs_dict)
+
+        self.wcs_transforms = wcs_transforms
+
+    def _load_wcs_from_files(self):
         """
         Load the WCS transforms for each meds file
         """
         from esutil.wcsutil import WCS
 
-        print('loading WCS')
+        print('loading WCS from original files')
         wcs_transforms = {}
         for band in self.iband:
             wcs_transforms[band] = {}

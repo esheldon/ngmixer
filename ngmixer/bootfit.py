@@ -685,7 +685,7 @@ class NGMixBootFitter(BaseFitter):
                         pars = psf_gmix.get_full_pars()
 
                         ed['psf_fit_g'][0,0] = g1
-                        ed['psf_fit_g'][0,1] = g1
+                        ed['psf_fit_g'][0,1] = g2
                         ed['psf_fit_T'] = T
                         ed['psf_fit_pars'] = pars
 
@@ -712,13 +712,14 @@ class NGMixBootFitter(BaseFitter):
         for band,obs_list in enumerate(mb_obs_list):
             for obs in obs_list:
 
-                fdata=obs.meta['fit_data']
+                fdata=obs.meta.get('fit_data',None)
                 if (obs.meta['flags'] == 0
-                        and 'fit_data' in obs.meta
+                        and fdata is not None
                         and fdata['psf_fit_flags'][0] == 0):
 
                     assert obs.meta['fit_flags'] == 0
                     assert obs.get_psf().has_gmix()
+
                     if fdata['wmax'][0] > 0.0:
                         did_one_max = True
                         npix += fdata['npix'][0]
@@ -728,6 +729,7 @@ class NGMixBootFitter(BaseFitter):
 
                     wsum += fdata['wsum'][0]
                     Tsum += fdata['wsum'][0]*fdata['psf_fit_T'][0]
+
                     g1sum += fdata['wsum'][0]*fdata['psf_fit_g'][0,0]
                     g2sum += fdata['wsum'][0]*fdata['psf_fit_g'][0,1]
 
@@ -835,6 +837,10 @@ class NGMixBootFitter(BaseFitter):
                 print("        psf flux(%s): %g +/- %g s2n: %g" % tup)
             else:
                 print("        psf flux(%s): %g +/- %g" % (band,flux,flux_err))
+
+        if flagsall != 0:
+            # we only propagate this bit to the main 'flags' field
+            flagsall = PSF_FLUX_FIT_FAILURE
 
         return flagsall
 

@@ -68,12 +68,14 @@ class Concat(object):
         """
         set the output file and the temporary directory
         """
-        if self.blind:
-            extra='-blind'
-        else:
-            extra=''
 
-        self.collated_file = os.path.join(self.output_dir, "%s-%s%s.fits" % (self.output_file,self.run,extra))
+        #self.collated_file = os.path.join(self.output_dir, "%s-%s%s.fits" % (self.output_file,self.run,extra))
+        self.collated_file = _get_collated_file(
+            self.output_dir,
+            self.output_file,
+            self.run,
+            blind=self.blind,
+        )
         self.tmpdir = files.get_temp_dir()
 
     def read_chunk(self, fname):
@@ -161,6 +163,10 @@ class Concat(object):
                     raise err
                 print("\tskipping problematic chunk")
 
+        if len(dlist) == 0:
+            print("\tNo good chunks found, skipping entire data set")
+            return
+
         data = numpy.array(dlist,dtype=data.dtype.descr)
         epoch_data = numpy.array(elist,dtype=epoch_data.dtype.descr)
         if len(nlist) > 0:
@@ -188,3 +194,17 @@ class Concat(object):
                 fits.write(meta,extname="meta_data")
 
         print('output is in:',self.collated_file)
+
+def _get_collated_file(output_dir, output_front, run, blind=True):
+    """
+    set the output file and the temporary directory
+    """
+    if blind:
+        extra='-blind'
+    else:
+        extra=''
+
+    collated_file = os.path.join(output_dir, "%s-%s%s.fits" % (output_front,run,extra))
+
+    return collated_file
+

@@ -39,7 +39,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         If True, replace pixels with bits set in the bmask,
         or with zero weight, with the central model.  If the
         central model did not converge (bad fit) then set
-        the flag CEN_MODEL_MISSING in the bmask.  Default True.
+        the flag CEN_MODEL_MISSING in the bmask.  Default False.
 
     min_weight: float
         Min weight to consider "bad".  If the compression preserves
