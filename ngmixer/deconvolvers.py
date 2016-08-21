@@ -26,14 +26,10 @@ from pprint import pprint
 from .bootfit import NGMixBootFitter
 
 
-try:
-    import deconv
-except ImportError:
-    pass
-
 class Deconvolver(NGMixBootFitter):
     def __init__(self,*args,**kw):
         super(Deconvolver,self).__init__(*args,**kw)
+        self['normalize_psf'] = self.get('normalize_psf',True)
 
     def _setup(self):
         """
@@ -79,9 +75,8 @@ class Deconvolver(NGMixBootFitter):
                 # to get a center
                 self._fit_gauss()
 
-                meas = self._do_deconv(new_mb_obs_list)
-                self._copy_galaxy_result(meas, coadd)
-                res=meas.get_result()
+                res = self._do_deconv(new_mb_obs_list)
+                self._copy_galaxy_result(res, coadd)
 
                 if res['flags'] != 0:
                     print("    deconv failed with flags:",res['flags'])
@@ -107,6 +102,7 @@ class Deconvolver(NGMixBootFitter):
         return flags
 
     def _do_deconv(self, mb_obs_list):
+        import deconv
 
         mfitter=self.boot.get_max_fitter()
         mres=mfitter.get_result()
@@ -143,7 +139,7 @@ class Deconvolver(NGMixBootFitter):
                 cenpix=array( j.get_cen() )
 
                 new_cen = cenpix + censky/scale
-                print("cen0:",cenpix,"newcen:",new_cen)
+                #print("cen0:",cenpix,"newcen:",new_cen)
 
                 new_im=_trim_image(obs.image, new_cen)
                 new_wt=_trim_image(obs.image, new_cen)
@@ -162,6 +158,7 @@ class Deconvolver(NGMixBootFitter):
 
         return mbo
 
+    '''
     def _find_center(self, mb_obs_list):
         scale=mb_obs_list[0][0].jacobian.get_scale()
         Tguess=4.0 * scale**2
@@ -183,6 +180,7 @@ class Deconvolver(NGMixBootFitter):
         runner.go(ntry=max_pars['ntry'])
         res=runner.fitter.get_result()
         return res
+    '''
 
     def _do_deconv_plots(self, meas):
         import images
@@ -435,6 +433,194 @@ class Deconvolver(NGMixBootFitter):
         d = self._make_epoch_struct()
         return d
 
+
+class MetacalDeconvolver(Deconvolver):
+
+    def __init__(self,*args,**kw):
+        super(MetacalDeconvolver,self).__init__(*args,**kw)
+        self._types=['noshear','1p','1m','2p','2m']
+
+    def _make_shears(self):
+        step=self['metacal_pars'].get('step',0.01)
+
+        shears={}
+        for t in self._types:
+            if t == 'noshear':
+                shears[t]=None
+            else:
+                if t=='1p':
+                    shears[t] = ngmix.Shape( step, 0.0)
+                elif t=='1m':
+                    shears[t] = ngmix.Shape(-step, 0.0)
+                elif t=='2p':
+                    shears[t] = ngmix.Shape(0.0,   step)
+                elif t=='2m':
+                    shears[t] = ngmix.Shape(0.0,  -step)
+
+        return shears
+
+    def _do_deconv(self, mb_obs_list):
+
+        mfitter=self.boot.get_max_fitter()
+        mres=mfitter.get_result()
+
+        cen=mres['pars'][0:0+2].copy()
+
+        mbo=self._trim_images(mb_obs_list, cen)
+
+        res = self._do_metacal_deconv(mbo)
+
+        return res
+
+
+    def _do_metacal_deconv(self, mb_obs_list):
+        import deconv
+
+        types=['noshear','1p','1m','2p','2m']
+
+        shears = self._make_shears()
+
+        moments = deconv.measure.ObsKSigmaMoments(
+            mb_obs_list,
+            self['deconv_pars']['sigma_weight'],
+            **self
+        )
+
+        flags=0
+        res={}
+        for type in shears:
+            moments.go(shear=shears[type])
+            res[type]=moments.get_result()
+
+            flags |= res[type]['orflags']
+
+        res['flags'] = flags
+        return res
+
+    def _get_metacal_namer(self, type='noshear'):
+        if type=='noshear':
+            back=None
+        else:
+            back=type
+        return Namer(back=back)
+
+    def _copy_galaxy_result(self, allres, coadd):
+        """
+        Copy from the result dict to the output array
+        """
+
+        dindex=0
+        data=self.data
+
+        for type in self._types:
+            res=allres[type]
+
+            n=self._get_metacal_namer(type=type)
+
+            data[n('dc_flags')][dindex] = res['flags']
+            data[n('dc_orflags')][dindex] = res['orflags']
+            data[n('dc_flags_band')][dindex] = res['flags_band']
+            data[n('dc_orflags_band')][dindex] = res['orflags_band']
+
+            data[n('T')][dindex] = res['T']
+            data[n('e')][dindex] = res['e']
+            data[n('wflux')][dindex] = res['wflux']
+            data[n('wflux_band')][dindex] = res['wflux']
+
+    def _make_struct(self,coadd):
+        """
+        make the output structure
+        """
+        num = 1
+        dt = self._get_fit_data_dtype(coadd)
+        data = numpy.zeros(num,dtype=dt)
+
+        n=self._get_namer('psf', coadd)
+
+        data[n('flags')] = NO_ATTEMPT
+        for nn in ['flux','flux_err','flux_s2n']:
+            data[n('flux')] = DEFVAL
+            data[n('flux_err')] = DEFVAL
+            data[n('flux_s2n')] = DEFVAL
+
+        n=self._get_namer('', coadd)
+
+        for nn in ['mask_frac','psfrec_T','psfrec_g']:
+            data[n(nn)] = DEFVAL
+
+        # the deconvolve parameters
+        for type in self._types:
+            n=self._get_metacal_namer(type=type)
+
+            for nn in ['dc_flags','dc_orflags','dc_flags_band','dc_orflags_band']: 
+                data[n(nn)] = NO_ATTEMPT
+
+            for nn in ['T','e','wflux','wflux_band']:
+                data[n(nn)] = DEFVAL
+
+        return data
+
+
+    def _get_fit_data_dtype(self,coadd):
+        dt=[]
+
+        nband=self['nband']
+        bshape=(nband,)
+        simple_npars=5+nband
+
+        n=self._get_namer('psf', coadd)
+
+        dt += [(n('flags'),   'i4',bshape),
+               (n('flux'),    'f8',bshape),
+               (n('flux_err'),'f8',bshape),
+               (n('flux_s2n'),'f8',bshape)]
+
+        n=self._get_namer('', coadd)
+
+        dt += [(n('nimage_use'),'i4',bshape)]
+
+        dt += [(n('mask_frac'),'f8'),
+               (n('psfrec_T'),'f8'),
+               (n('psfrec_g'),'f8', 2)]
+
+        if nband==1:
+            fcov_shape=(nband,)
+        else:
+            fcov_shape=(nband,nband)
+
+        for type in self._types:
+
+            if type=='noshear':
+                back=None
+            else:
+                back=type
+
+            n=Namer(back=back)
+            dt += [
+                (n('dc_flags'),'i4'),
+                (n('dc_orflags'),'i4'),
+                (n('dc_flags_band'),'i4',bshape),
+                (n('dc_orflags_band'),'i4',bshape),
+
+                (n('T'),'f8'),
+                (n('e'),'f8',2),
+                (n('wflux'),'f8',bshape),
+                (n('wflux_band'),'f8',bshape),
+            ]
+
+        return dt
+
+    def _fill_nimage_used(self,res,coadd):
+        nim_used = numpy.zeros(self['nband'],dtype='i4')
+        for band in xrange(self['nband']):
+            nim_used[band] = res['noshear']['nimage_use_band'][band]
+
+        n=self._get_namer('', coadd)
+
+        self.data[n('nimage_use')][0,:] = nim_used
+
+
+
 def _trim_image(im, cen):
 
     drow_low = cen[0]
@@ -457,18 +643,7 @@ def _trim_image(im, cen):
     clow=int(fclow)
     chigh=int(fchigh)
 
-    '''
-    print(frlow,rlow)
-    print(frhigh,rhigh)
-    print(fclow,clow)
-    print(fchigh,chigh)
-    '''
-
-
     return im[
         rlow:rhigh+1,
         clow:chigh+1,
     ]
-
-
-

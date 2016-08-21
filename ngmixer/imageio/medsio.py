@@ -79,8 +79,10 @@ class MEDSImageIO(ImageIO):
 
 
         # max fraction of image masked in bitmask or that has zero weight
-        #self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',0.1)
-        #self.conf['max_zero_weight_frac'] = self.conf.get('max_zero_weight_frac',0.1)
+        self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',1.0)
+        self.conf['max_zero_weight_frac'] = self.conf.get('max_zero_weight_frac',1.0)
+        self.conf['symmetrize_weight'] = self.conf.get('symmetrize_weight',False)
+
 
         # check this region around the center
         self.conf['central_bmask_radius'] = \
@@ -739,7 +741,11 @@ class MEDSImageIO(ImageIO):
         """
         Get an image cutout from the input MEDS file
         """
-        self.imname= os.path.basename(meds.get_source_path(mindex,icut))
+        try:
+            self.imname= os.path.basename(meds.get_source_path(mindex,icut))
+        except IndexError:
+            self.imname=''
+
         return meds.get_cutout(mindex, icut)
 
     def _badfrac_too_high(self, icut, nbad, shape, maxfrac, type):
