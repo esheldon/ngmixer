@@ -109,10 +109,11 @@ class Deconvolver(NGMixBootFitter):
 
         cen=mres['pars'][0:0+2].copy()
 
-        mbo=self._trim_images(mb_obs_list, cen)
+        if self['deconv_pars']['trim_images']:
+            mb_obs_list=self._trim_images(mb_obs_list, cen)
 
         meas=deconv.measure.calcmom_ksigma_obs(
-            mbo,
+            mb_obs_list,
             self['sigma_weight'],  # arcsec
             dk=self['dk'],         # 1/arcsec or None
         )
@@ -142,7 +143,7 @@ class Deconvolver(NGMixBootFitter):
                 #print("cen0:",cenpix,"newcen:",new_cen)
 
                 new_im=_trim_image(obs.image, new_cen)
-                new_wt=_trim_image(obs.image, new_cen)
+                new_wt=_trim_image(obs.weight, new_cen)
                 new_j = j.copy()
                 new_j.set_cen(row=new_cen[0], col=new_cen[1])
 
@@ -466,9 +467,10 @@ class MetacalDeconvolver(Deconvolver):
 
         cen=mres['pars'][0:0+2].copy()
 
-        mbo=self._trim_images(mb_obs_list, cen)
+        if self['deconv_pars']['trim_images']:
+            mb_obs_list=self._trim_images(mb_obs_list, cen)
 
-        res = self._do_metacal_deconv(mbo)
+        res = self._do_metacal_deconv(mb_obs_list)
 
         return res
 
@@ -480,9 +482,11 @@ class MetacalDeconvolver(Deconvolver):
 
         shears = self._make_shears()
 
+        dpars=self['deconv_pars']
         moments = deconv.measure.ObsKSigmaMoments(
             mb_obs_list,
-            self['deconv_pars']['sigma_weight'],
+            dpars['sigma_weight'],
+            fix_noise=dpars['fix_noise'],
             **self
         )
 
