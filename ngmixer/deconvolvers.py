@@ -254,6 +254,10 @@ class Deconvolver(NGMixBootFitter):
         for band,obs_list in enumerate(boot.mb_obs_list):
             if len(obs_list) == 0:
                 raise BootPSFFailure("psf fitting failed - band %d has no obs" % band)
+            #for obs in obs_list:
+            #    sigma=numpy.sqrt( obs.psf.gmix.get_T()/2.0 )
+            #    sigmapix = sigma/obs.psf.jacobian.get_scale()
+            #    print("sigma pixels:",sigmapix)
 
         self.boot=boot
 
@@ -482,11 +486,16 @@ class MetacalDeconvolver(Deconvolver):
 
         shears = self._make_shears()
 
+
         dpars=self['deconv_pars']
+        dk=dpars.get('dk',None)
+
         moments = deconv.measure.ObsKSigmaMoments(
             mb_obs_list,
             dpars['sigma_weight'],
             fix_noise=dpars['fix_noise'],
+            trim=dpars['trim_kimages'],
+            dk=dk,
             **self
         )
 
