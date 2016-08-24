@@ -44,6 +44,9 @@ class Deconvolver(NGMixBootFitter):
         fit the obs list
         """
 
+        if 'target_noise' in self:
+            self._add_extra_sim_noise(mb_obs_list)
+
         # only fit stuff that is not flagged
         new_mb_obs_list = self._get_good_mb_obs_list(mb_obs_list)
         self.new_mb_obs_list = new_mb_obs_list
@@ -490,9 +493,14 @@ class MetacalDeconvolver(Deconvolver):
         dpars=self['deconv_pars']
         dk=dpars.get('dk',None)
 
+        if 'sigma_weight_factor' in dpars:
+            sigma_weight=self._get_sigma_weight(mb_obs_list)
+        else:
+            sigma_weight=dpars['sigma_weight']
+
         moments = deconv.measure.ObsKSigmaMoments(
             mb_obs_list,
-            dpars['sigma_weight'],
+            sigma_weight,
             fix_noise=dpars['fix_noise'],
             trim=dpars['trim_kimages'],
             dk=dk,
@@ -509,6 +517,25 @@ class MetacalDeconvolver(Deconvolver):
 
         res['flags'] = flags
         return res
+
+    def _get_sigma_weight(self, mbo):
+        """
+        we need to use the same weight function for each
+        epoch/band.  We could use the largest psf size,
+        or smallest, or mean...
+        """
+
+        n=0
+        ssum=0.0
+        for obslist in mbo:
+            for obs in obslist:
+                ssum += numpy.sqrt(obs.psf.gmix.get_T()/2.0)
+                n+=1
+
+        sigma = ssum/n
+        sigma_weight = sigma*self['deconv_pars']['sigma_weight_factor']
+        #print("psf sigma:",sigma,"pixels:",sigma/0.265,"sigma_weight:",sigma_weight)
+        return sigma_weight
 
     def _get_metacal_namer(self, type='noshear'):
         if type=='noshear':
