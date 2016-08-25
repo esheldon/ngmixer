@@ -503,6 +503,7 @@ class MetacalDeconvolver(Deconvolver):
             sigma_weight,
             fix_noise=dpars['fix_noise'],
             trim=dpars['trim_kimages'],
+            deweight=dpars['deweight'],
             dk=dk,
             **self
         )
