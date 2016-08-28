@@ -85,11 +85,11 @@ class Deconvolver(NGMixBootFitter):
                     print("    deconv failed with flags:",res['flags'])
                     flags |= GAL_FIT_FAILURE
 
-            except BootGalFailure:
-                print("    galaxy fitting failed: %s" % err)
+            except BootGalFailure as err:
+                print("    galaxy fitting failed: %s" % str(err))
                 flags = GAL_FIT_FAILURE
 
-        except BootPSFFailure:
+        except BootPSFFailure as err:
             print("    psf fitting failed")
             flags = PSF_FIT_FAILURE
 
@@ -100,7 +100,8 @@ class Deconvolver(NGMixBootFitter):
         if (flags & PSF_FIT_FAILURE) == 0:
             self._do_psf_stats(mb_obs_list,coadd)
 
-        self._fill_nimage_used(res, coadd)
+        if res is not None:
+            self._fill_nimage_used(res, coadd)
 
         return flags
 
@@ -120,9 +121,6 @@ class Deconvolver(NGMixBootFitter):
             self['sigma_weight'],  # arcsec
             dk=self['dk'],         # 1/arcsec or None
         )
-
-        if self['make_plots']:
-            self._do_deconv_plots(meas)
 
         return meas
 
@@ -186,33 +184,6 @@ class Deconvolver(NGMixBootFitter):
         return res
     '''
 
-    def _do_deconv_plots(self, meas):
-        import images
-
-        mlist=meas.get_meas_list()
-
-        for iband,blist in enumerate(mlist):
-            for icut,m in enumerate(blist):
-                pngfile=os.path.join(
-                    self.plot_dir,
-                    'deconv-%d-%02d.png' % (iband,icut),
-                )
-                imlist=[
-                    self._scale_image(m.gal_image.array),
-                    self._scale_image(m.psf_image.array),
-                    self._scale_image(m.kimage),
-                    self._scale_image(m.kimage*m.kweight),
-                ]
-                titles=['image','psf','kimage','weighted k image']
-
-                print("writing plot:",pngfile)
-                images.view_mosaic(
-                    imlist,
-                    titles=titles,
-                    width=1000,
-                    height=1000,
-                    file=pngfile,
-                )
 
     def _scale_image(self, imin):
         im=imin.copy()
@@ -273,12 +244,15 @@ class Deconvolver(NGMixBootFitter):
 
         max_pars=self['max_pars']
 
-        self.boot.fit_max(
-            'gauss',
-            max_pars,
-            ntry=max_pars['ntry'],
-            prior=prior,
-        )
+        try:
+            self.boot.fit_max(
+                'gauss',
+                max_pars,
+                ntry=max_pars['ntry'],
+                prior=prior,
+            )
+        except GMixRangeError:
+            raise BootGalFailure("failure fitting gauss")
 
         res=self.boot.get_max_fitter().get_result()
         if res['flags'] != 0:
