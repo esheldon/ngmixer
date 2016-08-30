@@ -463,6 +463,8 @@ class MetacalDeconvolver(Deconvolver):
         weight_type=dpars.get('weight_type','ksigma')
         if weight_type=='ksigma':
             self._measure_class=deconv.measure.ObsKSigmaMoments
+        elif weight_type=='ksigmac':
+            self._measure_class=deconv.measure.ObsKSigmaMomentsC
         elif weight_type=='gauss':
             self._measure_class=deconv.measure.ObsGaussMoments
         else:
@@ -487,7 +489,6 @@ class MetacalDeconvolver(Deconvolver):
             mb_obs_list,
             sigma_weight,
             fix_noise=dpars['fix_noise'],
-            trim=dpars['trim_kimages'],
             deweight=dpars['deweight'],
             dk=dk,
             **self
@@ -499,7 +500,7 @@ class MetacalDeconvolver(Deconvolver):
             moments.go(shear=shears[type])
             res[type]=moments.get_result()
 
-            flags |= res[type]['orflags']
+            flags |= res[type]['flags']
 
         res['flags'] = flags
         return res
@@ -553,11 +554,12 @@ class MetacalDeconvolver(Deconvolver):
             data[n('wflux')][dindex] = res['wflux']
             data[n('wflux_band')][dindex] = res['wflux']
 
-            data[n('T_err')][dindex] = res['T_err']
-            data[n('e_cov')][dindex] = res['e_cov']
-            data[n('flux_s2n')][dindex] = res['flux_s2n']
+            for nn in ['T_err','e_cov','flux_s2n','s2n_w']:
+                if nn in res:
+                    data[n(nn)][dindex] = res[nn]
 
-            print("    flux_s2n: %.3g" % res['flux_s2n'])
+            if 'flux_s2n' in res:
+                print("    s2n_w: %.3g flux_s2n: %.3g" % (res['s2n_w'],res['flux_s2n']))
 
     def _make_struct(self,coadd):
         """
@@ -570,10 +572,8 @@ class MetacalDeconvolver(Deconvolver):
         n=self._get_namer('psf', coadd)
 
         data[n('flags')] = NO_ATTEMPT
-        for nn in ['flux','flux_err','flux_s2n']:
-            data[n('flux')] = DEFVAL
-            data[n('flux_err')] = DEFVAL
-            data[n('flux_s2n')] = DEFVAL
+        for nn in ['flux','flux_err']:
+            data[n(nn)] = DEFVAL
 
         n=self._get_namer('', coadd)
 
@@ -587,13 +587,11 @@ class MetacalDeconvolver(Deconvolver):
             for nn in ['dc_flags','dc_orflags','dc_flags_band','dc_orflags_band']: 
                 data[n(nn)] = NO_ATTEMPT
 
-            for nn in ['T','e','wflux','wflux_band']:
+            for nn in ['T','e','wflux','wflux_band','s2n_w','flux_s2n']:
                 data[n(nn)] = DEFVAL
 
             for nn in ['T_err','e_cov']:
                 data[n(nn)] = PDEFVAL
-            
-            data[n('flux_s2n')] = DEFVAL
 
         return data
 
@@ -645,6 +643,7 @@ class MetacalDeconvolver(Deconvolver):
                 (n('T_err'),'f8'),
                 (n('e_cov'),'f8', (2,2) ),
                 (n('flux_s2n'),'f8'),
+                (n('s2n_w'),'f8'),
 
                 (n('wflux'),'f8',bshape),
                 (n('wflux_band'),'f8',bshape),
