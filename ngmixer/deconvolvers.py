@@ -30,6 +30,7 @@ class Deconvolver(NGMixBootFitter):
     def __init__(self,*args,**kw):
         super(Deconvolver,self).__init__(*args,**kw)
         self['normalize_psf'] = self.get('normalize_psf',True)
+        self['deconv_pars']['trim_images'] = self['deconv_pars'].get('trim_images',False)
 
     def _setup(self):
         """
@@ -67,6 +68,8 @@ class Deconvolver(NGMixBootFitter):
             return GAL_FIT_FAILURE
         '''
 
+        dpars=self['deconv_pars']
+
         flags=0
         res=None
         try:
@@ -76,7 +79,8 @@ class Deconvolver(NGMixBootFitter):
 
             try:
                 # to get a center
-                self._fit_gauss()
+                if dpars['trim_images']:
+                    self._fit_gauss()
 
                 res = self._do_deconv(new_mb_obs_list)
                 self._copy_galaxy_result(res, coadd)
@@ -445,12 +449,12 @@ class MetacalDeconvolver(Deconvolver):
 
     def _do_deconv(self, mb_obs_list):
 
-        mfitter=self.boot.get_max_fitter()
-        mres=mfitter.get_result()
 
-        cen=mres['pars'][0:0+2].copy()
 
         if self['deconv_pars']['trim_images']:
+            mfitter=self.boot.get_max_fitter()
+            mres=mfitter.get_result()
+            cen=mres['pars'][0:0+2].copy()
             mb_obs_list=self._trim_images(mb_obs_list, cen)
 
         res = self._do_metacal_deconv(mb_obs_list)
@@ -471,6 +475,7 @@ class MetacalDeconvolver(Deconvolver):
             raise NotImplementedError("bad weight type: '%s'" % weight_type)
 
     def _do_metacal_deconv(self, mb_obs_list):
+        import deconv
 
         types=['noshear','1p','1m','2p','2m']
 
@@ -484,23 +489,32 @@ class MetacalDeconvolver(Deconvolver):
             sigma_weight=self._get_sigma_weight(mb_obs_list)
         else:
             sigma_weight=dpars['sigma_weight']
+        print("sigma weight:",sigma_weight)
 
         moments = self._measure_class(
             mb_obs_list,
             sigma_weight,
             fix_noise=dpars['fix_noise'],
             deweight=dpars['deweight'],
+            force_same=dpars['force_same'],
             dk=dk,
             **self
         )
 
-        flags=0
-        res={}
-        for type in shears:
-            moments.go(shear=shears[type])
-            res[type]=moments.get_result()
 
-            flags |= res[type]['flags']
+        try:
+
+            flags=0
+            res={}
+
+            for type in shears:
+                moments.go(shear=shears[type])
+                res[type]=moments.get_result()
+
+                flags |= res[type]['flags']
+
+        except deconv.DeconvRangeError as err:
+            raise BootGalFailure(str(err))
 
         res['flags'] = flags
         return res
@@ -519,9 +533,18 @@ class MetacalDeconvolver(Deconvolver):
                 ssum += numpy.sqrt(obs.psf.gmix.get_T()/2.0)
                 n+=1
 
+        scale = obs.jacobian.get_scale()
+
         sigma = ssum/n
         sigma_weight = sigma*self['deconv_pars']['sigma_weight_factor']
-        #print("psf sigma:",sigma,"pixels:",sigma/0.265,"sigma_weight:",sigma_weight)
+        """
+        print(
+            "psf sigma:",sigma,
+            "pixels:",sigma/scale,
+            "sigma_weight:",sigma_weight,
+            "pixels:",sigma_weight/scale,
+        )
+        """
         return sigma_weight
 
     def _get_metacal_namer(self, type='noshear'):
