@@ -477,28 +477,27 @@ class MetacalDeconvolver(Deconvolver):
     def _do_metacal_deconv(self, mb_obs_list):
         import deconv
 
+        doplots=False
+
         types=['noshear','1p','1m','2p','2m']
 
         shears = self._make_shears()
 
 
-        dpars=self['deconv_pars']
-        dk=dpars.get('dk',None)
+        dpars={}
+        dpars.update(self['deconv_pars'])
 
         if 'sigma_weight_factor' in dpars:
             sigma_weight=self._get_sigma_weight(mb_obs_list)
         else:
-            sigma_weight=dpars['sigma_weight']
+            sigma_weight=dpars.pop('sigma_weight')
+
         print("sigma weight:",sigma_weight)
 
         moments = self._measure_class(
             mb_obs_list,
             sigma_weight,
-            fix_noise=dpars['fix_noise'],
-            deweight=dpars['deweight'],
-            force_same=dpars['force_same'],
-            dk=dk,
-            **self
+            **dpars
         )
 
 
@@ -508,16 +507,21 @@ class MetacalDeconvolver(Deconvolver):
             res={}
 
             for type in shears:
-                moments.go(shear=shears[type])
+                moments.go(shear=shears[type],doplots=doplots)
                 res[type]=moments.get_result()
 
                 flags |= res[type]['flags']
+
+            if doplots:
+                if 'q'==raw_input('hit a key: '):
+                    stop
 
         except deconv.DeconvRangeError as err:
             raise BootGalFailure(str(err))
 
         res['flags'] = flags
         return res
+
 
     def _get_sigma_weight(self, mbo):
         """
@@ -683,6 +687,46 @@ class MetacalDeconvolver(Deconvolver):
 
         self.data[n('nimage_use')][0,:] = nim_used
 
+
+class MetacalDeconvolverPSFBase(MetacalDeconvolver):
+
+    def _do_metacal_deconv(self, mb_obs_list):
+        import deconv
+
+        doplots=False
+
+        types=['noshear','1p','1m','2p','2m']
+
+        shears = self._make_shears()
+
+        dpars = self['deconv_pars']
+
+        moments = deconv.measure.KSigmaMomentsPSFBase(
+            mb_obs_list,
+            **dpars
+        )
+
+
+        try:
+
+            flags=0
+            res={}
+
+            for type in shears:
+                moments.go(shear=shears[type],doplots=doplots)
+                res[type]=moments.get_result()
+
+                flags |= res[type]['flags']
+
+            if doplots:
+                if 'q'==raw_input('hit a key: '):
+                    stop
+
+        except deconv.DeconvRangeError as err:
+            raise BootGalFailure(str(err))
+
+        res['flags'] = flags
+        return res
 
 
 def _trim_image(im, cen):
