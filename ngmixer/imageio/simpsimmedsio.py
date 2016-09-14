@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+"""
+simple MEDS simulation file
+"""
 from __future__ import print_function
 import os
 import numpy
@@ -21,6 +23,9 @@ class SimpSimMEDSImageIO(MEDSImageIO):
         self.conf['psf_im_field'] = self.conf.get('psf_im_field',PSF_IM_FIELD)
         self.conf['psfs_in_file'] = self.conf.get('psfs_in_file',False)
 
+        if self.conf['psfs_in_file']:
+            self.conf['psfs_are_psfex'] = self.conf.get('psfs_are_psfex',False)
+
     def _load_psf_data(self):
         if not self.conf['psfs_in_file']:
             if 'psf_file' in self.extra_data:
@@ -32,14 +37,103 @@ class SimpSimMEDSImageIO(MEDSImageIO):
             print('psf file: %s' % self.psf_file)
             self.psf_data = fitsio.read(self.psf_file)
 
+        elif self.conf['psfs_are_psfex']:
+            # load all the PSFEx objects from file extensions
+            last_ext = self.meds_list[0]._fits[-1]
+            print(last_ext)
+            extname = last_ext.get_extname()
+
+            self._psf_ext_front=extname[0:13]
+            self._psf_ext_end='_psfcat'
+
+            self.psfex_lists = self._get_psfex_lists()
+
+    def _get_psfex_lists(self):
+        """
+        Load psfex objects for each of the SE images
+        include the coadd so we get  the index right
+        """
+        print('loading psfex')
+
+        psfex_lists=[]
+        for band in self.iband:
+            meds=self.meds_list[band]
+
+            psfex_list = self._get_psfex_objects(meds)
+            psfex_lists.append( psfex_list )
+
+        return psfex_lists
+
+    def _get_psfex_objects(self, meds):
+        """
+        Load psfex objects for all images, including coadd
+        """
+        import psfex
+
+        psfex_list=[]
+
+        info=meds.get_image_info()
+        nimage=info.size
+        for i in xrange(nimage):
+
+            impath=info['image_path'][i]
+            psf_ext = self._psfex_ext_from_image_path(info, impath)
+
+            pex = psfex.PSFEx(
+                meds._fits,
+                ext=psf_ext,
+            )
+
+            psfex_list.append(pex)
+
+        return psfex_list
+
+    def _psfex_ext_from_image_path(self, info, impath):
+        ccdname=os.path.basename( info['image_path'][35].strip() ).split('.')[0]
+
+        return '%s_%s_%s' % (self._psf_ext_front, ccdname, self._psf_ext_end)
+
+    def _get_psfex_image(self, band, mindex, icut):
+        """
+        Get an image representing the psf
+        """
+
+        meds=self.meds_list[band]
+        file_id=meds['file_id'][mindex,icut]
+
+        pex=self.psfex_lists[band][file_id]
+
+        row=meds['orig_row'][mindex,icut]
+        col=meds['orig_col'][mindex,icut]
+
+        if self.conf['center_psf']:
+            use_row,use_col=round(row),round(col)
+        else:
+            use_row,use_col=row,col
+
+        im=pex.get_rec(use_row,use_col)
+        cen=pex.get_center(use_row,use_col)
+
+        im=im.astype('f8', copy=False)
+
+        sigma_pix=pex.get_sigma()
+
+        if 'trim_psf' in self.conf and icut > 0:
+            im,cen=self._trim_psf(im, cen)
+
+        return im, cen, sigma_pix, pex['filename']
+
     def _get_psf_image(self, band, mindex, icut):
         """
         Get an image representing the psf
         """
         
         if self.conf['psfs_in_file']:
-            im = self.meds_list[band].get_psf(mindex,icut)
-            pfile = self.meds_files[band]
+            if self.conf['psfs_are_psfex']:
+                return self._get_psfex_image(band, mindex, icut)
+            else:
+                im = self.meds_list[band].get_psf(mindex,icut)
+                pfile = self.meds_files[band]
         else:
             meds=self.meds_list[band]
             psf_ind_field=self.conf['psf_ind_field']
