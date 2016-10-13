@@ -26,6 +26,8 @@ class SimpSimMEDSImageIO(MEDSImageIO):
         if self.conf['psfs_in_file']:
             self.conf['psfs_are_psfex'] = self.conf.get('psfs_are_psfex',False)
 
+        self.conf['center_psf'] = self.conf.get('center_psf',False)
+
     def _load_psf_data(self):
         if not self.conf['psfs_in_file']:
             if 'psf_file' in self.extra_data:
@@ -43,8 +45,8 @@ class SimpSimMEDSImageIO(MEDSImageIO):
             print(last_ext)
             extname = last_ext.get_extname()
 
-            self._psf_ext_front=extname[0:13]
-            self._psf_ext_end='_psfcat'
+            self._psf_ext_front=extname[0:12]
+            self._psf_ext_end='psfcat'
 
             self.psfex_lists = self._get_psfex_lists()
 

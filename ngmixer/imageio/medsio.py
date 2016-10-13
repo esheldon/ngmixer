@@ -140,6 +140,7 @@ class MEDSImageIO(ImageIO):
                     replace_bad=corrmeds['replace_bad'],
                     reject_outliers=corrmeds['reject_outliers'],
                     min_weight=min_weight,
+                    copy_all=True,
                     cleanup=True,
                     verbose=False,
                     make_plots=self.conf['make_plots'],
@@ -157,6 +158,7 @@ class MEDSImageIO(ImageIO):
                         self.fof_range[0],
                         self.fof_range[1],
                         newf,
+                        copy_all=True,
                         cleanup=True,
                     )
                     extracted.append(ex)
@@ -771,6 +773,7 @@ class MEDSImageIO(ImageIO):
 
         if 'bmask_cutouts' in meds._fits:
             bmask=meds.get_cutout(mindex, icut, type='bmask')
+            bmask=numpy.array(bmask, dtype='i4', copy=False)
 
             if self.conf['symmetrize_bmask']:
                 if bmask.shape[0] == bmask.shape[1]:
