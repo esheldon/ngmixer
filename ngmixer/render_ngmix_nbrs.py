@@ -149,6 +149,11 @@ class RenderNGmixNbrs(object):
 
         psf_pars=self.epoch_data['psf_fit_pars'][we[0],:]
         psf_gmix = GMix(pars=psf_pars)
+        e1,e2,T=psf_gmix.get_e1e2T()
+        if T <= 0.0:
+            print("    bad psf fit for central")
+            return None
+
         pixel_scale=self.epoch_data['pixel_scale'][we[0]]
 
         jdict=meds_data.get_jacobian(mindex, cutout_index)
