@@ -826,7 +826,8 @@ class MEDSImageIO(ImageIO):
         return bmask, skip
 
     def _clip_weight(self,wt):
-        wt = wt.astype('f8', copy=False)
+        # wt = wt.astype('f8', copy=False) # TODO: reinsert this
+        wt = wt.astype('f8')
 
         w = numpy.where(wt < self.conf['min_weight'])
         if w[0].size > 0:
