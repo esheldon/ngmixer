@@ -4,6 +4,7 @@ import os
 import numpy
 import copy
 import fitsio
+import glob
 
 from .medsio import MEDSImageIO
 from .. import nbrsfofs
@@ -146,17 +147,20 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
     def get_meta_data_dtype(self):
         dt = super(SVDESMEDSImageIO, self).get_meta_data_dtype()
-        rlen = len(self.meds_files_full[0]\
-                       .replace(os.environ['DESDATA'],'${DESDATA}')\
-                       .split('/')[3])
-        dt += [('coadd_run','S%d' % rlen)]
+        #TODO don't hack your way out like this
+        #rlen = len(self.meds_files_full[0]\
+        #               .replace(os.environ['DESDATA'],'${DESDATA}')\
+        #               .split('/')[3])
+        #dt += [('coadd_run','S%d' % rlen)]
+        dt += [('coadd_run','S%d' % 10)]
         return dt
 
     def _get_multi_band_observations(self, mindex):
         coadd_mb_obs_list, mb_obs_list = super(SVDESMEDSImageIO, self)._get_multi_band_observations(mindex)
-        run = self.meds_files_full[0]\
-            .replace(os.environ['DESDATA'],'${DESDATA}')\
-            .split('/')[3]
+        #run = self.meds_files_full[0]\
+        #    .replace(os.environ['DESDATA'],'${DESDATA}')\
+        #    .split('/')[3]
+        run=0 # TODO: re-implement
         coadd_mb_obs_list.meta['meta_data']['coadd_run'] = run
         mb_obs_list.meta['meta_data']['coadd_run'] = run
         return coadd_mb_obs_list, mb_obs_list
@@ -210,7 +214,8 @@ class SVDESMEDSImageIO(MEDSImageIO):
         meds=self.meds_list[band]
         file_id  = meds['file_id'][mindex,icut].astype('i4')
         image_id = meds._image_info[file_id]['image_id']
-        obs.meta['meta_data']['image_id'][0]  = image_id
+        # TODO: don't hack your way out like this
+        #obs.meta['meta_data']['image_id'][0]  = image_id
 
     def _load_psf_data(self):
         self.psfex_lists = self._get_psfex_lists()
@@ -225,10 +230,11 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         pex=self.psfex_lists[band][file_id]
         self.psfname=os.path.basename(pex['filename'])
-        if icut > 0:
-            if self.psfname[0:17] != self.imname[0:17]:
-                raise RuntimeError("im and psf mismatch: %s "
-                                   "vs %s" % (self.psfname,self.imname))
+        # TODO re-implement
+        #if icut > 0:
+        #    if self.psfname[0:17] != self.imname[0:17]:
+        #        raise RuntimeError("im and psf mismatch: %s "
+        #                           "vs %s" % (self.psfname,self.imname))
 
         row=meds['orig_row'][mindex,icut]
         col=meds['orig_col'][mindex,icut]
@@ -241,7 +247,8 @@ class SVDESMEDSImageIO(MEDSImageIO):
         im=pex.get_rec(use_row,use_col)
         cen=pex.get_center(use_row,use_col)
 
-        im=im.astype('f8', copy=False)
+        #im=im.astype('f8', copy=False) # TODO re-implement
+        im=im.astype('f8')
 
         sigma_pix=pex.get_sigma()
 
@@ -348,6 +355,8 @@ class SVDESMEDSImageIO(MEDSImageIO):
         """
         infer the psfex path from the image path.
         """
+
+        print("psfpath from image path",meds,image_path)
         desdata=os.environ['DESDATA']
         meds_desdata=meds._meta['DESDATA'][0]
 
@@ -360,6 +369,19 @@ class SVDESMEDSImageIO(MEDSImageIO):
             psfparts[-6] = 'EXTRA' # replace 'OPS'
             psfparts[-3] = 'psfex-rerun/%s' % self.conf['psf_rerun_version'] # replace 'red'
             psfpath='/'.join(psfparts)
+
+        if self.conf['use_desdm_psfex']:
+            if "coadd/" in psfpath:
+              psfpath=psfpath.replace("coadd/","")
+              psfpath=psfpath.replace(".fits","_psfcat.psf")
+              psfpath=desdata+"/psfex/"+psfpath
+            if "nwgint/" in psfpath:
+              psfpath=psfpath.replace("nwgint/","")
+              psfparts=psfpath.split("_")
+              psfpath=psfparts[2]+"_"+psfparts[3]+"_"+psfparts[4]+"_*_psfexcat.psf"
+              psfpath=desdata+"/psfex/"+psfpath
+              psfpath=glob.glob(psfpath)[0]
+
 
         return psfpath
 
