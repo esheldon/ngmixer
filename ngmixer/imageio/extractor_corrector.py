@@ -226,6 +226,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         For codes that use the weight, such as max like, this makes
         no difference, but it may be important for codes that
         take moments or use FFTs
+
         note zero weight has been marked in the bmask
         """
 
@@ -237,7 +238,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         bmask_logic  = (bmravel != 0)
         wbad,=numpy.where(bmask_logic)
 
-        if wbad.size > 0:
+        if wbad.size > 0 and wbad.size != bmask.size:
             if cen_img is None:
                 print("        bad central fit for",icut,
                       "could not replace bad pixels")
@@ -250,9 +251,9 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                     # fix the weight map.  We are going to add noise
                     # as well as signal in the bad pixels.  The problem
                     # pixels will still be marked in the bad pixel mask
-                    print("        replacing",wbad_wt[0].size,
-                          "weight in replaced pixels")
                     medwt = numpy.median(weight[wgood_wt])
+                    print("        replacing",wbad_wt[0].size,
+                          "weight in replaced pixels with",medwt)
                     weight[wbad_wt] = medwt
 
                 scaled_cen = cen_img.ravel()*pixel_scale**2

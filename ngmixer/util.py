@@ -241,13 +241,32 @@ class Namer(object):
     """
     create strings with a specified front prefix
     """
-    def __init__(self, front=None):
+    def __init__(self, front=None, back=None):
+        if front=='':
+            front=None
+        if back=='':
+            back=None
+
         self.front=front
+        self.back=back
+
+        if self.front is None and self.back is None:
+            self.nomod=True
+        else:
+            self.nomod=False
+
+
+
     def __call__(self, name):
-        if self.front is None or self.front=='':
+        if self.nomod:
             return name
         else:
-            return '%s_%s' % (self.front, name)
+            n=name
+            if self.front is not None:
+                n = '%s_%s' % (self.front, n)
+            if self.back is not None:
+                n = '%s_%s' % (n, self.back)
+            return n
 
 def print_pars(pars, fmt='%8.3g', front=None, verbosity=0):
     """

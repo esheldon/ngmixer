@@ -99,22 +99,25 @@ class BaseFitter(dict):
 
             flags = Fitter(mb_obs_list,coadd=False)
 
-        It should also flag any indv. obs that was not used in the fit with a non-zero value in the
-        'fit_flags' field of the meta data dict.
+        It should also flag any indv. obs that was not used in the fit with a
+        non-zero value in the 'fit_flags' field of the meta data dict.
 
-        The fit data should be returned as a numpy array in the mb_obs_list meta data dict in 'fit_data'.
+        The fit data should be returned as a numpy array in the mb_obs_list
+        meta data dict in 'fit_data'.
 
-        The per epoch fit data should be returned as a numpy array in 'fit_data' in the indv. obs's meta data dicts.
+        The per epoch fit data should be returned as a numpy array in
+        'fit_data' in the indv. obs's meta data dicts.
 
-        These numpy arrays should have the same dtype as returned by the methods get_fit_data_dtype and
-        get_epoch_fit_data_dtype respectively.
+        These numpy arrays should have the same dtype as returned by the
+        methods get_fit_data_dtype and get_epoch_fit_data_dtype respectively.
 
         If something goes really wrong, the method can rise the UtterFailure exception above.
 
         The coadd keyword will be set to true if this obs is a coadd.
 
-        If make_epoch_data is False, then epoch_fit_data can be set to None in the meta data dict. Even if this value is not None
-        if make_epoch_data is False, this value will be ignored be the calling routine.
+        If make_epoch_data is False, then epoch_fit_data can be set to None in
+        the meta data dict. Even if this value is not None if make_epoch_data
+        is False, this value will be ignored be the calling routine.
 
         If make_plots is set, fitter should make some plots.
 

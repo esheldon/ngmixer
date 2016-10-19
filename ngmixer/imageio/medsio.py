@@ -79,8 +79,10 @@ class MEDSImageIO(ImageIO):
 
 
         # max fraction of image masked in bitmask or that has zero weight
-        #self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',0.1)
-        #self.conf['max_zero_weight_frac'] = self.conf.get('max_zero_weight_frac',0.1)
+        self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',1.0)
+        self.conf['max_zero_weight_frac'] = self.conf.get('max_zero_weight_frac',1.0)
+        self.conf['symmetrize_weight'] = self.conf.get('symmetrize_weight',False)
+
 
         # check this region around the center
         self.conf['central_bmask_radius'] = \
@@ -138,6 +140,7 @@ class MEDSImageIO(ImageIO):
                     replace_bad=corrmeds['replace_bad'],
                     reject_outliers=corrmeds['reject_outliers'],
                     min_weight=min_weight,
+                    copy_all=True,
                     cleanup=True,
                     verbose=False,
                     make_plots=self.conf['make_plots'],
@@ -155,6 +158,7 @@ class MEDSImageIO(ImageIO):
                         self.fof_range[0],
                         self.fof_range[1],
                         newf,
+                        copy_all=True,
                         cleanup=True,
                     )
                     extracted.append(ex)
@@ -739,7 +743,11 @@ class MEDSImageIO(ImageIO):
         """
         Get an image cutout from the input MEDS file
         """
-        self.imname= os.path.basename(meds.get_source_path(mindex,icut))
+        try:
+            self.imname= os.path.basename(meds.get_source_path(mindex,icut))
+        except IndexError:
+            self.imname=''
+
         return meds.get_cutout(mindex, icut)
 
     def _badfrac_too_high(self, icut, nbad, shape, maxfrac, type):
@@ -765,6 +773,7 @@ class MEDSImageIO(ImageIO):
 
         if 'bmask_cutouts' in meds._fits:
             bmask=meds.get_cutout(mindex, icut, type='bmask')
+            bmask=numpy.array(bmask, dtype='i4', copy=False)
 
             if self.conf['symmetrize_bmask']:
                 if bmask.shape[0] == bmask.shape[1]:
@@ -792,23 +801,24 @@ class MEDSImageIO(ImageIO):
                     skip=True
                     return None,skip
 
-            rad=self.conf['central_bmask_radius']
-            if rad is not None:
-                row0 = meds['cutout_row'][mindex,icut]
-                col0 = meds['cutout_col'][mindex,icut]
+            if 'central_bmask_radius' in self.conf:
+                rad=self.conf['central_bmask_radius']
+                if rad is not None:
+                    row0 = meds['cutout_row'][mindex,icut]
+                    col0 = meds['cutout_col'][mindex,icut]
 
-                row_start = _clip_pixel(row0-rad, bmask.shape[0])
-                row_end   = _clip_pixel(row0+rad, bmask.shape[0])
-                col_start = _clip_pixel(col0-rad, bmask.shape[1])
-                col_end   = _clip_pixel(col0+rad, bmask.shape[1])
+                    row_start = _clip_pixel(row0-rad, bmask.shape[0])
+                    row_end   = _clip_pixel(row0+rad, bmask.shape[0])
+                    col_start = _clip_pixel(col0-rad, bmask.shape[1])
+                    col_end   = _clip_pixel(col0+rad, bmask.shape[1])
 
-                bmask_sub = bmask[row_start:row_end,
-                                  col_start:col_end]
-                wcen=numpy.where(bmask_sub != 0)
-                if wcen[0].size > 0:
-                    print("    skipping cutout",icut,"due center masked")
-                    skip=True
-                    return None,skip
+                    bmask_sub = bmask[row_start:row_end,
+                                      col_start:col_end]
+                    wcen=numpy.where(bmask_sub != 0)
+                    if wcen[0].size > 0:
+                        print("    skipping cutout",icut,"due center masked")
+                        skip=True
+                        return None,skip
 
         else:
             bmask=None

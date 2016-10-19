@@ -399,8 +399,7 @@ class NGMixer(dict):
             try:
                 me_fit_flags = self.fitter(mb_obs_list,coadd=False,
                                            nbrs_fit_data=nbrs_fit_data,
-                                           nbrs_meta_data=nbrs_meta_data,
-                                           make_epoch_data=make_epoch_data)
+                                           nbrs_meta_data=nbrs_meta_data)
 
                 # fill in epoch data
                 if make_epoch_data:
@@ -426,8 +425,7 @@ class NGMixer(dict):
             try:
                 coadd_fit_flags = self.fitter(coadd_mb_obs_list,coadd=True,
                                               nbrs_fit_data=nbrs_fit_data,
-                                              nbrs_meta_data=nbrs_meta_data,
-                                              make_epoch_data=make_epoch_data)
+                                              nbrs_meta_data=nbrs_meta_data)
 
                 # fill in epoch data
                 if make_epoch_data:
@@ -438,7 +436,8 @@ class NGMixer(dict):
 
                 # fill in fit data
                 for tag in coadd_mb_obs_list.meta['fit_data'].dtype.names:
-                    self.curr_data[tag][self.curr_data_index] = coadd_mb_obs_list.meta['fit_data'][tag][0]
+                    self.curr_data[tag][self.curr_data_index] = \
+                            coadd_mb_obs_list.meta['fit_data'][tag][0]
 
             except UtterFailure as err:
                 print("    coadd fit got utter failure error: %s" % str(err))

@@ -4,8 +4,6 @@ import numpy
 import os
 import scipy.stats
 
-from copy import deepcopy
-
 # local imports
 from .defaults import DEFVAL, NO_ATTEMPT, \
     PSF_FIT_FAILURE, GAL_FIT_FAILURE, \
@@ -18,10 +16,8 @@ from .render_ngmix_nbrs import RenderNGmixNbrs
 # ngmix imports
 import ngmix
 from ngmix import Observation, ObsList, MultiBandObsList, GMixRangeError
-from ngmix.fitting import EIG_NOTFINITE
 from ngmix.gexceptions import BootPSFFailure, BootGalFailure
-from ngmix.gmix import GMixModel, GMix, GMixCM
-from ngmix.shape import Shape
+from ngmix.gmix import GMix
 from ngmix.jacobian import Jacobian
 
 from pprint import pprint
@@ -159,7 +155,7 @@ class NGMixBootFitter(BaseFitter):
                     obs.weight = wt
 
 
-    def __call__(self,mb_obs_list,coadd=False,make_epoch_data=True,nbrs_fit_data=None,nbrs_meta_data=None):
+    def __call__(self,mb_obs_list,coadd=False,nbrs_fit_data=None,nbrs_meta_data=None):
         """
         fit the obs list
         """
@@ -793,7 +789,7 @@ class NGMixBootFitter(BaseFitter):
 
             if flags == 0:
                 dindex = 0
-                s2n = self.data[n('flux')][dindex,:]/self.data[n('flux_err')][dindex,:]
+                s2n = self.data[n('flux_s2n')]
                 max_s2n = numpy.nanmax(s2n)
                 if max_s2n < self['min_psf_s2n']:
                     flags |= LOW_PSF_FLUX
@@ -834,7 +830,13 @@ class NGMixBootFitter(BaseFitter):
             self.data[n('flux')][0,band] = flux
             self.data[n('flux_err')][0,band] = flux_err
 
-            print("        psf flux(%s): %g +/- %g" % (band,flux,flux_err))
+            if flux_err > 0:
+                s2n = flux/flux_err
+                self.data[n('flux_s2n')][0,band] = s2n
+                tup=(band,flux,flux_err,s2n)
+                print("        psf flux(%s): %g +/- %g s2n: %g" % tup)
+            else:
+                print("        psf flux(%s): %g +/- %g" % (band,flux,flux_err))
 
         if flagsall != 0:
             # we only propagate this bit to the main 'flags' field
@@ -1172,7 +1174,8 @@ class NGMixBootFitter(BaseFitter):
 
         dt += [(n('flags'),   'i4',bshape),
                (n('flux'),    'f8',bshape),
-               (n('flux_err'),'f8',bshape)]
+               (n('flux_err'),'f8',bshape),
+               (n('flux_s2n'),'f8',bshape)]
 
         n=self._get_namer('', coadd)
 
@@ -1238,6 +1241,7 @@ class NGMixBootFitter(BaseFitter):
         data[n('flags')] = NO_ATTEMPT
         data[n('flux')] = DEFVAL
         data[n('flux_err')] = DEFVAL
+        data[n('flux_s2n')] = DEFVAL
 
         n=self._get_namer('', coadd)
 
