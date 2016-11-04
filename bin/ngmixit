@@ -42,6 +42,9 @@ parser.add_option("--mof-file", default=None,
 parser.add_option("--psf-file", default=None,
                   help=("file with PSF images"))
 
+parser.add_option("--psf-map", default=None,
+                  help=("file with mapping between image filename and local psf path"))
+
 parser.add_option("--obj-flags", default=None,
                   help=("file with flags for each object; flags != 0 are ignored"))
 
@@ -83,6 +86,9 @@ if __name__ == '__main__':
 
     if options.psf_file is not None:
         extra_data['psf_file'] = options.psf_file
+
+    if options.psf_map is not None:
+        extra_data['psf_map'] = options.psf_map
 
     doMOF = config.get('model_nbrs',False)
 

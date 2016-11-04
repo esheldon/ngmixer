@@ -29,6 +29,10 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
     def __init__(self, *args, **kw):
         conf = args[0]
+
+        conf['use_psf_rerun'] = conf.get('use_psf_rerun',False)
+        conf['center_psf'] = conf.get('center_psf',False)
+
         if conf['use_psf_rerun']:
             rerun=conf['psf_rerun_version']
             self._load_psfex_blacklist(rerun)
@@ -225,10 +229,10 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         pex=self.psfex_lists[band][file_id]
         self.psfname=os.path.basename(pex['filename'])
-        if icut > 0:
-            if self.psfname[0:17] != self.imname[0:17]:
-                raise RuntimeError("im and psf mismatch: %s "
-                                   "vs %s" % (self.psfname,self.imname))
+        #if icut > 0:
+        #    if self.psfname[0:17] != self.imname[0:17]:
+        #        raise RuntimeError("im and psf mismatch: %s "
+        #                           "vs %s" % (self.psfname,self.imname))
 
         row=meds['orig_row'][mindex,icut]
         col=meds['orig_col'][mindex,icut]
@@ -925,3 +929,65 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                 mb_obs_list.meta['obj_flags'] |= flags
 
         return coadd_mb_obs_list, mb_obs_list
+
+class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
+    def __init__(self, *args, **kw):
+        self._load_psf_map(**kw)
+        super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
+
+
+    def _load_psf_map(self, **kw):
+        """
+        we fake the coadd psf
+        """
+        extra_data=kw.get('extra_data',{})
+
+        map_file=extra_data.get('psf_map',None)
+        if map_file is None:
+            raise RuntimeError("for Y3 you must send a map file")
+
+        data=fitsio.read(map_file)
+        psf_map={}
+        for i in xrange(data.size):
+
+            if i==0:
+                ii=i+1
+            else:
+                ii=i
+
+            fname=data['im_filename'][i].strip()
+            psf_path = data['psf_local_path'][ii].strip()
+
+            keep = fname.split('_')[0:0+3]
+            key = '-'.join(keep )
+
+            psf_map[key] = psf_path
+
+        self._psf_map=psf_map
+
+    def _psfex_path_from_image_path(self, meds, image_path):
+        """
+        infer the psfex path from the image path.
+        """
+
+        fname = os.path.basename(image_path).replace('.fits.fz','.fits')
+
+        fs = fname.split('_')
+        if len(fs)==3:
+            print("faking coadd psf")
+            # we fake the coadd, just take a random one
+            key = list(self._psf_map.keys())[0]
+            psfpath=self._psf_map[key]
+        else:
+            key = '-'.join( fs[2:2+3] )
+            psfpath = self._psf_map[key]
+
+        psfpath = os.path.expandvars(psfpath)
+        return psfpath
+
+    def get_epoch_meta_data_dtype(self):
+        dt = super(SVDESMEDSImageIO, self).get_epoch_meta_data_dtype()
+        dt += [('image_id','S49')]  # image_id specified in meds creation, e.g. for image table
+        return dt
+
+
