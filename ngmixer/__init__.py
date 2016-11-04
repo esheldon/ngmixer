@@ -25,6 +25,7 @@ FITTERS['isamp-ngmix-boot'] = bootfit.ISampNGMixBootFitter
 from . import deconvolvers
 FITTERS['deconv'] = deconvolvers.Deconvolver
 FITTERS['metacal-deconv'] = deconvolvers.MetacalDeconvolver
+FITTERS['metacal-deconv-psfbase'] = deconvolvers.MetacalDeconvolverPSFBase
 
 
 try:
