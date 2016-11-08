@@ -419,7 +419,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
     def _get_psfex_objects(self, meds, band):
         """
-        Load psfex objects for all images, including coadd
+        Load psfex objects for all images
         """
 
         psfex_list=[]
@@ -1044,14 +1044,8 @@ class Y3DESMEDSImageIOAlt(Y1DESMEDSImageIO):
         fname = os.path.basename(image_path).replace('.fits.fz','.fits')
 
         fs = fname.split('_')
-        if len(fs)==3:
-            print("faking coadd psf")
-            # we fake the coadd, just take a random one
-            key = list(self._psf_map.keys())[0]
-            psfpath=self._psf_map[key]
-        else:
-            key = '-'.join( fs[2:2+3] )
-            psfpath = self._psf_map[key]
+        key = '-'.join( fs[2:2+3] )
+        psfpath = self._psf_map[key]
 
         psfpath = os.path.expandvars(psfpath)
         return psfpath
