@@ -432,16 +432,21 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
             # don't even bother if we are going to skip this image
             flags = self.all_image_flags[band][i]
-            if (flags & self.conf['image_flags2check']) == 0:
 
-                impath=info['image_path'][i].strip()
-                psfpath = self._psfex_path_from_image_path(meds, impath)
+            if (i==0) and not self.conf['fit_coadd_galaxy']:
+                print("skipping coadd psf")
+                self.all_image_flags[band][i] |= 1
+            else:
+                if (flags & self.conf['image_flags2check']) == 0:
 
-                # pex might be None with flags set
-                pex, psf_flags = self._get_psfex_object(psfpath)
-                if psf_flags != 0:
-                    self.all_image_flags[band][i] |= psf_flags
-                    nflagged += 1
+                    impath=info['image_path'][i].strip()
+                    psfpath = self._psfex_path_from_image_path(meds, impath)
+
+                    # pex might be None with flags set
+                    pex, psf_flags = self._get_psfex_object(psfpath)
+                    if psf_flags != 0:
+                        self.all_image_flags[band][i] |= psf_flags
+                        nflagged += 1
 
 
             psfex_list.append(pex)
@@ -931,6 +936,72 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         return coadd_mb_obs_list, mb_obs_list
 
 class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
+    """
+    this is using Brian Yanny's exposure pattern list format
+    """
+    def __init__(self, *args, **kw):
+        self._load_psf_map(**kw)
+        super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
+
+
+    def _load_psf_map(self, **kw):
+        """
+        we fake the coadd psf
+        """
+        extra_data=kw.get('extra_data',{})
+
+        map_file=extra_data.get('psf_map',None)
+        if map_file is None:
+            raise RuntimeError("for Y3 you must send a map file")
+
+        print("reading psf map:",map_file)
+        psf_map={}
+        with open(map_file) as fobj:
+            for line in fobj:
+
+                pattern=line.strip()
+
+                bname=os.path.basename(pattern)
+
+                # bname looks like D00149774_g_c%02d_r2382p01_psfexcat.psf
+                # we will key off the exposure name, e.g. D00149774
+                fs = bname.split('_')
+                expname = fs[0]
+
+                full_pattern = os.path.join('$DESDATA', 'OPS', 'finalcut', pattern)
+                psf_map[expname] = full_pattern
+
+        self._psf_map=psf_map
+
+    def _psfex_path_from_image_path(self, meds, image_path):
+        """
+        infer the psfex path from the image path.
+        """
+
+        bname = os.path.basename(image_path)
+        # these bnames look like DES0157-3914_r2577p01_D00490381_r_c48_nwgint.fits
+        # we need the exposure name, e.g. D00490381 and the ccd number, e.g. 48
+
+        fs = bname.split('_')
+
+        expname = fs[2]
+        ccd = int( fs[4][1:] )
+
+        psf_path = self._psf_map[expname] % ccd
+
+
+        psf_path = os.path.expandvars(psf_path)
+        return psf_path
+
+    def get_epoch_meta_data_dtype(self):
+        dt = super(SVDESMEDSImageIO, self).get_epoch_meta_data_dtype()
+        dt += [('image_id','S49')]  # image_id specified in meds creation, e.g. for image table
+        return dt
+
+class Y3DESMEDSImageIOAlt(Y1DESMEDSImageIO):
+    """
+    This is the original, with the explicit filename-psf path mapping
+    """
     def __init__(self, *args, **kw):
         self._load_psf_map(**kw)
         super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
