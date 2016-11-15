@@ -4,6 +4,8 @@ import sys
 import copy
 import numpy
 import fitsio
+import meds
+
 from .util import PBar
 
 def get_dummy_fofs(numbers):
@@ -35,6 +37,10 @@ class MedsNbrs(object):
     """
 
     def __init__(self,meds_list,conf):
+
+        if isinstance(meds_list, meds.MEDS):
+            meds_list=[meds_list]
+
         self.meds_list = meds_list
         self.conf = conf
 

@@ -1,4 +1,12 @@
 #!/usr/bin/env python
+"""
+process a MEDS file to extract neighbor information, including
+friends-of-friends groups
+
+You can send any of the meds files for a tile, as the band specific
+information is not used
+"""
+from __future__ import print_function
 import os
 import sys
 import numpy
@@ -7,96 +15,64 @@ import fitsio
 from glob import glob
 import shutil
 import errno
+
+import esutil as eu
+from ngmixer import files
 from ngmixer.nbrsfofs import MedsNbrs,NbrsFoF
 
-from optparse import OptionParser
-usage = """usage: %prog [options] config /full/path/to/meds_file_1 [/full/path/to/meds_file_2 ...]
+from argparse import ArgumentParser
 
-A config file looks like 
+parser = ArgumentParser()
+parser.add_argument('config',help='run configuration file')
+parser.add_argument('meds_file',help='a meds file path')
 
-    #config file for nbrs list
-
-    #versions
-    nbrs_version: '001'
-
-    nbrs_pars:
-        buff_type: 'tot'
-        buff_frac: 0.25
-        maxsize_to_replace: 256
-        new_maxsize: 384
-        check_seg: True"""
-
-parser = OptionParser(usage=usage)
-
-parser.add_option("--silent",default=False,action="store_true",
-                  help=("Print the number of MEDS files to process to stdout and return"))
-
-def mkdir(path):
-    try:
-        os.makedirs(path)
-    except OSError as ex:
-        if ex.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else: raise
-
-def read_yaml(config_path):
-    """
-    read from the file assuming it is yaml
-    """
-    import yaml
-    with open(config_path) as fobj:
-        conf=yaml.load(fobj)
-    return conf
-
-def run_meds_nbrs(meds_version,meds_files,nbrs_version,conf,base_output_path="${DESDATA}/EXTRA/meds",silent=False):
+def main():
     """
     Make the nbrs file for a given meds dir
     """
-    meds_dir = os.path.dirname(meds_files[0])
-    tilename = meds_dir.split('/')[-1].split('_')[-1]
-    date = meds_dir.split('/')[-1].split('_')[-2]
-    
-    mlist = []
-    for fname in meds_files:
-        if os.path.exists(os.path.expandvars(fname)):
-            print fname
-            mlist.append(meds.MEDS(os.path.expandvars(fname)))
-            break
 
-    if len(mlist) == 0:
-        return None
+    args=parser.parse_args()
+    conf = files.read_config(args.config)
 
-    nbrs = MedsNbrs(mlist,conf['nbrs_pars'])
-    nbrs_data = nbrs.get_nbrs(verbose=not silent)
+    nbrs_file=files.get_nbrs_file(args.meds_file, conf['run'])
+    fof_file=files.get_fof_file(args.meds_file, conf['run'])
+    files.makedirs_fromfile(nbrs_file)
+
+    m=meds.MEDS(args.meds_file)
+    nbrs = MedsNbrs(m, conf['nbrs'])
+
+    nbrs_data = nbrs.get_nbrs()
+
     if nbrs_data is not None:
-        opth = '%s/%s/nbrs-data/%s/%s_%s' % (base_output_path,meds_version,nbrs_version,date,tilename)
-        mkdir(os.path.expandvars(opth))
-        nbrs_file = '%s-meds-%s-nbrslist-%s.fits' % (tilename,meds_version,nbrs_version)
-        fitsio.write(os.path.expandvars(os.path.join(opth,nbrs_file)),nbrs_data,clobber=True)
-        
+
+
+        hdr={
+            'run':conf['run'],
+            'conf':args.config,
+            'meds':args.meds_file,
+        }
+        print("writing:",nbrs_file)
+        fitsio.write(
+            nbrs_file,
+            nbrs_data,
+            header=hdr,
+            clobber=True,
+
+        )
+
         fofs = NbrsFoF(nbrs_data)
-        fof_data = fofs.get_fofs(verbose=not silent)
-        fof_file = nbrs_file.replace('-nbrslist-','-nbrsfofs-')
-        fitsio.write(os.path.expandvars(os.path.join(opth,fof_file)),fof_data,clobber=True)
+        fof_data = fofs.get_fofs()
+
+        print("writing:",fof_file)
+        fitsio.write(
+            fof_file,
+            fof_data,
+            header=hdr,
+            clobber=True,
+        )
         
     return None
 
-def main():
-    options, args = parser.parse_args(sys.argv[1:])
-    if len(args) <= 1:
-        parser.print_help()
-        sys.exit(45)
-
-    conf = read_yaml(args[0])
-    
-    meds_version = args[1].split('-meds-')[-1].replace('.fits.fz','').replace('.fits','')
-    nbrs_version = conf['nbrs_version']
-
-    obase = os.path.join("${DESDATA}/EXTRA/meds",meds_version,'nbrs-data',nbrs_version)
-    mkdir(os.path.expandvars(obase))
-    shutil.copy(args[0],os.path.expandvars(os.path.join(obase,os.path.split(args[0])[-1])))
-    
-    run_meds_nbrs(meds_version,args[1:],nbrs_version,conf,silent=options.silent)
     
 if __name__ == '__main__':
     main()

@@ -959,6 +959,14 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
         with open(map_file) as fobj:
             for line in fobj:
 
+                ls=line.strip().split()
+
+                expname=ls[0]
+                pattern=ls[1]
+
+                psf_map[expname] = pattern
+
+                """
                 pattern=line.strip()
 
                 bname=os.path.basename(pattern)
@@ -970,6 +978,7 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
                 full_pattern = os.path.join('$DESDATA', 'OPS', 'finalcut', pattern)
                 psf_map[expname] = full_pattern
+                """
 
         self._psf_map=psf_map
 
