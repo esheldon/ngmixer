@@ -994,9 +994,10 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
         fs = bname.split('_')
 
         expname = fs[2]
-        ccd = int( fs[4][1:] )
+        ccd = fs[4][1:]
 
-        psf_path = self._psf_map[expname] % ccd
+        key='%s-%s' % (expname, ccd)
+        psf_path = self._psf_map[key]
 
 
         psf_path = os.path.expandvars(psf_path)

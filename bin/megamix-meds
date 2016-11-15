@@ -99,7 +99,7 @@ class MegaMixer(dict):
 
     def _make_scripts(self):
         """
-        write the scripts, assuming the directories are in place
+        write the scripts
         """
         for chunk,rng in enumerate(self.chunk_ranges):
             self._write_script(chunk, rng)
@@ -111,11 +111,18 @@ class MegaMixer(dict):
         fmt=self._get_script_template()
         args = {}
 
+        output_file  = self._get_chunk_file(chunk,rng,ext='fits')
+        logfile      = self._get_chunk_file(chunk,rng,ext='log')
+
+        output_file=expand_path(output_file)
+        logfile=expand_path(logfile)
+
+
         args['ngmix_config'] = self.config_file
         args['psf_map']      = self.psf_map_file
         args['meds_files']   = self.meds_string
-        args['output_file']  = self._get_chunk_file(chunk,rng,ext='fits')
-        args['logfile']      = self._get_chunk_file(chunk,rng,ext='log')
+        args['output_file']  = output_file
+        args['logfile']      = logfile
         args['start']        = rng[0]
         args['stop']         = rng[1]
 
@@ -124,14 +131,14 @@ class MegaMixer(dict):
 
         scr = fmt.format(**args)
 
-        scr_name = self._get_chunk_file(chunk,rng,ext='sh')
-        scr_name=os.path.expandvars(scr_name)
+        script_name = self._get_chunk_file(chunk,rng,ext='sh')
+        script_name=expand_path(script_name)
 
-        print("writing:",scr_name)
-        with open(scr_name,'w') as fp:
+        print("writing:",script_name)
+        with open(script_name,'w') as fp:
             fp.write(scr)
 
-        os.system('chmod 755 %s' % scr_name)
+        os.system('chmod 755 %s' % script_name)
 
     def _make_chunk_dir(self, chunk, rng):
         d=files.get_chunk_dir(
@@ -243,63 +250,33 @@ mv -vf $tmplog $logfile
 class SLACMegaMixer(MegaMixer):
     def _make_scripts(self):
         """
-        write the scripts, assuming the directories are in place
+        write the scripts and job files
         """
-        print("writing under:",self.files['work_dir'])
         for chunk,rng in enumerate(self.chunk_ranges):
-            self._write_script(chunk,rng)
+            self._write_script(chunk, rng)
             self._write_job_script(chunk,rng)
-
-    def _write_script(self, chunk, rng):
-        files=self.files
-
-        fmt=self._get_script_template()
-        args = {}
-
-        args['ngmix_config'] = self.config_file
-        args['output_file'] = self._get_chunk_file(chunk,rng)
-        args['meds_files'] = ','.join(self.meds_files)
-        args['start'] = rng[0]
-        args['stop'] = rng[1]
-
-        if 'seed' not in self:
-            seed = self.rng.randint(low=1,high=1000000000)
-            args['seed_opt'] = '--seed=%d' % seed
-        else:
-            args['seed_opt'] = ''
-
-        scr = fmt.format(**args)
-
-        scr_name = self._get_chunk_script_file(chunk,rng)
-        scr_name=os.path.expandvars(scr_name)
-
-        with open(scr_name,'w') as fp:
-            fp.write(scr)
-
-        os.system('chmod 755 %s' % scr_name)
 
     def _write_job_script(self, chunk, rng):
         fmt=self._get_job_template()
         args = {}
 
-        args['jobname'] = self._get_chunk_output_base(chunk,rng)
-        args['logfile'] = self._get_chunk_log_file(chunk,rng)
+        script_name = self._get_chunk_file(chunk,rng,ext='sh')
+        script_name=expand_path(script_name)
+
+        args['script_name']=script_name
+
+        jobname=os.path.basename(script_name).replace('.sh','')
+        args['jobname'] = jobname
 
         scr = fmt.format(**args)
 
-        scr_name = self._get_chunk_job_file(chunk,rng)
-        with open(scr_name,'w') as fp:
+        script_name = self._get_chunk_file(chunk,rng,ext='lsf')
+        print("writing:",script_name)
+        with open(script_name,'w') as fp:
             fp.write(scr)
 
-        os.system('chmod 755 %s' % scr_name)
-
-
-    def _get_chunk_job_file(self,chunk,rng):
-        dir=self._get_chunk_output_dir(chunk, rng)
-        return os.path.join(dir, "job.sh")
-
-
     def _get_job_template(self):
+
         template=r"""#!/bin/bash
 #BSUB -J {jobname}
 #BSUB -oo ./{jobname}.oe
@@ -308,39 +285,19 @@ class SLACMegaMixer(MegaMixer):
 #BSUB -We 24:00
 #BSUB -W 48:00
 
-export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
-mkdir -p $TMPDIR
-
-logfile={logfile}
-
-logbase=$(basename $logfile)
-tmplog=$TMPDIR/$logbase
-
-./runchunk.sh &> $tmplog
-
-mv -vf $tmplog $logfile
-
-rm -rf $TMPDIR
-
+{script_name}
 """
 
         return template
 
-    def _get_script_template(self):
-        template = r"""#!/bin/bash
-
-config={ngmix_config}
-outfile={output_file}
-meds="{meds_files}"
-
-ngmixit \
-    --fof-range={start},{stop} \
-    --work-dir=$TMPDIR \
-    {seed_opt} \
-    $config $outfile $meds
-
-"""
-        return template
+def expand_path(path):
+    return os.path.abspath(
+        os.path.expandvars(
+            os.path.expanduser(
+                path,
+            )
+        )
+    )
 
 
 def get_megamixer(system):

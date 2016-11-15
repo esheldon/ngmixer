@@ -260,10 +260,12 @@ def fetchinputs(args):
                         expname=m.group(1)
                         ccdnum=m.group(2)
 
+                        key='%s-%s' % (expname, ccdnum)
+
                         psffile=re.sub('%02d',ccdnum,psf_paths[expname])
 
                         local_file=os.path.join(psf_dir, os.path.basename(psffile))
-                        psf_map_fobj.write('%s %s\n' % (expname, local_file))
+                        psf_map_fobj.write('%s %s\n' % (key, local_file))
 
                         psf_url=os.path.join( args.serootpath, psffile )
                         if not args.nograbpsfs:
