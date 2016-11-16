@@ -33,6 +33,8 @@ def get_bootstrapper(obs, type='boot', **keys):
         boot=CompositeBootstrapper(obs, **keys)
     elif type=='metacal':
         boot=MaxMetacalBootstrapper(obs, **keys)
+    elif type=='metacal-analytic':
+        boot=ngmix.bootstrap.MetacalAnalyticPSFBootstrapper(obs, **keys)
     else:
         raise ValueError("bad bootstrapper type: '%s'" % type)
 
@@ -1511,6 +1513,10 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         print("metacal pars:")
         pprint(self['metacal_pars'])
 
+        types=self['metacal_pars'].get('types',None)
+        if types is None:
+            self['metacal_pars']['types']=ngmix.metacal.METACAL_TYPES
+
         if 'model_pars' in self['metacal_pars']:
             print("setting separate metacal prior")
             set_priors(self['metacal_pars'])
@@ -1520,11 +1526,16 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         get the bootstrapper for fitting psf through galaxy
         """
 
+        if 'analytic_psf' in self['metacal_pars']:
+            type='metacal-analytic'
+        else:
+            type='metacal'
+
         find_cen=self.get('pre_find_center',False)
         boot=get_bootstrapper(
             mb_obs_list,
             find_cen=find_cen,
-            type='metacal',
+            type=type,
             **self
         )
 
@@ -1637,7 +1648,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             print("    metacal flags set:",mcal_flags)
             d[n('flags')][dindex] |= METACAL_FAILURE
 
-        for type in ngmix.metacal.METACAL_TYPES:
+        for type in self['metacal_pars']['types']:
             tres=res[type]
             if type=='noshear':
                 back=''
@@ -1677,7 +1688,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             raise RuntimeError("for metacal, only fit one model and "
                                "either coadd or me")
 
-        for type in ngmix.metacal.METACAL_TYPES:
+        for type in self['metacal_pars']['types']:
 
             if type=='noshear':
                 back=''
