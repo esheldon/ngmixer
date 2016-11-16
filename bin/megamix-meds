@@ -166,6 +166,8 @@ class MegaMixer(dict):
     def _get_script_template(self):
         template=r"""#!/bin/bash
 
+mkdir -p $TMPDIR
+
 logfile="{logfile}"
 
 logbase=$(basename $logfile)
@@ -285,6 +287,8 @@ class SLACMegaMixer(MegaMixer):
 #BSUB -n 1
 #BSUB -We 24:00
 #BSUB -W 48:00
+
+export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
 
 {script_name}
 """

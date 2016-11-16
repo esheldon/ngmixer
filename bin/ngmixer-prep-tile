@@ -2,13 +2,7 @@
 """
 Prepare files for running ngmixer on one DES coadd tile.
 
-Fetches input MEDS and PSF files.  This is designed for a situation such as
-fermi grid where the data must be retrieved on he fly, and a full tile is
-processed as part of a single job.
-
-
-Currently assumes Y3A1 for the root directory for the MEDS files
-
+Fetches input MEDS and PSF files to a directory under $MEDS_DIR
 """
 from __future__ import print_function
 
@@ -30,7 +24,8 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument(
     'tilename',
-    help='Name of tile to process, i.e. DES0123-4567',
+    help=('Name of tile or tile_id to process, e.g. '
+          'DES0123-4567 or DES0123-4567_r2590p01'),
 )
 parser.add_argument(
     'tileset',
@@ -93,7 +88,7 @@ parser.add_argument(
     default='griz',
 )
 parser.add_argument(
-    '--coaddrootpath',
+    '--coaddrooturl',
     help='Root path to DESDM file tree for coadd inputs',
     default='https://desar2.cosmology.illinois.edu/DESFiles/desarchive/OPS/multiepoch',
 )
@@ -106,23 +101,9 @@ parser.add_argument(
 
 
 parser.add_argument(
-    '--serootpath',
+    '--serooturl',
     help='Root path to DESDM file tree for Y3A1_FINALCUT (single epoch) psf inputs',
     default='https://desar2.cosmology.illinois.edu/DESFiles/desarchive/OPS/finalcut',
-)
-parser.add_argument(
-    '--medsdir',
-    help='MEDS subdir for MEDS files',
-)
-parser.add_argument(
-    '--psfdir',
-    help='psf subdir for psf files',
-)
-
-parser.add_argument(
-    '--outdir',
-    help='dir for ngmixer outputs',
-    default='output-bytile',
 )
 
 def fetch_remote(local_dir, remote_url, clobber=False):
@@ -180,7 +161,12 @@ def fetchinputs(args):
     the psf directory
     """
 
-    print("syncing files for tile:",args.tilename)
+    tilename=args.tilename
+    if '_' in tilename:
+        # this is a tile_id
+        tilename=tilename.split('_')[0]
+
+    print("syncing files for tile:",tilename)
 
 
     meds_paths = {}
@@ -192,15 +178,8 @@ def fetchinputs(args):
         meds_paths[t] = mp
         list_paths[t] = lp
 
-    if args.medsdir is not None:
-        meds_dir=args.medsdir
-    else:
-        meds_dir=files.get_meds_dir_fromfile(meds_paths[args.tilename])
-
-    if args.psfdir is not None:
-        psf_dir=args.psfdir
-    else:
-        psf_dir=files.get_psf_dir_fromfile(meds_paths[args.tilename])
+    meds_dir=files.get_meds_dir_fromfile(meds_paths[tilename])
+    psf_dir=files.get_psf_dir_fromfile(meds_paths[tilename])
 
     print("meds dir:",meds_dir)
     print("psf dir:",psf_dir)
@@ -210,7 +189,7 @@ def fetchinputs(args):
 
     psf_paths = {}
 
-    info=files.get_meds_info(meds_paths[args.tilename])
+    info=files.get_meds_info(meds_paths[tilename])
 
     psf_map_output = files.get_psfmap_file(
         info['campaign'],
@@ -246,19 +225,20 @@ def fetchinputs(args):
 
             print("    %s" % band)
 
-            meds_file=meds_paths[args.tilename].replace('BAND',band)
-            meds_url=os.path.join(args.coaddrootpath, args.campaign, meds_file)
+            meds_file=meds_paths[tilename].replace('BAND',band)
+            meds_url=os.path.join(args.coaddrooturl, args.campaign, meds_file)
             meds_local = os.path.join(meds_dir, os.path.basename(meds_file))
             meds_list.append(meds_local)
 
             if not args.nograbmeds:
                 fetch_remote(meds_dir, meds_url, clobber=args.clobber)
 
-            listfile=list_paths[args.tilename].replace('BAND',band)
-            local_listfile = os.path.basename(listfile)
-            list_url=os.path.join(args.coaddrootpath, args.campaign, listfile)
+            listfile=list_paths[tilename].replace('BAND',band)
+            local_listfile = os.path.join(meds_dir, os.path.basename(listfile))
+
+            list_url=os.path.join(args.coaddrooturl, args.campaign, listfile)
             if not args.nograblists:
-                fetch_remote(".", list_url, clobber=args.clobber)
+                fetch_remote(meds_dir, list_url, clobber=args.clobber)
 
             with open(local_listfile) as listread:
                 for line in listread:
@@ -274,7 +254,7 @@ def fetchinputs(args):
                         local_file=os.path.join(psf_dir, os.path.basename(psffile))
                         psf_map_fobj.write('%s %s\n' % (key, local_file))
 
-                        psf_url=os.path.join( args.serootpath, psffile )
+                        psf_url=os.path.join( args.serooturl, psffile )
                         if not args.nograbpsfs:
                             fetch_remote(psf_dir, psf_url, clobber=args.clobber)
 
