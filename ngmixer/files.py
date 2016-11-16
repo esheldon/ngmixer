@@ -32,7 +32,7 @@ def read_config(fname):
     return data
 
 
-def extract_meds_info(meds_file):
+def get_meds_info(meds_file):
     """
     extract information from a Y3+ meds file path
     """
@@ -46,53 +46,146 @@ def extract_meds_info(meds_file):
     band = fs[2]
 
     # use underscore for consistency
-    meds_id='%s_%s' % (tilename,reqatt)
+    tile_id='%s_%s' % (tilename,reqatt)
+
+    end = bname.split('-')[-1]
+    campaign = end.replace('.fits.fz','').replace('.fits','')
+
 
     return {
-        'meds_id':meds_id,       # tilename_reqatt
+        'campaign':campaign,
+        'tile_id':tile_id,       # tilename_reqatt
         'tilename':tilename,     # coadd tile
         'reqatt':reqatt,         # combination of reqnum and attnum, e.g r2577p01
         'band':band,             # the filter band
     }
 
-def get_meds_id(meds_file):
+def get_tile_id(meds_file):
     """
     e.g. DES0205-3706_r2577p01
     """
-    info = extract_meds_info(meds_file)
-    return info['meds_id']
+    info = get_meds_info(meds_file)
+    return info['tile_id']
 
-def get_temporary_meds_dir(meds_file):
-    """
-    this is the directory where we will sync the meds files
-    and psf files.  This is not the "usual" place where DESDM
-    puts things
-    """
-
+def get_meds_basedir():
     if 'MEDS_DIR' not in os.environ:
         raise RuntimeError("MEDS_DIR environment variable not set")
+    return os.environ['MEDS_DIR']
 
-    info = extract_meds_info(meds_file)
-
-    return os.path.join(
-        os.environ['MEDS_DIR'],
-        info['meds_id'],
-    )
-
-def get_temporary_psf_dir(meds_file):
+def get_meds_dir(campaign, tile_id):
     """
     this is the directory where we will sync the meds files
     and psf files.  This is not the "usual" place where DESDM
     puts things
     """
 
-    dir = get_temporary_meds_dir(meds_file)
-    return os.path.join(dir, 'psfs')
+    dir=get_meds_basedir()
+    return os.path.join(
+        dir,
+        campaign,
+        tile_id,
+    )
+
+def get_meds_file(campaign, tile_id, band):
+    """
+    this is the directory where we will sync the meds files
+    and psf files.  This is not the "usual" place where DESDM
+    puts things
+    """
+
+    dir=get_meds_dir(campaign, tile_id)
+    fname = '%s_%s_%s.fits.fz' % (tile_id, band, campaign)
+
+    return os.path.join(
+        dir,
+        fname,
+    )
+
+def get_meds_files(campaign, tile_id, bands):
+    """
+    this is the directory where we will sync the meds files
+    and psf files.  This is not the "usual" place where DESDM
+    puts things
+    """
+
+    dir=get_meds_dir(campaign, tile_id)
+
+    fnames = []
+    for band in bands:
+        fname = '%s_%s_meds-%s.fits.fz' % (tile_id, band, campaign)
+        fname = os.path.join(
+            dir,
+            fname,
+        )
+        fnames.append(fname)
+
+    return fnames
+
+
+def get_meds_dir_fromfile(meds_file):
+    """
+    local meds directory from an input file name
+    """
+
+    info = get_meds_info(meds_file)
+    return get_meds_dir(info['campaign'], info['tile_id'])
+
+
+def get_psf_dir(campaign, tile_id):
+    """
+    local location for all psf files associated with
+    a MEDS file
+    """
+    meds_dir=get_meds_dir(campaign, tile_id)
+    return os.path.join(meds_dir, 'psfs')
+
+def get_psf_dir_fromfile(meds_file):
+    """
+    this is the directory where we will sync the meds files
+    and psf files.  This is not the "usual" place where DESDM
+    puts things
+    """
+    info = get_meds_info(meds_file)
+    return get_psf_dir(info['campaign'], info['tile_id'])
+
+def get_psfmap_dir(campaign, tile_id):
+    """
+    we put the psfmap file in the same directory
+    as the MEDS file
+    """
+    return get_meds_dir(campaign, tile_id)
+
+def get_psfmap_file(campaign, tile_id):
+    """
+    we put the psfmap file in the same directory
+    as the MEDS file
+    """
+    dir = get_psfmap_dir(campaign, tile_id)
+    fname = '%s-%s-psfmap.txt' % (tile_id,campaign)
+    return os.path.join(
+        dir,
+        fname,
+    )
+
+def get_psfmap_dir_fromfile(meds_file):
+    """
+    we put the psfmap file in the same directory
+    as the MEDS file
+    """
+    return get_meds_dir_fromfile(meds_file)
+
+def get_psfmap_file_fromfile(meds_file):
+    """
+    get the psfmap file from a meds file input
+    """
+    info=get_meds_info(meds_file)
+    return get_psfmap_file(info['campaign'], info['tile_id'])
 
 
 def get_ngmixer_output_dir():
-    #return '$NGMIXER_OUTPUT_DIR'
-
+    """
+    this is where the outputs go
+    """
     if 'NGMIXER_OUTPUT_DIR' not in os.environ:
         raise ValueError("environment variable NGMIXER_OUTPUT_DIR not set")
     return os.environ['NGMIXER_OUTPUT_DIR']
@@ -102,11 +195,11 @@ def get_nbrs_dir(meds_file, run):
     get the directory holding the nbrs info for the
     indicated meds file
     """
-    meds_vers=get_meds_id(meds_file)
+    tile_id=get_tile_id(meds_file)
     return os.path.join(
         get_ngmixer_output_dir(),
         run,
-        meds_vers,
+        tile_id,
     )
 
 
@@ -115,10 +208,10 @@ def get_nbrs_file(meds_file, run):
     get the path to a nbrs file given a MEDS file
     """
     dir=get_nbrs_dir(meds_file, run)
-    info=extract_meds_info(meds_file)
+    info=get_meds_info(meds_file)
 
     info['run'] = run
-    fname = '%(meds_id)s-%(run)s-nbrslist.fits'
+    fname = '%(tile_id)s-%(run)s-nbrslist.fits'
     fname = fname % info
 
     return os.path.join(
@@ -131,10 +224,10 @@ def get_fof_file(meds_file, run):
     get the path to a nbrs FOF file given a MEDS file
     """
     dir=get_nbrs_dir(meds_file, run)
-    info=extract_meds_info(meds_file)
+    info=get_meds_info(meds_file)
 
     info['run'] = run
-    fname = '%(meds_id)s-%(run)s-nbrsfofs.fits'
+    fname = '%(tile_id)s-%(run)s-nbrsfofs.fits'
     fname = fname % info
 
     return os.path.join(
@@ -147,11 +240,11 @@ def get_chunk_dir(meds_file, run, rng):
     """
     get the directory holding the output for a chunk
     """
-    meds_vers=get_meds_id(meds_file)
+    tile_id=get_tile_id(meds_file)
     return os.path.join(
         get_ngmixer_output_dir(),
         run,
-        meds_vers,
+        tile_id,
         'chunk%06d-%06d' % tuple(rng),
     )
 
@@ -162,14 +255,14 @@ def get_chunk_file(meds_file, run, rng, ext='fits'):
     """
     dir=get_chunk_dir(meds_file, run, rng)
 
-    info=extract_meds_info(meds_file)
+    info=get_meds_info(meds_file)
 
     info['run'] = run
     info['start']=rng[0]
     info['end']=rng[1]
     info['ext']=ext
 
-    fname = '%(meds_id)s-%(run)s-%(start)06d-%(end)06d.%(ext)s'
+    fname = '%(tile_id)s-%(run)s-%(start)06d-%(end)06d.%(ext)s'
     fname = fname % info
 
     return os.path.join(

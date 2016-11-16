@@ -16,9 +16,7 @@ You must have the following environment variables set
     $TMPDIR - temporary directory for work
 
 TODO: 
-    - Y3
-    - get shell version working
-    - get slac version working
+    - work on list of tile ids
 """
 
 from __future__ import print_function
@@ -29,6 +27,14 @@ import fitsio
 import numpy as np
 import glob
 
+import ngmixer
+from ngmixer import files
+from ngmixer.files import read_yaml
+from ngmixer.megamixer import NGMegaMixer
+from ngmixer.megamixer import SLACNGMegaMixer,SLACArrayNGMegaMixer
+from ngmixer.megamixer import CakeNGMegaMixer
+
+
 from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
 parser = ArgumentParser(
@@ -36,10 +42,14 @@ parser = ArgumentParser(
     formatter_class=RawTextHelpFormatter,
 )
 
-parser.add_argument('config_file',help='config file path')
-parser.add_argument('psf_map',help='the psf map file')
+parser.add_argument('ngmix_config',help='config file path')
 parser.add_argument('command',help='command to run')
-parser.add_argument('meds_files',nargs='+',help='the meds files to process')
+parser.add_argument(
+    'meds_files',
+    nargs='+',
+    help=('the meds files to process, or a yaml file '
+          'describing the tile set to use'),
+)
 
 parser.add_argument("--system",default='shell',
                   help=("name of system for jobs"))
@@ -66,18 +76,13 @@ parser.add_argument("--seed", default=None,type=int,
                   help=("random seed to make seeds for jobs.  "
                         "If not sent, is gotten from the config file"))
 
-from ngmixer import files
-from ngmixer.megamixer import NGMegaMixer
-from ngmixer.megamixer import SLACNGMegaMixer,SLACArrayNGMegaMixer
-from ngmixer.megamixer import CakeNGMegaMixer
-import ngmixer
 
 class MegaMixer(dict):
     """
     conf has ngmix config plus
     """
-    def __init__(self, config_file, psf_map_file, meds_files, seed=None):
-        self.config_file    = os.path.abspath( config_file )
+    def __init__(self, ngmix_config, psf_map_file, meds_files, seed=None):
+        self.ngmix_config    = os.path.abspath( ngmix_config )
         self.psf_map_file   = os.path.abspath(psf_map_file)
         self._load_config()
         self._make_rng(seed=seed)
@@ -114,11 +119,8 @@ class MegaMixer(dict):
         output_file  = self._get_chunk_file(chunk,rng,ext='fits')
         logfile      = self._get_chunk_file(chunk,rng,ext='log')
 
-        output_file=expand_path(output_file)
-        logfile=expand_path(logfile)
 
-
-        args['ngmix_config'] = self.config_file
+        args['ngmix_config'] = self.ngmix_config
         args['psf_map']      = self.psf_map_file
         args['meds_files']   = self.meds_string
         args['output_file']  = output_file
@@ -132,7 +134,6 @@ class MegaMixer(dict):
         scr = fmt.format(**args)
 
         script_name = self._get_chunk_file(chunk,rng,ext='sh')
-        script_name=expand_path(script_name)
 
         print("writing:",script_name)
         with open(script_name,'w') as fp:
@@ -153,11 +154,13 @@ class MegaMixer(dict):
                 pass
 
     def _get_chunk_file(self, chunk, rng, ext='fits'):
-        return files.get_chunk_file(
+        fname = files.get_chunk_file(
             self.meds_files[0],
             self.conf['run'],
             rng,
-            ext=ext)
+            ext=ext,
+        )
+        return expand_path(fname)
 
 
     def _get_script_template(self):
@@ -192,7 +195,7 @@ mv -vf $tmplog $logfile
 
     def _set_files(self):
         files={
-            'config_file':self.config_file,
+            'ngmix_config':self.ngmix_config,
             'meds_files':self.meds_files,
         }
 
@@ -232,8 +235,7 @@ mv -vf $tmplog $logfile
 
 
     def _load_config(self):
-        from ngmixer.files import read_yaml
-        self.conf = read_yaml(self.config_file)
+        self.conf = read_yaml(self.ngmix_config)
         self.jobs_conf = self.conf['jobs']
 
     def _make_rng(self, seed=None):
@@ -261,7 +263,6 @@ class SLACMegaMixer(MegaMixer):
         args = {}
 
         script_name = self._get_chunk_file(chunk,rng,ext='sh')
-        script_name=expand_path(script_name)
 
         args['script_name']=script_name
 
@@ -310,19 +311,16 @@ def get_megamixer(system):
 
     return MMixer
 
-def main():
-    from ngmixer.files import read_yaml
+def process_meds_files(args, meds_files):
 
-    args = parser.parse_args()
-
-    ngmixer.defaults.VERBOSITY.level = args.verbosity
+    psf_map_file = files.get_psfmap_file_fromfile(meds_files[0])
 
     # get command
     cmd = args.command
 
     MMixer = get_megamixer(args.system)
 
-    ngmm = MMixer(args.config_file, args.psf_map, args.meds_files, seed=args.seed)
+    ngmm = MMixer(args.ngmix_config, psf_map_file, meds_files, seed=args.seed)
 
     if cmd == 'setup':
         ngmm.setup()
@@ -357,6 +355,35 @@ def main():
     else:
         raise ValueError("cmd %s not valid!" % cmd)
 
+
+def find_meds_files(conf, tile_id):
+
+    dir = files.get_meds_dir(conf['campaign'], tile_id)
+    
+def process_tile_list(args):
+    tile_conf = read_yaml(args.meds_files[0])
+
+    for tile_id in tile_conf['tile_ids']:
+        print("tile id:",tile_id)
+        meds_files = files.get_meds_files(
+            tile_conf['campaign'],
+            tile_id,
+            tile_conf['bands'],
+        )
+
+        process_meds_files(args, meds_files)
+
+
+def main():
+
+    args = parser.parse_args()
+
+    ngmixer.defaults.VERBOSITY.level = args.verbosity
+
+    if 'yaml' in args.meds_files[0]:
+        process_tile_list(args)
+    else:
+        process_meds_files(args, args.meds_files)
 
 if __name__ == '__main__':
     main()
