@@ -7,8 +7,8 @@ import fitsio
 
 from .medsio import MEDSImageIO
 from .. import nbrsfofs
+from .. import util
 from ..util import print_with_verbosity, \
-    interpolate_image, \
     radec_to_unitvecs_ruv, \
     radec_to_thetaphi, \
     thetaphi_to_unitvecs_ruv, \
@@ -736,6 +736,8 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         jacob2 = m2.get_jacobian_matrix(iobj,icutout2)
         
         im1 = m1.get_cutout(iobj,icutout1,type='bmask')
+        im2 = m2.get_cutout(iobj,icutout2,type='bmask')
+        im2[:,:] = 0
         
         msk = numpy.array([2048+1024+512+256+128+16+8+1],dtype='u4')
         
@@ -747,11 +749,13 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         im1[:,:] = 0
         im1[q] = 1
         
-        assert m1['box_size'][iobj] == m2['box_size'][iobj]
+        #assert m1['box_size'][iobj] == m2['box_size'][iobj]
         assert m1['id'][iobj] == m2['id'][iobj]
 
-        return interpolate_image(rowcen1, colcen1, jacob1, im1, 
-                                 rowcen2, colcen2, jacob2)[0]
+        return util.interpolate_image_diffsize(rowcen1, colcen1, jacob1, im1, 
+                                               rowcen2, colcen2, jacob2, im2)
+        #return util.interpolate_image(rowcen1, colcen1, jacob1, im1, 
+        #                              rowcen2, colcen2, jacob2)[0]
     
     def _get_extra_bitmasks(self,coadd_mb_obs_list,mb_obs_list):        
         marr = self.meds_list
@@ -825,8 +829,14 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                     colcen2 = m['cutout_col'][mindex,icut]
                     jacob2 = m.get_jacobian_matrix(mindex,icut)
                     
-                    bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
-                                               rowcen2, colcen2, jacob2)[0]
+                    #bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
+                    #                           rowcen2, colcen2, jacob2)[0]
+                    bmaski = m.get_cutout(mindex,0,type='bmask')
+                    bmaski[:,:] = 0
+                    util.interpolate_image_diffsize(
+                        rowcen1, colcen1, jacob1, bmask,
+                        rowcen2, colcen2, jacob2, bmaski,
+                    )
                     
                     """
                     if band == 0 and mb_obs_list.meta['id'] == 3076597980:
