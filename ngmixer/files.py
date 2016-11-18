@@ -190,28 +190,28 @@ def get_ngmixer_output_dir():
         raise ValueError("environment variable NGMIXER_OUTPUT_DIR not set")
     return os.environ['NGMIXER_OUTPUT_DIR']
 
-def get_nbrs_dir(meds_file, run):
+def get_nbrs_dir(tile_id, run):
     """
     get the directory holding the nbrs info for the
     indicated meds file
     """
-    tile_id=get_tile_id(meds_file)
     return os.path.join(
         get_ngmixer_output_dir(),
         run,
         tile_id,
     )
 
-
-def get_nbrs_file(meds_file, run):
+def get_nbrs_file(tile_id, run, ext='fits'):
     """
     get the path to a nbrs file given a MEDS file
     """
-    dir=get_nbrs_dir(meds_file, run)
-    info=get_meds_info(meds_file)
+    dir=get_nbrs_dir(tile_id, run)
 
+    info={}
+    info['tile_id'] = tile_id
     info['run'] = run
-    fname = '%(tile_id)s-%(run)s-nbrslist.fits'
+    info['ext'] = ext
+    fname = '%(tile_id)s-%(run)s-nbrslist.%(ext)s'
     fname = fname % info
 
     return os.path.join(
@@ -219,15 +219,30 @@ def get_nbrs_file(meds_file, run):
         fname,
     )
 
-def get_fof_file(meds_file, run):
+
+def get_nbrs_file_fromfile(meds_file, run, ext='fits'):
+    """
+    get the path to a nbrs file given a MEDS file
+    """
+    info=get_meds_info(meds_file)
+
+    return get_nbrs_file(
+        info['tile_id'],
+        run,
+        ext=ext,
+    )
+
+def get_fof_file(tile_id, run, ext='fits'):
     """
     get the path to a nbrs FOF file given a MEDS file
     """
-    dir=get_nbrs_dir(meds_file, run)
-    info=get_meds_info(meds_file)
+    dir=get_nbrs_dir(tile_id, run)
 
+    info={}
+    info['tile_id'] = tile_id
     info['run'] = run
-    fname = '%(tile_id)s-%(run)s-nbrsfofs.fits'
+    info['ext'] = ext
+    fname = '%(tile_id)s-%(run)s-nbrsfofs.%(ext)s'
     fname = fname % info
 
     return os.path.join(
@@ -236,11 +251,23 @@ def get_fof_file(meds_file, run):
     )
 
 
-def get_chunk_dir(meds_file, run, rng):
+def get_fof_file_fromfile(meds_file, run, ext='fits'):
+    """
+    get the path to a nbrs FOF file given a MEDS file
+    """
+    info=get_meds_info(meds_file)
+
+    return get_fof_file(
+        info['tile_id'],
+        run,
+        ext=ext,
+    )
+
+
+def get_chunk_dir(tile_id, run, rng):
     """
     get the directory holding the output for a chunk
     """
-    tile_id=get_tile_id(meds_file)
     return os.path.join(
         get_ngmixer_output_dir(),
         run,
@@ -249,14 +276,15 @@ def get_chunk_dir(meds_file, run, rng):
     )
 
 
-def get_chunk_file(meds_file, run, rng, ext='fits'):
+def get_chunk_file(tile_id, run, rng, ext='fits'):
     """
     get the path to a nbrs file given a MEDS file
     """
-    dir=get_chunk_dir(meds_file, run, rng)
 
-    info=get_meds_info(meds_file)
+    dir=get_chunk_dir(tile_id, run, rng)
 
+    info={}
+    info['tile_id']=tile_id
     info['run'] = run
     info['start']=rng[0]
     info['end']=rng[1]
@@ -270,7 +298,18 @@ def get_chunk_file(meds_file, run, rng, ext='fits'):
         fname,
     )
 
+def get_chunk_file_fromfile(meds_file, run, rng, ext='fits'):
+    """
+    get the path to a nbrs file given a MEDS file
+    """
 
+    info=get_meds_info(meds_file)
+    return get_chunk_file(
+        info['tile_id'],
+        run,
+        rng,
+        ext=ext,
+    )
 
 
 def makedirs_fromfile(fname, ntry=2):
@@ -283,11 +322,11 @@ def makedirs_fromfile(fname, ntry=2):
         try:
             eu.ostools.makedirs_fromfile(
                 fname,
-                verbose=True,
+                #verbose=True,
                 allow_fail=False,
             )
             ok=True
-        except err:
+        except OSError as err:
             print("failed to make directory:",os.path.dirname(fname))
             print("trying again after 1 second")
             time.sleep(1)

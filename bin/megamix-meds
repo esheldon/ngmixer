@@ -94,13 +94,22 @@ class MegaMixer(dict):
 
     def setup(self):
         """
-        make directories, write scripts, copy the config file
+        make directories, write scripts
         """
 
         print("setting up scripts")
 
         self._set_chunk_ranges()
         self._make_scripts()
+
+    def setup_nbrs(self):
+        """
+        make directories, write scripts
+        """
+
+        print("setting up nbrs scripts")
+        self._write_nbrs_script()
+
 
     def _make_scripts(self):
         """
@@ -128,6 +137,16 @@ class MegaMixer(dict):
         args['start']        = rng[0]
         args['stop']         = rng[1]
 
+        if self.conf['model_nbrs']:
+            fof_file = self._get_fof_file(ext='fits')
+            args['fof_opt'] = '--fof-file=%s'% fof_file 
+
+            nbrs_file = self._get_nbrs_file(ext='fits')
+            args['nbrs_opt'] = '--nbrs-file=%s'% nbrs_file 
+        else:
+            args['fof_opt'] = ''
+            args['nbrs_opt'] = ''
+
         seed = self.rng.randint(low=1,high=1000000000)
         args['seed_opt'] = '--seed=%d' % seed
 
@@ -141,20 +160,41 @@ class MegaMixer(dict):
 
         os.system('chmod 755 %s' % script_name)
 
+    def _write_nbrs_script(self):
+
+        self._make_nbrs_dir()
+
+        fmt=self._get_nbrs_script_template()
+        args = {}
+
+        logfile      = self._get_nbrs_file(ext='log')
+
+        args['ngmix_config'] = self.ngmix_config
+        args['meds_file']    = self.meds_files[0]
+        args['logfile']      = logfile
+
+        scr = fmt.format(**args)
+
+        script_name = self._get_nbrs_file(ext='sh')
+
+        print("writing:",script_name)
+        with open(script_name,'w') as fp:
+            fp.write(scr)
+
+        os.system('chmod 755 %s' % script_name)
+
+
+
     def _make_chunk_dir(self, chunk, rng):
-        d=files.get_chunk_dir(
+        f=files.get_chunk_file_fromfile(
             self.meds_files[0],
             self.conf['run'],
             rng,
         )
-        if not os.path.exists(d):
-            try:
-                os.makedirs(d)
-            except:
-                pass
+        files.makedirs_fromfile(f)
 
     def _get_chunk_file(self, chunk, rng, ext='fits'):
-        fname = files.get_chunk_file(
+        fname = files.get_chunk_file_fromfile(
             self.meds_files[0],
             self.conf['run'],
             rng,
@@ -162,6 +202,26 @@ class MegaMixer(dict):
         )
         return expand_path(fname)
 
+    def _get_nbrs_file(self, ext='fits'):
+        fname = files.get_nbrs_file_fromfile(
+            self.meds_files[0],
+            self.conf['run'],
+            ext=ext,
+        )
+        return expand_path(fname)
+
+    def _get_fof_file(self, ext='fits'):
+        fname = files.get_fof_file_fromfile(
+            self.meds_files[0],
+            self.conf['run'],
+            ext=ext,
+        )
+        return expand_path(fname)
+
+
+    def _make_nbrs_dir(self):
+        f=self._get_nbrs_file()
+        files.makedirs_fromfile(f)
 
     def _get_script_template(self):
         template=r"""#!/bin/bash
@@ -186,6 +246,8 @@ ngmixit                                   \
     --fof-range=$start,$stop              \
     --work-dir=$TMPDIR                    \
     --psf-map=$psf_map                    \
+    {nbrs_opt}                            \
+    {fof_opt}                             \
     {seed_opt}                            \
     $config $outfile $meds &> $tmplog
 
@@ -194,6 +256,28 @@ mv -vf $tmplog $logfile
 """
 
         return template
+
+    def _get_nbrs_script_template(self):
+        template=r"""#!/bin/bash
+
+mkdir -p $TMPDIR
+
+logfile="{logfile}"
+
+logbase=$(basename $logfile)
+tmplog=$TMPDIR/$logbase
+
+
+config="{ngmix_config}"
+meds="{meds_file}"
+
+ngmixer-meds-make-nbrs-data $config $meds &> $tmplog
+mv -vf $tmplog $logfile
+"""
+
+        return template
+
+
 
     def _set_files(self):
         files={
@@ -252,6 +336,16 @@ mv -vf $tmplog $logfile
 
 
 class SLACMegaMixer(MegaMixer):
+    def setup_nbrs(self):
+        """
+        make directories, write scripts
+        """
+
+        print("setting up nbrs scripts")
+        self._write_nbrs_script()
+        self._write_nbrs_job_script()
+
+
     def _make_scripts(self):
         """
         write the scripts and job files
@@ -295,6 +389,26 @@ export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
 
         return template
 
+    def _write_nbrs_job_script(self):
+        fmt=self._get_job_template()
+        args = {}
+
+        script_name = self._get_nbrs_file(ext='sh')
+
+        args['script_name']=script_name
+
+        jobname=os.path.basename(script_name).replace('.sh','')
+        args['jobname'] = jobname
+
+        scr = fmt.format(**args)
+
+        script_name = self._get_nbrs_file(ext='lsf')
+        print("writing:",script_name)
+        with open(script_name,'w') as fp:
+            fp.write(scr)
+
+
+
 def expand_path(path):
     return os.path.abspath(
         os.path.expandvars(
@@ -328,6 +442,8 @@ def process_meds_files(args, meds_files):
 
     if cmd == 'setup':
         ngmm.setup()
+    elif cmd=='setup-nbrs':
+        ngmm.setup_nbrs()
 
     elif 'collate' in cmd:
         # not yet implemented
@@ -365,14 +481,16 @@ def find_meds_files(conf, tile_id):
     dir = files.get_meds_dir(conf['campaign'], tile_id)
     
 def process_tile_list(args):
+    # this is actually a config file
     tile_conf = read_yaml(args.meds_files[0])
+    conf=read_yaml(args.ngmix_config)
 
     for tile_id in tile_conf['tile_ids']:
         print("tile id:",tile_id)
         meds_files = files.get_meds_files(
             tile_conf['campaign'],
             tile_id,
-            tile_conf['bands'],
+            conf['jobs']['bands'],
         )
 
         process_meds_files(args, meds_files)
