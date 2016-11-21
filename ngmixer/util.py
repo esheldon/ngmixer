@@ -134,10 +134,6 @@ def interpolate_image_diffsize(rowcen1, colcen1, jacob1, im1,
     # fill the image
     im2[rows2abs[wgood],cols2abs[wgood]] = im1[row1[wgood],col1[wgood]]
 
-    return im2
-
-
-
 
 
 def print_with_verbosity(*args,**kwargs):

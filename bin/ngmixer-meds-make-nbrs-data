@@ -34,8 +34,8 @@ def main():
     args=parser.parse_args()
     conf = files.read_config(args.config)
 
-    nbrs_file=files.get_nbrs_file(args.meds_file, conf['run'])
-    fof_file=files.get_fof_file(args.meds_file, conf['run'])
+    nbrs_file=files.get_nbrs_file_fromfile(args.meds_file, conf['run'])
+    fof_file=files.get_fof_file_fromfile(args.meds_file, conf['run'])
     files.makedirs_fromfile(nbrs_file)
 
     m=meds.MEDS(args.meds_file)

@@ -22,9 +22,9 @@ TODO:
 from __future__ import print_function
 import os
 import sys
+import numpy
 import meds
 import fitsio
-import numpy as np
 import glob
 
 import ngmixer
@@ -287,12 +287,18 @@ mv -vf $tmplog $logfile
 
         self.files=files
 
-    def _get_nrows(self):
-        fname=self.meds_files[0]
-        with fitsio.FITS(fname) as fits:
-            nrows = fits['object_data'].get_nrows()
+    def _get_num(self):
 
-        return nrows
+        if self.conf['model_nbrs']:
+            fname = self._get_fof_file()
+            fofs = fitsio.read(fname)
+            num = numpy.unique(fofs['fofid']).size
+        else:
+            fname=self.meds_files[0]
+            with fitsio.FITS(fname) as fits:
+                num = fits['object_data'].get_nrows()
+
+        return num
 
 
     def _set_chunk_ranges(self):
@@ -302,7 +308,9 @@ mv -vf $tmplog $logfile
 
         files=self.files
 
-        nrows = self._get_nrows()
+        # could be number of objects or number of
+        # fof groups
+        nrows = self._get_num()
 
         chunksize=self.jobs_conf['chunksize']
         nchunks = nrows//chunksize
@@ -320,6 +328,7 @@ mv -vf $tmplog $logfile
         self.chunk_ranges = chunk_ranges
 
 
+
     def _load_config(self):
         self.conf = read_yaml(self.ngmix_config)
         self.jobs_conf = self.conf['jobs']
@@ -331,7 +340,7 @@ mv -vf $tmplog $logfile
                                    "config or send --seed=")
             seed=self.conf['global_seed']
 
-        self.rng = np.random.RandomState(seed=seed)
+        self.rng = numpy.random.RandomState(seed=seed)
 
 
 
@@ -442,6 +451,7 @@ def process_meds_files(args, meds_files):
 
     if cmd == 'setup':
         ngmm.setup()
+
     elif cmd=='setup-nbrs':
         ngmm.setup_nbrs()
 

@@ -752,10 +752,23 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         #assert m1['box_size'][iobj] == m2['box_size'][iobj]
         assert m1['id'][iobj] == m2['id'][iobj]
 
-        return util.interpolate_image_diffsize(rowcen1, colcen1, jacob1, im1, 
-                                               rowcen2, colcen2, jacob2, im2)
-        #return util.interpolate_image(rowcen1, colcen1, jacob1, im1, 
+        util.interpolate_image_diffsize(
+            rowcen1, colcen1, jacob1, im1, 
+            rowcen2, colcen2, jacob2, im2,
+        )
+        #im2 = util.interpolate_image(rowcen1, colcen1, jacob1, im1, 
         #                              rowcen2, colcen2, jacob2)[0]
+
+        if im1.max() > 0 and True:
+            import images
+            print(iobj,icutout1,icutout2)
+            images.view_mosaic(
+                [im1,im2],
+                file='/u/ki/esheldon/public_html/tmp/plots/tmp.png',
+            )
+            if 'q'==raw_input('hit a key: '):
+                stop
+        return im2
     
     def _get_extra_bitmasks(self,coadd_mb_obs_list,mb_obs_list):        
         marr = self.meds_list
@@ -837,19 +850,6 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                         rowcen1, colcen1, jacob1, bmask,
                         rowcen2, colcen2, jacob2, bmaski,
                     )
-                    
-                    """
-                    if band == 0 and mb_obs_list.meta['id'] == 3076597980:
-                        import matplotlib.pyplot as plt
-
-                        fig,axs = plt.subplots(1,3)
-                        axs[0].imshow(bmaski)
-                        axs[1].imshow(self._expand_mask(bmaski,rounds=1))
-                        axs[2].imshow(self._expand_mask(bmaski,rounds=2))
-                        
-                        import ipdb
-                        ipdb.set_trace()
-                    """
                     
                     bmaski = self._expand_mask(bmaski,rounds=2)
                     
