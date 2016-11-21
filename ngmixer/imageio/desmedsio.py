@@ -759,7 +759,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         #im2 = util.interpolate_image(rowcen1, colcen1, jacob1, im1, 
         #                              rowcen2, colcen2, jacob2)[0]
 
-        if im1.max() > 0 and True:
+        if im1.max() > 0 and False:
             import images
             print(iobj,icutout1,icutout2)
             images.view_mosaic(
