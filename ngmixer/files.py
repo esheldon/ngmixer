@@ -201,7 +201,7 @@ def get_nbrs_dir(tile_id, run):
         tile_id,
     )
 
-def get_nbrs_file(tile_id, run, ext='fits'):
+def get_nbrs_file(tile_id, run, ext='.fits'):
     """
     get the path to a nbrs file given a MEDS file
     """
@@ -211,7 +211,7 @@ def get_nbrs_file(tile_id, run, ext='fits'):
     info['tile_id'] = tile_id
     info['run'] = run
     info['ext'] = ext
-    fname = '%(tile_id)s-%(run)s-nbrslist.%(ext)s'
+    fname = '%(tile_id)s-%(run)s-nbrslist%(ext)s'
     fname = fname % info
 
     return os.path.join(
@@ -220,7 +220,7 @@ def get_nbrs_file(tile_id, run, ext='fits'):
     )
 
 
-def get_nbrs_file_fromfile(meds_file, run, ext='fits'):
+def get_nbrs_file_fromfile(meds_file, run, ext='.fits'):
     """
     get the path to a nbrs file given a MEDS file
     """
@@ -232,7 +232,7 @@ def get_nbrs_file_fromfile(meds_file, run, ext='fits'):
         ext=ext,
     )
 
-def get_fof_file(tile_id, run, ext='fits'):
+def get_fof_file(tile_id, run, ext='.fits'):
     """
     get the path to a nbrs FOF file given a MEDS file
     """
@@ -242,7 +242,7 @@ def get_fof_file(tile_id, run, ext='fits'):
     info['tile_id'] = tile_id
     info['run'] = run
     info['ext'] = ext
-    fname = '%(tile_id)s-%(run)s-nbrsfofs.%(ext)s'
+    fname = '%(tile_id)s-%(run)s-nbrsfofs%(ext)s'
     fname = fname % info
 
     return os.path.join(
@@ -251,7 +251,7 @@ def get_fof_file(tile_id, run, ext='fits'):
     )
 
 
-def get_fof_file_fromfile(meds_file, run, ext='fits'):
+def get_fof_file_fromfile(meds_file, run, ext='.fits'):
     """
     get the path to a nbrs FOF file given a MEDS file
     """
@@ -276,7 +276,7 @@ def get_chunk_dir(tile_id, run, rng):
     )
 
 
-def get_chunk_file(tile_id, run, rng, ext='fits'):
+def get_chunk_file(tile_id, run, rng, ext='.fits'):
     """
     get the path to a nbrs file given a MEDS file
     """
@@ -290,7 +290,7 @@ def get_chunk_file(tile_id, run, rng, ext='fits'):
     info['end']=rng[1]
     info['ext']=ext
 
-    fname = '%(tile_id)s-%(run)s-%(start)06d-%(end)06d.%(ext)s'
+    fname = '%(tile_id)s-%(run)s-%(start)06d-%(end)06d%(ext)s'
     fname = fname % info
 
     return os.path.join(
@@ -298,7 +298,7 @@ def get_chunk_file(tile_id, run, rng, ext='fits'):
         fname,
     )
 
-def get_chunk_file_fromfile(meds_file, run, rng, ext='fits'):
+def get_chunk_file_fromfile(meds_file, run, rng, ext='.fits'):
     """
     get the path to a nbrs file given a MEDS file
     """

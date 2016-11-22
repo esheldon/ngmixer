@@ -57,6 +57,9 @@ parser.add_argument("--system",default='shell',
 parser.add_argument("--queue",default=None,
                   help=("queue to submit to"))
 
+parser.add_argument('--missing',action='store_true',default=False,
+                    help="write scripts only for missing output files")
+
 parser.add_argument('--noblind',action='store_true',default=False,
                   help="don't blind the catalog")
 
@@ -81,9 +84,13 @@ class MegaMixer(dict):
     """
     conf has ngmix config plus
     """
-    def __init__(self, ngmix_config, psf_map_file, meds_files, seed=None):
+    def __init__(self, ngmix_config, psf_map_file, meds_files,
+                 missing=False,
+                 seed=None):
         self.ngmix_config    = os.path.abspath( ngmix_config )
         self.psf_map_file   = os.path.abspath(psf_map_file)
+        self.missing=missing
+
         self._load_config()
         self._make_rng(seed=seed)
 
@@ -125,8 +132,8 @@ class MegaMixer(dict):
         fmt=self._get_script_template()
         args = {}
 
-        output_file  = self._get_chunk_file(chunk,rng,ext='fits')
-        logfile      = self._get_chunk_file(chunk,rng,ext='log')
+        output_file  = self._get_chunk_file(chunk,rng,ext='.fits')
+        logfile      = self._get_chunk_file(chunk,rng,ext='.log')
 
 
         args['ngmix_config'] = self.ngmix_config
@@ -138,10 +145,10 @@ class MegaMixer(dict):
         args['stop']         = rng[1]
 
         if self.conf['model_nbrs']:
-            fof_file = self._get_fof_file(ext='fits')
+            fof_file = self._get_fof_file(ext='.fits')
             args['fof_opt'] = '--fof-file=%s'% fof_file 
 
-            nbrs_file = self._get_nbrs_file(ext='fits')
+            nbrs_file = self._get_nbrs_file(ext='.fits')
             args['nbrs_opt'] = '--nbrs-file=%s'% nbrs_file 
         else:
             args['fof_opt'] = ''
@@ -152,13 +159,26 @@ class MegaMixer(dict):
 
         scr = fmt.format(**args)
 
-        script_name = self._get_chunk_file(chunk,rng,ext='sh')
+        if self.missing:
+            ext='-missing.sh'
+        else:
+            ext='.sh'
 
-        print("writing:",script_name)
-        with open(script_name,'w') as fp:
-            fp.write(scr)
+        script_name = self._get_chunk_file(chunk,rng,ext=ext)
 
-        os.system('chmod 755 %s' % script_name)
+        dowrite=True
+        if self.missing:
+            if os.path.exists(script_name):
+                os.remove(script_name)
+            if os.path.exists(output_file):
+                dowrite=False
+
+        if dowrite:
+            print("writing:",script_name)
+            with open(script_name,'w') as fp:
+                fp.write(scr)
+
+            os.system('chmod 755 %s' % script_name)
 
     def _write_nbrs_script(self):
 
@@ -167,7 +187,7 @@ class MegaMixer(dict):
         fmt=self._get_nbrs_script_template()
         args = {}
 
-        logfile      = self._get_nbrs_file(ext='log')
+        logfile      = self._get_nbrs_file(ext='.log')
 
         args['ngmix_config'] = self.ngmix_config
         args['meds_file']    = self.meds_files[0]
@@ -175,7 +195,7 @@ class MegaMixer(dict):
 
         scr = fmt.format(**args)
 
-        script_name = self._get_nbrs_file(ext='sh')
+        script_name = self._get_nbrs_file(ext='.sh')
 
         print("writing:",script_name)
         with open(script_name,'w') as fp:
@@ -193,7 +213,7 @@ class MegaMixer(dict):
         )
         files.makedirs_fromfile(f)
 
-    def _get_chunk_file(self, chunk, rng, ext='fits'):
+    def _get_chunk_file(self, chunk, rng, ext='.fits'):
         fname = files.get_chunk_file_fromfile(
             self.meds_files[0],
             self.conf['run'],
@@ -202,7 +222,7 @@ class MegaMixer(dict):
         )
         return expand_path(fname)
 
-    def _get_nbrs_file(self, ext='fits'):
+    def _get_nbrs_file(self, ext='.fits'):
         fname = files.get_nbrs_file_fromfile(
             self.meds_files[0],
             self.conf['run'],
@@ -210,7 +230,7 @@ class MegaMixer(dict):
         )
         return expand_path(fname)
 
-    def _get_fof_file(self, ext='fits'):
+    def _get_fof_file(self, ext='.fits'):
         fname = files.get_fof_file_fromfile(
             self.meds_files[0],
             self.conf['run'],
@@ -327,8 +347,6 @@ mv -vf $tmplog $logfile
 
         self.chunk_ranges = chunk_ranges
 
-
-
     def _load_config(self):
         self.conf = read_yaml(self.ngmix_config)
         self.jobs_conf = self.conf['jobs']
@@ -367,7 +385,8 @@ class SLACMegaMixer(MegaMixer):
         fmt=self._get_job_template()
         args = {}
 
-        script_name = self._get_chunk_file(chunk,rng,ext='sh')
+        output_file = self._get_chunk_file(chunk,rng,ext='.fits')
+        script_name = self._get_chunk_file(chunk,rng,ext='.sh')
 
         args['script_name']=script_name
 
@@ -376,10 +395,24 @@ class SLACMegaMixer(MegaMixer):
 
         scr = fmt.format(**args)
 
-        script_name = self._get_chunk_file(chunk,rng,ext='lsf')
-        print("writing:",script_name)
-        with open(script_name,'w') as fp:
-            fp.write(scr)
+        if self.missing:
+            ext='-missing.lsf'
+        else:
+            ext='.lsf'
+
+        script_name = self._get_chunk_file(chunk,rng,ext=ext)
+
+        dowrite=True
+        if self.missing:
+            if os.path.exists(script_name):
+                os.remove(script_name)
+            if os.path.exists(output_file):
+                dowrite=False
+
+        if dowrite:
+            print("writing:",script_name)
+            with open(script_name,'w') as fp:
+                fp.write(scr)
 
     def _get_job_template(self):
 
@@ -402,7 +435,7 @@ export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
         fmt=self._get_job_template()
         args = {}
 
-        script_name = self._get_nbrs_file(ext='sh')
+        script_name = self._get_nbrs_file(ext='.sh')
 
         args['script_name']=script_name
 
@@ -411,7 +444,7 @@ export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
 
         scr = fmt.format(**args)
 
-        script_name = self._get_nbrs_file(ext='lsf')
+        script_name = self._get_nbrs_file(ext='.lsf')
         print("writing:",script_name)
         with open(script_name,'w') as fp:
             fp.write(scr)
@@ -447,7 +480,13 @@ def process_meds_files(args, meds_files):
 
     MMixer = get_megamixer(args.system)
 
-    ngmm = MMixer(args.ngmix_config, psf_map_file, meds_files, seed=args.seed)
+    ngmm = MMixer(
+        args.ngmix_config,
+        psf_map_file,
+        meds_files,
+        seed=args.seed,
+        missing=args.missing,
+    )
 
     if cmd == 'setup':
         ngmm.setup()
