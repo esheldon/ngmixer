@@ -7,7 +7,9 @@ from .concat import Concat
 CONCAT['concat'] = Concat
 
 from .desconcat import DESConcat
+from .desconcat import DESMetacalConcat
 CONCAT['concat-des'] = DESConcat
+CONCAT['concat-metacal-des'] = DESMetacalConcat
 
 def get_concat_class(concat_name):
     """

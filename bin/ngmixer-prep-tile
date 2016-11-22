@@ -50,21 +50,6 @@ parser.add_argument(
     action='store_true',
     help='over-write existing files',
 )
-parser.add_argument(
-    '--nper',
-    type=int,
-    default=100,
-    help='number of objects/fofs to process at once',
-)
-parser.add_argument(
-    '--do-mof',
-    action='store_true',
-    help=('process neighbors for the MOF fitting.  '
-          'Scripts for generating the nbrs '
-          'files are created as well as for doing the fitting'),
-)
-
-
 
 parser.add_argument(
     '--nograbmeds',

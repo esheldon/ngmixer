@@ -311,29 +311,56 @@ def get_chunk_file_fromfile(meds_file, run, rng, ext='.fits'):
         ext=ext,
     )
 
+def get_collated_dir(run):
+    """
+    get the directory holding the collated files
+    """
+    return os.path.join(
+        get_ngmixer_output_dir(),
+        run,
+        'output',
+    )
 
-def makedirs_fromfile(fname, ntry=2):
-    import time
 
-    fname=os.path.expandvars(fname)
-    ok=False
+def get_collated_file(tile_id, run, blind=False, ext='.fits'):
+    """
+    location of a collated file
+    """
 
-    for i in xrange(ntry):
-        try:
-            eu.ostools.makedirs_fromfile(
-                fname,
-                #verbose=True,
-                allow_fail=False,
-            )
-            ok=True
-        except OSError as err:
-            print("failed to make directory:",os.path.dirname(fname))
-            print("trying again after 1 second")
-            time.sleep(1)
-            pass
+    if blind:
+        fname = get_collated_file(
+            tile_id,
+            run,
+            ext='-blind.fits',
+        )
+    else:
+        dir=get_collated_dir(run)
 
-    if not ok:
-        raise err
+        info=dict(
+            tile_id=tile_id,
+            run=run,
+            ext=ext,
+        )
+
+        fname = '%(tile_id)s-%(run)s%(ext)s'
+        fname = fname % info
+
+        fname = os.path.join(
+            dir,
+            fname,
+        )
+
+    return fname
+
+def get_collated_file_fromfile(meds_file, run, blind=False, ext='.fits'):
+    info=get_meds_info(meds_file)
+    return get_collated_file(
+        info['tile_id'],
+        run,
+        blind=blind,
+        ext=ext,
+    )
+
 
 class StagedOutFile(object):
     """
@@ -431,6 +458,29 @@ class StagedOutFile(object):
         return self
     def __exit__(self, exception_type, exception_value, traceback):
         self.stage_out()
+
+def makedirs_fromfile(fname, ntry=2):
+    import time
+
+    fname=os.path.expandvars(fname)
+    ok=False
+
+    for i in xrange(ntry):
+        try:
+            eu.ostools.makedirs_fromfile(
+                fname,
+                #verbose=True,
+                allow_fail=False,
+            )
+            ok=True
+        except OSError as err:
+            print("failed to make directory:",os.path.dirname(fname))
+            print("trying again after 1 second")
+            time.sleep(1)
+            pass
+
+    if not ok:
+        raise err
 
 def makedir_fromfile(fname):
     dname=os.path.dirname(fname)
