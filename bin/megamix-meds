@@ -106,7 +106,6 @@ class MegaMixer(dict):
         self.meds_string=' '.join(self.meds_files)
 
         self._set_files()
-        self._set_chunk_ranges()
 
     def setup(self):
         """
@@ -115,6 +114,7 @@ class MegaMixer(dict):
 
         print("setting up scripts")
 
+        self._set_chunk_ranges()
         self._make_scripts()
 
     def setup_nbrs(self):
@@ -130,6 +130,8 @@ class MegaMixer(dict):
         concatenate all the chunk files, adding in
         some calculated information such as mags
         """
+
+        self._set_chunk_ranges()
 
         cls = ngmixer.megamixer.concat_io.get_concat_class(
             self.conf['collate']['concat_type'],
