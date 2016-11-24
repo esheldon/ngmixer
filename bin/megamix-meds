@@ -201,12 +201,7 @@ class MegaMixer(dict):
 
         scr = fmt.format(**args)
 
-        if self.missing:
-            ext='-missing.sh'
-        else:
-            ext='.sh'
-
-        script_name = self._get_chunk_file(chunk,rng,ext=ext)
+        script_name = self._get_chunk_file(chunk,rng,ext='.sh')
 
         dowrite=True
         if self.missing:
@@ -260,6 +255,7 @@ class MegaMixer(dict):
             self.meds_files[0],
             self.conf['run'],
             rng,
+            missing=self.missing,
             ext=ext,
         )
         return expand_path(fname)
@@ -437,12 +433,7 @@ class SLACMegaMixer(MegaMixer):
 
         scr = fmt.format(**args)
 
-        if self.missing:
-            ext='-missing.lsf'
-        else:
-            ext='.lsf'
-
-        script_name = self._get_chunk_file(chunk,rng,ext=ext)
+        script_name = self._get_chunk_file(chunk,rng,ext='.lsf')
 
         dowrite=True
         if self.missing:
@@ -569,13 +560,17 @@ def process_tile_list(args):
 
     for tile_id in tile_conf['tile_ids']:
         print("tile id:",tile_id)
+
         meds_files = files.get_meds_files(
             tile_conf['campaign'],
             tile_id,
             conf['jobs']['bands'],
         )
 
-        process_meds_files(args, meds_files)
+        try:
+            process_meds_files(args, meds_files)
+        except IOError as err:
+            print("caught error: %s" % str(err))
 
 
 def main():

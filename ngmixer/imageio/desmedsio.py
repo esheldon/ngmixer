@@ -727,6 +727,29 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         return cen_obs.get_psf(),J_nbr
 
     def _interpolate_maskbits(self,iobj,m1,icutout1,m2,icutout2):
+        """
+        Y3 bit masks
+
+#define BADPIX_BPM          1  /* set in bpm (hot/dead pixel/column)        */
+#define BADPIX_SATURATE     2  /* saturated pixel                           */
+#define BADPIX_INTERP       4  /* interpolated pixel                        */
+#define BADPIX_BADAMP       8  /* Data from non-functional amplifier        */
+#define BADPIX_LOW (BADPIX_BADAMP) /* too little signal- NOT IN USE        */
+#define BADPIX_CRAY        16  /* cosmic ray pixel                          */
+#define BADPIX_STAR        32  /* bright star pixel                         */
+#define BADPIX_TRAIL       64  /* bleed trail pixel                         */
+#define BADPIX_EDGEBLEED  128  /* edge bleed pixel                          */
+#define BADPIX_SSXTALK    256  /* pixel potentially effected by xtalk from  */
+                               /*       a super-saturated source            */
+#define BADPIX_EDGE       512  /* pixel flag to exclude CCD glowing edges   */
+#define BADPIX_STREAK    1024  /* pixel associated with streak from a       */
+                               /*       satellite, meteor, ufo...           */
+#define BADPIX_SUSPECT   2048  /* nominally useful pixel but not perfect    */
+#define BADPIX_FIXED     4096  /* corrected by pixcorrect                   */
+#define BADPIX_NEAREDGE  8192  /* suspect due to edge proximity             */
+#define BADPIX_TAPEBUMP 16384  /* suspect due to known tape bump            */
+        """
+
         rowcen1 = m1['cutout_row'][iobj,icutout1]
         colcen1 = m1['cutout_col'][iobj,icutout1]
         jacob1 = m1.get_jacobian_matrix(iobj,icutout1)
@@ -739,7 +762,8 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         im2 = m2.get_cutout(iobj,icutout2,type='bmask')
         im2[:,:] = 0
         
-        msk = numpy.array([2048+1024+512+256+128+16+8+1],dtype='u4')
+
+        msk = numpy.array([16384+8192+2048+1024+512+256+128+16+8+1],dtype='u4')
         
         q = numpy.where( ((im1&2 != 0) | (im1&4 != 0)) 
                          & 
