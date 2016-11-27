@@ -439,6 +439,9 @@ class SLACMegaMixer(MegaMixer):
         if self.missing:
             if os.path.exists(script_name):
                 os.remove(script_name)
+            if os.path.exists(script_name+'.submitted'):
+                print("removing:",script_name+'.submitted')
+                os.remove(script_name+'.submitted')
             if os.path.exists(output_file):
                 dowrite=False
 
@@ -571,6 +574,8 @@ def process_tile_list(args):
             process_meds_files(args, meds_files)
         except IOError as err:
             print("caught error: %s" % str(err))
+        except ngmixer.megamixer.concat.ConcatError:
+            print("failed to concatenate tile")
 
 
 def main():
