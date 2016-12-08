@@ -20,35 +20,9 @@ class DESConcat(Concat):
         self.bands = kwargs.pop('bands')
         self.nbands = len(self.bands)
         self.blind = kwargs.pop('blind',True)
-        if self.blind:
-            self.blind_factor = self.get_blind_factor()
+
         super(DESConcat,self).__init__(*args,**kwargs)
         self.config['fit_models'] = list(self.config['model_pars'].keys())
-
-    def get_blind_factor(self):
-        """
-        by joe zuntz
-        """
-        import sys
-        import hashlib
-
-        try:
-            with open(os.environ['DESBLINDPHRASE'],'r') as fp:
-                code_phrase = fp.read()
-            code_phrase = code_phrase.strip()
-        except:
-            code_phrase = "DES is blinded"
-
-        #hex number derived from code phrase
-        m = hashlib.md5(code_phrase).hexdigest()
-        #convert to decimal
-        s = int(m, 16)
-        # last 8 digits
-        f = s%100000000
-        # turn 8 digit number into value between 0 and 1
-        g = f*1e-8
-        #get value between 0.9 and 1
-        return 0.9 + 0.1*g
 
     def read_chunk(self, fname):
         """
@@ -70,6 +44,8 @@ class DESConcat(Concat):
 
         This also includes the Q values from B&A
         """
+        from blind_des_catalog import blind_arrays
+
         models=self.get_models(data)
 
         names=data.dtype.names
@@ -79,17 +55,53 @@ class DESConcat(Concat):
 
             w,=numpy.where(data[n('flags')] == 0)
             if w.size > 0:
-                data[n('pars')][:,2] *= self.blind_factor
-                data[n('pars')][:,3] *= self.blind_factor
-                if n('pars_best') in names:
-                    data[n('pars_best')][:,2] *= self.blind_factor
-                    data[n('pars_best')][:,3] *= self.blind_factor
 
-                if n('g') in names:
-                    data[n('g')][w,:] *= self.blind_factor
+                for type,i1,i2 in [('pars',2,3),
+                                   ('pars_best',2,3),
+                                   ('g',0,1)]:
+                    name=n(type)
+                    if name in names:
+                        bg1,bg2 = blind_arrays(data[n('pars')][w,i1],data[n('pars')][w,i2])
+                        data[name][w,i1] = bg1
+                        data[name][w,i2] = bg2
 
-                if n('Q') in names:
-                    data[n('Q')][w,:] *= self.blind_factor
+        if 'mcal_g' in names:
+            w,=numpy.where(data['mcal_flags'] == 0)
+            types=[
+                ('mcal_pars',   2,3),
+
+                ('mcal_pars_1p',2,3),
+                ('mcal_pars_1m',2,3),
+                ('mcal_pars_2p',2,3),
+                ('mcal_pars_2m',2,3),
+
+                ('mcal_pars_1p_psf',2,3),
+                ('mcal_pars_1m_psf',2,3),
+                ('mcal_pars_2p_psf',2,3),
+                ('mcal_pars_2m_psf',2,3),
+
+                ('mcal_g',   0,1),
+
+                ('mcal_g_1p',0,1),
+                ('mcal_g_1m',0,1),
+                ('mcal_g_2p',0,1),
+                ('mcal_g_2m',0,1),
+
+                ('mcal_g_1p_psf',0,1),
+                ('mcal_g_1m_psf',0,1),
+                ('mcal_g_2p_psf',0,1),
+                ('mcal_g_2m_psf',0,1),
+
+            ]
+
+            for name,i1,i2 in types:
+
+                if name in names:
+                    bg1,bg2 = blind_arrays(data[name][w,i1],data[name][w,i2])
+                    data[name][w,i1] = bg1
+                    data[name][w,i2] = bg2
+
+
 
     def pick_epoch_fields(self, epoch_data0):
         """
