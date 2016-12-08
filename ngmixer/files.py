@@ -10,6 +10,12 @@ import copy
 import numpy
 import esutil as eu
 
+def get_desdata():
+    """
+    might not be defined
+    """
+    return os.environ.get('DESDATA','$DESDATA')
+
 def read_config(fname):
     """
     read a config file, making sure the run name
