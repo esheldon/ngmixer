@@ -6,7 +6,7 @@ import numpy
 import fitsio
 import meds
 
-from .util import PBar
+from .pbar import prange
 
 def get_dummy_fofs(numbers):
     nobj = len(numbers)
@@ -83,13 +83,7 @@ class MedsNbrs(object):
         dtype = [('number','i8'),('nbr_number','i8')]
         print "config:",self.conf
 
-        #loop through objects, get nbrs in each meds list
-        if verbose:
-            pgr = PBar(self.meds_list[0].size,"finding nbrs")
-            pgr.start()
-        for mindex in xrange(self.meds_list[0].size):
-            if verbose:
-                pgr.update(mindex+1)
+        for mindex in prange(self.meds_list[0].size):
             nbrs = []
             for band,m in enumerate(self.meds_list):
                 #make sure MEDS lists have the same objects!
@@ -106,9 +100,6 @@ class MedsNbrs(object):
             #add to final list
             for nbr in nbrs:
                 nbrs_data.append((m['number'][mindex],nbr))
-
-        if verbose:
-            pgr.finish()
 
         #return array sorted by number
         nbrs_data = numpy.array(nbrs_data,dtype=dtype)
@@ -203,18 +194,9 @@ class NbrsFoF(object):
         #init
         self._init_fofs()
 
-        #link
-        if verbose:
-            bar = PBar(self.Nobj,"making fofs")
-            bar.start()
 
-        for i in xrange(self.Nobj):
-            if verbose:
-                bar.update(i+1)
+        for i in prange(self.Nobj):
             self._link_fof(i)
-
-        if verbose:
-            bar.finish()
 
         for fofid,k in enumerate(self.fofs):
             inds = numpy.array(list(self.fofs[k]),dtype=int)
