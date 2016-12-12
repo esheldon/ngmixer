@@ -119,7 +119,8 @@ def fetch_remote(local_dir, remote_url, clobber=False):
     if os.path.exists(tmp_file):
         os.remove(tmp_file)
 
-    res=subprocess.call(["wget","-P",tmp_dir,remote_url])
+    print("syncing:",remote_url)
+    res=subprocess.call(["wget","-q","-P",tmp_dir,remote_url])
     if res != 0:
         raise IOError("could not copy url: '%s'" % remote_url)
 
