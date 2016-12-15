@@ -6,6 +6,7 @@ import copy
 import fitsio
 
 from .medsio import MEDSImageIO
+from .. import files
 from .. import nbrsfofs
 from .. import util
 from ..util import print_with_verbosity, \
@@ -62,7 +63,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         if get_extra_meta:
             print("    getting extra image metadata")
-            desdata=os.environ['DESDATA']
+            desdata=files.get_desdata()
             meds_desdata=self.meds_list[0]._meta['DESDATA'][0]
 
             for band in self.iband:
@@ -103,10 +104,10 @@ class SVDESMEDSImageIO(MEDSImageIO):
             clen=len(config_file)
             dt += [('ngmixer_config','S%d' % clen)]
 
-        flen=max([len(mf.replace(os.environ['DESDATA'],'${DESDATA}')) for mf in self.meds_files_full] )
+        mydesdata=files.get_desdata()
+        flen=max([len(mf.replace(mydesdata,'${DESDATA}')) for mf in self.meds_files_full] )
         dt += [('meds_file','S%d' % flen)]
 
-        mydesdata = os.environ['DESDATA']
         dt += [('ngmixer_DESDATA','S%d' % len(mydesdata))]
 
         nband=len(self.meds_files_full)
@@ -122,7 +123,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
             if 'config_file' in self.conf:
                 meta['ngmixer_config'][band] = config_file
-            meta['meds_file'][band] = meds_file.replace(os.environ['DESDATA'],'${DESDATA}')
+            meta['meds_file'][band] = meds_file.replace(mydesdata,'${DESDATA}')
             meta['ngmixer_DESDATA'][band] = mydesdata
 
         return meta
@@ -150,16 +151,19 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
     def get_meta_data_dtype(self):
         dt = super(SVDESMEDSImageIO, self).get_meta_data_dtype()
+
+        desdata=files.get_desdata()
         rlen = len(self.meds_files_full[0]\
-                       .replace(os.environ['DESDATA'],'${DESDATA}')\
+                       .replace(desdata,'${DESDATA}')\
                        .split('/')[3])
         dt += [('coadd_run','S%d' % rlen)]
         return dt
 
     def _get_multi_band_observations(self, mindex):
         coadd_mb_obs_list, mb_obs_list = super(SVDESMEDSImageIO, self)._get_multi_band_observations(mindex)
+        desdata=files.get_desdata()
         run = self.meds_files_full[0]\
-            .replace(os.environ['DESDATA'],'${DESDATA}')\
+            .replace(desdata,'${DESDATA}')\
             .split('/')[3]
         coadd_mb_obs_list.meta['meta_data']['coadd_run'] = run
         mb_obs_list.meta['meta_data']['coadd_run'] = run
@@ -336,7 +340,8 @@ class SVDESMEDSImageIO(MEDSImageIO):
         include the coadd so we get  the index right
         """
         print('loading psfex')
-        desdata=os.environ['DESDATA']
+
+        desdata=files.get_desdata()
         meds_desdata=self.meds_list[0]._meta['DESDATA'][0]
 
         psfex_lists=[]
@@ -352,7 +357,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
         """
         infer the psfex path from the image path.
         """
-        desdata=os.environ['DESDATA']
+        desdata=files.get_desdata()
         meds_desdata=meds._meta['DESDATA'][0]
 
         psfpath=image_path.replace('.fits.fz','_psfcat.psf')
@@ -977,6 +982,18 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
         self._load_psf_map(**kw)
         super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
 
+    def get_meta_data_dtype(self):
+        """
+        there is no coadd_run any more, so skip that part from SV/Y1
+        """
+        return super(SVDESMEDSImageIO, self).get_meta_data_dtype()
+
+    def _get_multi_band_observations(self, mindex):
+        """
+        there is no coadd_run any more, so skip that part from SV/Y1
+        """
+        return super(SVDESMEDSImageIO, self)._get_multi_band_observations(mindex)
+
 
     def _load_psf_map(self, **kw):
         """
@@ -1041,62 +1058,4 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
         dt = super(SVDESMEDSImageIO, self).get_epoch_meta_data_dtype()
         dt += [('image_id','S49')]  # image_id specified in meds creation, e.g. for image table
         return dt
-
-class Y3DESMEDSImageIOAlt(Y1DESMEDSImageIO):
-    """
-    This is the original, with the explicit filename-psf path mapping
-    """
-    def __init__(self, *args, **kw):
-        self._load_psf_map(**kw)
-        super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
-
-
-    def _load_psf_map(self, **kw):
-        """
-        we fake the coadd psf
-        """
-        extra_data=kw.get('extra_data',{})
-
-        map_file=extra_data.get('psf_map',None)
-        if map_file is None:
-            raise RuntimeError("for Y3 you must send a map file")
-
-        data=fitsio.read(map_file)
-        psf_map={}
-        for i in xrange(data.size):
-
-            if i==0:
-                ii=i+1
-            else:
-                ii=i
-
-            fname=data['im_filename'][i].strip()
-            psf_path = data['psf_local_path'][ii].strip()
-
-            keep = fname.split('_')[0:0+3]
-            key = '-'.join(keep )
-
-            psf_map[key] = psf_path
-
-        self._psf_map=psf_map
-
-    def _psfex_path_from_image_path(self, meds, image_path):
-        """
-        infer the psfex path from the image path.
-        """
-
-        fname = os.path.basename(image_path).replace('.fits.fz','.fits')
-
-        fs = fname.split('_')
-        key = '-'.join( fs[2:2+3] )
-        psfpath = self._psf_map[key]
-
-        psfpath = os.path.expandvars(psfpath)
-        return psfpath
-
-    def get_epoch_meta_data_dtype(self):
-        dt = super(SVDESMEDSImageIO, self).get_epoch_meta_data_dtype()
-        dt += [('image_id','S49')]  # image_id specified in meds creation, e.g. for image table
-        return dt
-
 
