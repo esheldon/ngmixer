@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import os
 import sys
 import meds
@@ -66,13 +67,13 @@ class BNLCondorMegaMixer(NGMegaMixer):
             fname,nwrite=self.write_condor(files,fof_ranges)
 
         if nwrite == 0:
-            print "    no unfinished jobs left to run"
+            print("    no unfinished jobs left to run")
             return
         fname=os.path.basename(fname)
 
         dr = files['work_output_dir']
         cmd='cd %s && condor_submit %s && cd -' % (dr,fname)
-        print "condor command: '%s'" % cmd
+        print("condor command: '%s'" % cmd)
         os.system(cmd)
 
 
@@ -160,7 +161,7 @@ popd
         path=self.get_master_script_file(files)
         text=self.get_master_script_text()
 
-        print "    writing:",path
+        print("    writing:",path)
         with open(path,'w') as fobj:
             fobj.write(text)
         os.system('chmod 755 %s' % path)
@@ -335,9 +336,9 @@ Queue\n"""
                     fobj.write(lines)
 
         if doall:
-            print "        total of",nwrite,"jobs",fname
+            print("        total of",nwrite,"jobs",fname)
         else:
-            print "        wrote",nwrite,"jobs",fname
+            print("        wrote",nwrite,"jobs",fname)
             if nwrite==0:
                 for i in xrange(10):
                     _try_remove_file(fname)
@@ -424,9 +425,9 @@ popd
         nwrite=1
 
         if doall:
-            print "        total of 1 job",condor_file
+            print("        total of 1 job",condor_file)
         else:
-            print "        wrote 1 job",condor_file
+            print("        wrote 1 job",condor_file)
 
         return condor_file, nwrite
 

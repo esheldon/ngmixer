@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import os
 import sys
 import copy
@@ -45,12 +46,6 @@ class MedsNbrs(object):
         self.conf = conf
 
         self._init_bounds()
-        #print config
-        #print "    buff_type:",buff_type
-        #print "    buff_frac:",buff_frac
-        #print "    maxsize_to_replace:",maxsize_to_replace
-        #print "    new_maxsize:",new_maxsize
-        #print "    check_seg:",check_seg
 
     def _init_bounds(self):
         self.l = {}
@@ -81,7 +76,7 @@ class MedsNbrs(object):
         #data types
         nbrs_data = []
         dtype = [('number','i8'),('nbr_number','i8')]
-        print "config:",self.conf
+        print("config:",self.conf)
 
         #loop through objects, get nbrs in each meds list
         if verbose:
@@ -296,7 +291,7 @@ class NbrsFoFExtractor(object):
     def close(self):
         if self.cleanup:
             if os.path.exists(self.sub_file):
-                print 'removing sub file:',self.sub_file
+                print('removing sub file:',self.sub_file)
                 os.remove(self.sub_file)
 
     def _get_inds(self, data):
@@ -315,7 +310,7 @@ class NbrsFoFExtractor(object):
     def _extract(self):
 
         with fitsio.FITS(self.fof_file) as infits:
-            print 'opening sub file:',self.sub_file
+            print('opening sub file:',self.sub_file)
             with fitsio.FITS(self.sub_file,'rw',clobber=True) as outfits:
                 old_data = infits[1][:]
                 inds = self._get_inds(old_data)
