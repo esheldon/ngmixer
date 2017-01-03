@@ -580,8 +580,8 @@ def process_tile_list(args):
             print("caught MissingDataError error: %s" % str(err))
         except IOError as err:
             print("caught error: %s" % str(err))
-        except ngmixer.megamixer.concat.ConcatError:
-            print("failed to concatenate tile")
+        except ngmixer.megamixer.concat.ConcatError as err:
+            print("failed to concatenate tile: %s" % str(err))
 
 
 def main():
