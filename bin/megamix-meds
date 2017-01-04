@@ -599,15 +599,15 @@ def process_tile_list(args):
         try:
             process_meds_files(args, meds_files)
         except ngmixer.util.MissingDataError as err:
-            if ntiles==1:
+            if ntiles==1 and not args.skip_errors:
                 raise
             print("caught MissingDataError error: %s" % str(err))
         except IOError as err:
-            if ntiles==1:
+            if ntiles==1 and not args.skip_errors:
                 raise
             print("caught error: %s" % str(err))
         except ngmixer.megamixer.concat.ConcatError as err:
-            if ntiles==1:
+            if ntiles==1 and not args.skip_errors:
                 raise
             print("failed to concatenate tile: %s" % str(err))
 
