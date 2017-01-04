@@ -86,10 +86,13 @@ def main():
 
     args = parser.parse_args()
 
+    blind = not args.noblind
+
     collator = DESDMCollator(
         args.ngmix_config,
         args.file_list,
         args.collated_file,
+        blind=blind,
     )
 
     collator.collate()
