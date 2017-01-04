@@ -186,15 +186,21 @@ class MegaMixer(dict):
         args['start']        = rng[0]
         args['stop']         = rng[1]
 
+        args['mof_opt'] = ''
         if self.conf['model_nbrs']:
             fof_file = self._get_fof_file(ext='.fits')
             args['fof_opt'] = '--fof-file=%s'% fof_file 
 
             nbrs_file = self._get_nbrs_file(ext='.fits')
             args['nbrs_opt'] = '--nbrs-file=%s'% nbrs_file 
+
         else:
             args['fof_opt'] = ''
             args['nbrs_opt'] = ''
+
+            if self.conf['make_corrected_meds']:
+                mof_file = self._get_mof_file()
+                args['mof_opt'] = '--mof-file=%s' % mof_file
 
         seed = self.rng.randint(low=1,high=1000000000)
         args['seed_opt'] = '--seed=%d' % seed
@@ -241,6 +247,19 @@ class MegaMixer(dict):
         os.system('chmod 755 %s' % script_name)
 
 
+    def _get_mof_file(self):
+        """
+        mof file used for subtracting neighbor light
+        """
+        if 'mof_run' not in self.conf:
+            raise ValueError('you need to set "mof_run" in the config '
+                             'file to subtract neighbors')
+
+        mof_file = files.get_collated_file_fromfile(
+            self.meds_files[0],
+            self.conf['mof_run'],
+        )
+        return mof_file
 
     def _make_chunk_dir(self, chunk, rng):
         f=files.get_chunk_file_fromfile(
@@ -306,6 +325,7 @@ ngmixit                                   \
     --psf-map=$psf_map                    \
     {nbrs_opt}                            \
     {fof_opt}                             \
+    {mof_opt}                             \
     {seed_opt}                            \
     $config $outfile $meds &> $tmplog
 
@@ -565,6 +585,8 @@ def process_tile_list(args):
     tile_conf = read_yaml(args.meds_files[0])
     conf=read_yaml(args.ngmix_config)
 
+    ntiles = len(tile_conf['tile_ids'])
+
     for tile_id in tile_conf['tile_ids']:
         print("tile id:",tile_id)
 
@@ -577,12 +599,17 @@ def process_tile_list(args):
         try:
             process_meds_files(args, meds_files)
         except ngmixer.util.MissingDataError as err:
+            if ntiles==1:
+                raise
             print("caught MissingDataError error: %s" % str(err))
         except IOError as err:
+            if ntiles==1:
+                raise
             print("caught error: %s" % str(err))
         except ngmixer.megamixer.concat.ConcatError as err:
+            if ntiles==1:
+                raise
             print("failed to concatenate tile: %s" % str(err))
-
 
 def main():
 
