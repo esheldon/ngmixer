@@ -5,7 +5,7 @@ import os
 import scipy.stats
 
 # local imports
-from .defaults import DEFVAL, NO_ATTEMPT, \
+from .defaults import DEFVAL, PDEFVAL, NO_ATTEMPT, \
     PSF_FIT_FAILURE, GAL_FIT_FAILURE, \
     LOW_PSF_FLUX, PSF_FLUX_FIT_FAILURE, \
     NBR_HAS_NO_PSF_FIT, METACAL_FAILURE
@@ -1734,29 +1734,14 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
 
 class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
-    _default_metacal_pars={
-        'symmetrize_psf':True,
-        'types': ['objshear','1p','1m','2p','2m'],
-    }
     def _setup(self):
         # calling super of super
         super(MetacalNGMixBootFitter,self)._setup()
 
-        metacal_pars={}
-        metacal_pars.update(
-            MetacalAdmomBootFitter._default_metacal_pars,
-        )
-        if 'metacal_pars' in self:
-            metacal_pars.update( self['metacal_pars'] )
-
-        metacal_pars['nband'] = self['nband']
-
-        self['metacal_pars'] = metacal_pars
-
-        print("metacal pars:")
-        pprint(self['metacal_pars'])
-
+        self['metacal_pars'] = self.get('metacal_pars',None)
         self['admom_pars'] = self.get('admom_pars',None)
+
+        self['psf_Tguess_key'] = 'Tguess'
 
     def _set_models(self):
         """
@@ -1764,13 +1749,22 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
         """
         self['fit_models'] = ['gauss']
 
-
     def _get_bootstrapper(self, model, mb_obs_list):
         """
         get the bootstrapper for fitting psf through galaxy
         """
         # note self has admom_pars key
         return ngmix.bootstrap.AdmomBootstrapper(
+            mb_obs_list,
+            **self
+        )
+
+    def _get_metacal_bootstrapper(self, mb_obs_list):
+        """
+        get the bootstrapper for fitting psf through galaxy
+        """
+        # note self has metacal_pars key
+        return ngmix.bootstrap.AdmomMetacalBootstrapper(
             mb_obs_list,
             **self
         )
@@ -1785,7 +1779,7 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
         if boot is None:
             boot=self.boot
 
-        boot.fit_psfs(Tguess_key='Tguess')
+        boot.fit_psfs(Tguess_key=self['psf_Tguess_key'])
 
         # check for no obs in a band if PSF fit fails
         for band,obs_list in enumerate(boot.mb_obs_list):
@@ -1808,12 +1802,41 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
 
         self.gal_fitter=self.boot.get_fitter()
 
+        self.mcal_boot=self._do_metacal(self.boot)
+
+        metacal_res = self.mcal_boot.get_metacal_result()
+
+        res=self.gal_fitter.get_result()
+        res.update(metacal_res)
 
         if self['make_plots']:
             self._plot_resids(self.new_mb_obs_list.meta['id'],
                               self.boot.get_fitter(),
                               model, coadd, 'max')
             self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
+
+
+    def _do_metacal(self, boot):
+        """
+        the basic fitter for this class
+        """
+
+        assert self['replace_bad_pixels']==False
+
+        # new bootstrapper for metacal
+        mcal_boot=self._get_metacal_bootstrapper(boot.mb_obs_list)
+
+        try:
+
+            mcal_boot.fit_metacal(psf_Tguess_key=self['psf_Tguess_key'])
+
+        except BootPSFFailure as err:
+            # the _run_boot code catches this one
+            raise BootGalFailure(str(err))
+
+        return mcal_boot
+
+
 
 
     def get_num_pars_psf(self):
@@ -1830,48 +1853,84 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
 
         n=self._get_namer(model, coadd)
 
-        data=self.data
+        d=self.data
 
-        data[n('flags')][dindex] = res['flags']
+        d[n('flags')][dindex] = res['flags']
 
         if res['flags'] == 0:
 
-            data[n('g')][dindex,:] = res['g']
-            data[n('g_cov')][dindex,:,:] = res['g_cov']
+            d[n('g')][dindex,:] = res['g']
+            d[n('g_cov')][dindex,:,:] = res['g_cov']
 
-            data[n('s2n')][dindex]  = res['s2n']
-            data[n('T')][dindex]    = res['T']
+            d[n('s2n')][dindex]  = res['s2n']
+            d[n('T')][dindex]    = res['T']
+            d[n('T_err')][dindex]    = res['T_err']
+
+
+        
+            d['mcal_flags'][dindex] = res['mcal_flags']
+            types=ngmix.bootstrap.AdmomMetacalBootstrapper._default_metacal_pars['types']
+            for type in types:
+                tres=res[type]
+                if type=='noshear':
+                    back=''
+                else:
+                    back='_%s' % type
+
+                d['mcal_g%s' % back][dindex] = tres['g']
+                d['mcal_g_cov%s' % back][dindex] = tres['g_cov']
+
+                d['mcal_s2n%s' % back][dindex] = tres['s2n']
+
+                d['mcal_T%s' % back][dindex] = tres['T']
+                d['mcal_T_err%s' % back][dindex] = tres['T_err']
+
+                if type=='noshear':
+                    for p in ['gpsf','Tpsf']:
+                        name='mcal_%s' % p
+                        d[name][dindex] = tres[p]
+
 
     def _make_struct(self,coadd):
         """
         make the output structure
         """
         dt = self._get_fit_data_dtype(coadd=coadd)
-        data = numpy.zeros(1,dtype=dt)
+        d= numpy.zeros(1,dtype=dt)
 
         n=self._get_namer('psf', coadd)
 
-        data[n('flags')] = NO_ATTEMPT
-        data[n('flux')] = DEFVAL
-        data[n('flux_s2n')] = DEFVAL
+        d[n('flags')] = NO_ATTEMPT
+        d[n('flux')] = DEFVAL
+        d[n('flux_s2n')] = DEFVAL
 
         n=self._get_namer('', coadd)
 
-        data[n('mask_frac')] = DEFVAL
-        data[n('psfrec_T')] = DEFVAL
-        data[n('psfrec_g')] = DEFVAL
+        d[n('mask_frac')] = DEFVAL
+        d[n('psfrec_T')] = DEFVAL
+        d[n('psfrec_g')] = DEFVAL
 
         models=self._get_all_models(coadd)
         for model in models:
             n=Namer(model)
 
-            data[n('flags')] = NO_ATTEMPT
-            data[n('g')] = DEFVAL
-            data[n('g_cov')] = DEFVAL
-            data[n('s2n')] = DEFVAL
-            data[n('T')] = DEFVAL
+            d[n('flags')] = NO_ATTEMPT
+            d[n('g')] = DEFVAL
+            d[n('g_cov')] = DEFVAL
+            d[n('s2n')] = DEFVAL
+            d[n('T')] = DEFVAL
+            d[n('T_err')] = PDEFVAL
 
-        return data
+        for f in self.mcal_flist:
+            if 'err' in f:
+                dval=PDEFVAL
+            elif 'flags' in f:
+                dval = NO_ATTEMPT
+            else:
+                dval=DEFVAL
+            d[f] = dval
+
+        return d
 
 
     def _get_fit_data_dtype(self,coadd):
@@ -1910,7 +1969,42 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
                 (n('g_cov'),'f8',(2,2)),
                 (n('s2n'),'f8'),
                 (n('T'),'f8'),
+                (n('T_err'),'f8'),
             ]
+
+        dt += self._get_metacal_dt()
+
+        return dt
+
+    def _get_metacal_dt(self):
+        types=ngmix.bootstrap.AdmomMetacalBootstrapper._default_metacal_pars['types']
+
+        dt=[('mcal_flags','i4')]
+        for type in types:
+
+            if type=='noshear':
+                back=''
+            else:
+                back='_%s' % type
+
+            dt += [
+                ('mcal_g%s' % back,'f8',2),
+                ('mcal_g_cov%s' % back,'f8',(2,2)),  # might be used for weights
+            ]
+
+            if type=='noshear':
+                dt += [
+                    ('mcal_gpsf','f8',2),
+                    ('mcal_Tpsf','f8'),
+                ]
+
+            dt += [
+                ('mcal_s2n%s' % back,'f8'),
+                ('mcal_T%s' % back,'f8'),
+                ('mcal_T_err%s' % back,'f8'),
+            ]
+
+        self.mcal_flist = [d[0] for d in dt]
 
         return dt
 
