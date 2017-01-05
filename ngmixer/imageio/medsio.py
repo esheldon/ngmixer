@@ -140,7 +140,6 @@ class MEDSImageIO(ImageIO):
                     replace_bad=corrmeds['replace_bad'],
                     reject_outliers=corrmeds['reject_outliers'],
                     min_weight=min_weight,
-                    copy_all=True,
                     cleanup=True,
                     verbose=False,
                     make_plots=self.conf['make_plots'],

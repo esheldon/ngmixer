@@ -41,6 +41,9 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         central model did not converge (bad fit) then set
         the flag CEN_MODEL_MISSING in the bmask.  Default False.
 
+    reject_outliers: bool
+        Set the weight to zero for pixels that are outliers
+
     min_weight: float
         Min weight to consider "bad".  If the compression preserves
         zeros, this can be left at zero.  Default 0.0
@@ -72,6 +75,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                  make_plots=False,
                  verbose=False):
 
+        self.cleanup=cleanup
         self.mof_file=mof_file
 
         self.band_names=band_names
@@ -550,12 +554,13 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         # get the band for the file
         band = -1
         for band_name in self.band_names:
-            btest = '-%s-' % band_name
+            #btest = '-%s-' % band_name
+            btest = '_%s_' % band_name
             if btest in meds_file:
                 band = self.band_names.index(band_name)
                 break
         if band == -1:
-            raise ValueError("Could not find band for file '%s'!" % corr_file)
+            raise ValueError("Could not find band for file '%s'!" % meds_file)
 
         self.band = band
 

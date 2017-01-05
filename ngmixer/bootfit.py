@@ -58,7 +58,7 @@ class NGMixBootFitter(BaseFitter):
         self['use_logpars'] = self.get('use_logpars',False)
 
         # which models to fit
-        self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
+        self._set_models()
 
         # allow pre-selection based on psf flux
         self['min_psf_s2n'] = self.get('min_psf_s2n',-numpy.inf)
@@ -81,6 +81,9 @@ class NGMixBootFitter(BaseFitter):
         # this actually means calculating things like
         # lensfit sens from samples or B&A PQR
         self['do_shear'] = self.get('do_shear',False)
+
+    def _set_models(self):
+        self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
 
     def _get_namer(self, model, coadd):
         if coadd and (self['fit_me_galaxy'] or self['use_coadd_prefix']):
@@ -805,8 +808,8 @@ class NGMixBootFitter(BaseFitter):
                     print("    galaxy fitting failed: %s" % err)
                     flags = GAL_FIT_FAILURE
 
-        except BootPSFFailure:
-            print("    psf fitting failed")
+        except BootPSFFailure as err:
+            print("    psf fitting failed: %s" % str(err))
             flags = PSF_FIT_FAILURE
 
         return flags, boot
@@ -830,7 +833,8 @@ class NGMixBootFitter(BaseFitter):
 
             self.data[n('flags')][0,band] = flags
             self.data[n('flux')][0,band] = flux
-            self.data[n('flux_err')][0,band] = flux_err
+            if n('flux_err') in self.data.dtype.names:
+                self.data[n('flux_err')][0,band] = flux_err
 
             if flux_err > 0:
                 s2n = flux/flux_err
@@ -846,7 +850,7 @@ class NGMixBootFitter(BaseFitter):
 
         return flagsall
 
-    def _fit_psfs(self,coadd, boot=None):
+    def _fit_psfs(self, coadd, boot=None):
         """
         fit the psf model to every observation's psf image
         """
@@ -871,10 +875,13 @@ class NGMixBootFitter(BaseFitter):
             if len(obs_list) == 0:
                 raise BootPSFFailure("psf fitting failed - band %d has no obs" % band)
 
-        if (self['make_plots']
-            and (('made_psf_plots' not in self.mb_obs_list.meta) or
+        if self['make_plots']:
+            self._do_psf_plots(boot)
+
+    def _do_psf_plots(self, boot):
+        if (('made_psf_plots' not in self.mb_obs_list.meta) or
                  ('made_psf_plots' in self.mb_obs_list.meta and
-                  self.mb_obs_list.meta['made_psf_plots'] == False)) ):
+                  self.mb_obs_list.meta['made_psf_plots'] == False)):
 
             self.mb_obs_list.update_meta_data({'made_psf_plots':True})
             for band,obs_list in enumerate(boot.mb_obs_list):
@@ -1020,7 +1027,7 @@ class NGMixBootFitter(BaseFitter):
         dindex=0
 
         res=self.gal_fitter.get_result()
-        mres=self.boot.get_max_fitter().get_result()
+        mres=self.boot.get_fitter().get_result()
 
         rres=self.boot.get_round_result()
 
@@ -1081,7 +1088,7 @@ class NGMixBootFitter(BaseFitter):
         if 'pars_err' in res:
             print_pars(res['pars_err'],front='    gal_perr: ')
 
-        mres=self.boot.get_max_fitter().get_result()
+        mres=self.boot.get_fitter().get_result()
         if 's2n_w' in mres:
             rres=self.boot.get_round_result()            
             tup=(mres['s2n_w'],
@@ -1154,7 +1161,7 @@ class NGMixBootFitter(BaseFitter):
         """
         get all model names, includeing the coadd_ ones
         """
-        self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
+        #self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
 
         models=[]
         #if coadd:
@@ -1378,11 +1385,11 @@ class MaxNGMixBootFitter(NGMixBootFitter):
         rpars=self['round_pars']
         self.boot.set_round_s2n(fitter_type=rpars['fitter_type'])
 
-        self.gal_fitter=self.boot.get_max_fitter()
+        self.gal_fitter=self.boot.get_fitter()
 
         if self['make_plots']:
             self._plot_resids(self.new_mb_obs_list.meta['id'],
-                              self.boot.get_max_fitter(),
+                              self.boot.get_fitter(),
                               model, coadd, 'max')
             self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
 
@@ -1402,7 +1409,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
 
         if self['make_plots']:
             self._plot_resids(self.new_mb_obs_list.meta['id'],
-                              self.boot.get_max_fitter(),
+                              self.boot.get_fitter(),
                               model,
                               coadd,
                               'max')
@@ -1433,7 +1440,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         """
 
         boot=self.boot
-        max_fitter=boot.get_max_fitter()
+        max_fitter=boot.get_fitter()
         sampler=boot.get_isampler()
 
         # this is the full prior
@@ -1500,12 +1507,6 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         from .priors import set_priors
 
         super(MetacalNGMixBootFitter,self)._setup()
-
-        self['nrand'] = self.get('nrand',1)
-        if self['nrand'] is None:
-            self['nrand']=1
-
-        self['use_original_weight'] = self.get('use_original_weight',False)
 
         defpars={'step':0.01}
         self['metacal_pars'] = self.get('metacal_pars',defpars)
@@ -1732,5 +1733,184 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
 
 
+class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
+    _default_metacal_pars={
+        'symmetrize_psf':True,
+        'types': ['objshear','1p','1m','2p','2m'],
+    }
+    def _setup(self):
+        # calling super of super
+        super(MetacalNGMixBootFitter,self)._setup()
 
+        metacal_pars={}
+        metacal_pars.update(
+            MetacalAdmomBootFitter._default_metacal_pars,
+        )
+        if 'metacal_pars' in self:
+            metacal_pars.update( self['metacal_pars'] )
+
+        metacal_pars['nband'] = self['nband']
+
+        self['metacal_pars'] = metacal_pars
+
+        print("metacal pars:")
+        pprint(self['metacal_pars'])
+
+        self['admom_pars'] = self.get('admom_pars',None)
+
+    def _set_models(self):
+        """
+        Just to better interact with the inherited code base
+        """
+        self['fit_models'] = ['gauss']
+
+
+    def _get_bootstrapper(self, model, mb_obs_list):
+        """
+        get the bootstrapper for fitting psf through galaxy
+        """
+        # note self has admom_pars key
+        return ngmix.bootstrap.AdmomBootstrapper(
+            mb_obs_list,
+            **self
+        )
+
+    def _fit_psfs(self, coadd, boot=None):
+        """
+        fit the psf model to every observation's psf image
+        """
+
+        print('    fitting the PSFs')
+
+        if boot is None:
+            boot=self.boot
+
+        boot.fit_psfs(Tguess_key='Tguess')
+
+        # check for no obs in a band if PSF fit fails
+        for band,obs_list in enumerate(boot.mb_obs_list):
+            if len(obs_list) == 0:
+                raise BootPSFFailure("psf fitting failed - band %d has no obs" % band)
+
+        if self['make_plots']:
+            self._do_psf_plots(boot)
+
+    def _fit_galaxy(self, model, coadd, boot=None,**kwargs):
+        """
+        model should always be gauss
+        """
+        assert model=="gauss"
+
+        if boot is None:
+            boot=self.boot
+
+        boot.fit()
+
+        self.gal_fitter=self.boot.get_fitter()
+
+
+        if self['make_plots']:
+            self._plot_resids(self.new_mb_obs_list.meta['id'],
+                              self.boot.get_fitter(),
+                              model, coadd, 'max')
+            self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
+
+
+    def get_num_pars_psf(self):
+        return 6
+
+    def _copy_galaxy_result(self, model, coadd):
+        """
+        Copy from the result dict to the output array
+        """
+
+        dindex=0
+
+        res=self.gal_fitter.get_result()
+
+        n=self._get_namer(model, coadd)
+
+        data=self.data
+
+        data[n('flags')][dindex] = res['flags']
+
+        if res['flags'] == 0:
+
+            data[n('g')][dindex,:] = res['g']
+            data[n('g_cov')][dindex,:,:] = res['g_cov']
+
+            data[n('s2n')][dindex]  = res['s2n']
+            data[n('T')][dindex]    = res['T']
+
+    def _make_struct(self,coadd):
+        """
+        make the output structure
+        """
+        dt = self._get_fit_data_dtype(coadd=coadd)
+        data = numpy.zeros(1,dtype=dt)
+
+        n=self._get_namer('psf', coadd)
+
+        data[n('flags')] = NO_ATTEMPT
+        data[n('flux')] = DEFVAL
+        data[n('flux_s2n')] = DEFVAL
+
+        n=self._get_namer('', coadd)
+
+        data[n('mask_frac')] = DEFVAL
+        data[n('psfrec_T')] = DEFVAL
+        data[n('psfrec_g')] = DEFVAL
+
+        models=self._get_all_models(coadd)
+        for model in models:
+            n=Namer(model)
+
+            data[n('flags')] = NO_ATTEMPT
+            data[n('g')] = DEFVAL
+            data[n('g_cov')] = DEFVAL
+            data[n('s2n')] = DEFVAL
+            data[n('T')] = DEFVAL
+
+        return data
+
+
+    def _get_fit_data_dtype(self,coadd):
+        dt=[]
+
+        nband=self['nband']
+        bshape=(nband,)
+        simple_npars=5+nband
+
+        n=self._get_namer('psf', coadd)
+
+        dt += [(n('flags'),   'i4',bshape),
+               (n('flux'),    'f8',bshape),
+               (n('flux_s2n'),'f8',bshape)]
+
+        n=self._get_namer('', coadd)
+
+        dt += [(n('nimage_use'),'i4',bshape)]
+
+        dt += [(n('mask_frac'),'f8'),
+               (n('psfrec_T'),'f8'),
+               (n('psfrec_g'),'f8', 2)]
+
+        if nband==1:
+            fcov_shape=(nband,)
+        else:
+            fcov_shape=(nband,nband)
+        
+        models=self._get_all_models(coadd)
+        for model in models:
+            n=Namer(model)
+
+            dt+=[
+                (n('flags'),'i4'),
+                (n('g'),'f8',2),
+                (n('g_cov'),'f8',(2,2)),
+                (n('s2n'),'f8'),
+                (n('T'),'f8'),
+            ]
+
+        return dt
 

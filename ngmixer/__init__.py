@@ -20,6 +20,7 @@ FITTERS = {}
 from . import bootfit
 FITTERS['max-ngmix-boot'] = bootfit.MaxNGMixBootFitter
 FITTERS['metacal-ngmix-boot'] = bootfit.MetacalNGMixBootFitter
+FITTERS['metacal-admom-boot'] = bootfit.MetacalAdmomBootFitter
 FITTERS['isamp-ngmix-boot'] = bootfit.ISampNGMixBootFitter
 
 from . import deconvolvers

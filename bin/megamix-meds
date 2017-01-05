@@ -187,7 +187,8 @@ class MegaMixer(dict):
         args['stop']         = rng[1]
 
         args['mof_opt'] = ''
-        if self.conf['model_nbrs']:
+        model_nbrs = self.conf.get('model_nbrs',False)
+        if model_nbrs:
             fof_file = self._get_fof_file(ext='.fits')
             args['fof_opt'] = '--fof-file=%s'% fof_file 
 
@@ -198,7 +199,7 @@ class MegaMixer(dict):
             args['fof_opt'] = ''
             args['nbrs_opt'] = ''
 
-            if self.conf['make_corrected_meds']:
+            if 'correct_meds' in self.conf:
                 mof_file = self._get_mof_file()
                 args['mof_opt'] = '--mof-file=%s' % mof_file
 
@@ -251,13 +252,10 @@ class MegaMixer(dict):
         """
         mof file used for subtracting neighbor light
         """
-        if 'mof_run' not in self.conf:
-            raise ValueError('you need to set "mof_run" in the config '
-                             'file to subtract neighbors')
 
         mof_file = files.get_collated_file_fromfile(
             self.meds_files[0],
-            self.conf['mof_run'],
+            self.conf['correct_meds']['mof_run'],
         )
         return mof_file
 
@@ -367,7 +365,8 @@ mv -vf $tmplog $logfile
 
     def _get_num(self):
 
-        if self.conf['model_nbrs']:
+        model_nbrs = self.conf.get('model_nbrs',False)
+        if model_nbrs:
             fname = self._get_fof_file()
             fofs = fitsio.read(fname)
             num = numpy.unique(fofs['fofid']).size
@@ -410,7 +409,7 @@ mv -vf $tmplog $logfile
         self.chunk_ranges = chunk_ranges
 
     def _load_config(self):
-        self.conf = read_yaml(self.ngmix_config)
+        self.conf = files.read_config(self.ngmix_config)
         self.jobs_conf = self.conf['jobs']
 
     def _make_rng(self, seed=None):
@@ -583,7 +582,7 @@ def find_meds_files(conf, tile_id):
 def process_tile_list(args):
     # this is actually a config file
     tile_conf = read_yaml(args.meds_files[0])
-    conf=read_yaml(args.ngmix_config)
+    conf=files.read_config(args.ngmix_config)
 
     ntiles = len(tile_conf['tile_ids'])
 
