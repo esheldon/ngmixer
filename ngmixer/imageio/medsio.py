@@ -409,6 +409,8 @@ class MEDSImageIO(ImageIO):
     def get_meta_data_dtype(self):
         dt=[('id','i8'),
             ('number','i4'),
+            ('ra','f8'),
+            ('dec','f8'),
             ('nimage_tot','i4',(self.conf['nband'],)),
             ('fofid','i8')]
         return dt
@@ -519,6 +521,8 @@ class MEDSImageIO(ImageIO):
         meta_row = self._get_meta_row()
         meta_row['id'][0] = self.meds_list[0]['id'][mindex]
         meta_row['number'][0] = self.meds_list[0]['number'][mindex]
+        meta_row['ra'][0] = self.meds_list[0]['ra'][mindex]
+        meta_row['dec'][0] = self.meds_list[0]['dec'][mindex]
 
         # to account for max_cutouts limit, we count the actual number
         #meta_row['nimage_tot'][0,:] = numpy.array([self.meds_list[b]['ncutout'][mindex]-1 for b in xrange(self.conf['nband'])],dtype='i4')

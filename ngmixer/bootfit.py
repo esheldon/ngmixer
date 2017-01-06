@@ -1382,8 +1382,7 @@ class MaxNGMixBootFitter(NGMixBootFitter):
     def _fit_galaxy(self, model, coadd, guess=None, **kwargs):
         self._fit_max(model,guess=guess,**kwargs)
 
-        rpars=self['round_pars']
-        self.boot.set_round_s2n(fitter_type=rpars['fitter_type'])
+        self.boot.set_round_s2n()
 
         self.gal_fitter=self.boot.get_fitter()
 
@@ -1431,8 +1430,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         prior=self['model_pars'][model]['prior']
         self.boot.isample(ipars, prior=prior)
 
-        rpars=self['round_pars']
-        self.boot.set_round_s2n(fitter_type=rpars['fitter_type'])
+        self.boot.set_round_s2n()
 
     def _add_shear_info(self, model):
         """
@@ -1866,6 +1864,8 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
             d[n('T')][dindex]    = res['T']
             d[n('T_err')][dindex]    = res['T_err']
 
+            d[n('flux')][dindex]    = res['flux']
+            d[n('flux_s2n')][dindex]    = res['flux_s2n']
 
         
             d['mcal_flags'][dindex] = res['mcal_flags']
@@ -1884,6 +1884,9 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
 
                 d['mcal_T%s' % back][dindex] = tres['T']
                 d['mcal_T_err%s' % back][dindex] = tres['T_err']
+
+                d['mcal_flux%s' % back][dindex] = tres['flux']
+                d['mcal_flux_s2n%s' % back][dindex] = tres['flux_s2n']
 
                 if type=='noshear':
                     for p in ['gpsf','Tpsf']:
@@ -1921,6 +1924,9 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
             d[n('T')] = DEFVAL
             d[n('T_err')] = PDEFVAL
 
+            d[n('flux')] = DEFVAL
+            d[n('flux_s2n')] = DEFVAL
+
         for f in self.mcal_flist:
             if 'err' in f:
                 dval=PDEFVAL
@@ -1938,7 +1944,6 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
 
         nband=self['nband']
         bshape=(nband,)
-        simple_npars=5+nband
 
         n=self._get_namer('psf', coadd)
 
@@ -1970,6 +1975,8 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
                 (n('s2n'),'f8'),
                 (n('T'),'f8'),
                 (n('T_err'),'f8'),
+                (n('flux'),'f8',bshape),
+                (n('flux_s2n'),'f8',bshape),
             ]
 
         dt += self._get_metacal_dt()
@@ -1978,6 +1985,10 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
 
     def _get_metacal_dt(self):
         types=ngmix.bootstrap.AdmomMetacalBootstrapper._default_metacal_pars['types']
+
+
+        nband=self['nband']
+        bshape=(nband,)
 
         dt=[('mcal_flags','i4')]
         for type in types:
@@ -2002,6 +2013,8 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
                 ('mcal_s2n%s' % back,'f8'),
                 ('mcal_T%s' % back,'f8'),
                 ('mcal_T_err%s' % back,'f8'),
+                ('mcal_flux%s' % back,'f8',bshape),
+                ('mcal_flux_s2n%s' % back,'f8',bshape),
             ]
 
         self.mcal_flist = [d[0] for d in dt]

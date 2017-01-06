@@ -205,13 +205,7 @@ class DESConcat(Concat):
             names.insert(flux_ind+2,'coadd_psf_mag')
 
 
-        tmpind = names.index('psf_flux_err')
-        if 'psf_flux_s2n' not in names:
-            tmpind += 1
-            dt.insert(tmpind, ('psf_flux_s2n','f8',nbands) )
-            names.insert(tmpind,'psf_flux_s2n')
-
-        tmpind += 1
+        tmpind = names.index('psf_flux_s2n')
         dt.insert(tmpind, ('psf_mag','f8',nbands) )
         names.insert(tmpind,'psf_mag')
 
@@ -432,6 +426,10 @@ class DESConcat(Concat):
                         flux=flux[w2]
                         flux_err=numpy.sqrt(flux_var[w2])
                         data[n('flux_s2n')][w[w2], band] = flux/flux_err
+
+class DESAdmomMetacalConcat(DESConcat):
+    def get_models(self, data):
+        return ['gauss','mcal']
 
 class DESMetacalConcat(DESConcat):
     #def __init__(self,*args,**kwargs):
