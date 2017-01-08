@@ -8,7 +8,7 @@ from ..util import Namer
 
 from .concat import Concat,ConcatError
 
-SHAPENOISE=0.16
+SHAPENOISE=0.20
 SHAPENOISE2=SHAPENOISE**2
 
 class DESConcat(Concat):
@@ -438,6 +438,10 @@ class DESAdmomMetacalConcat(DESConcat):
         return ['gauss','mcal']
 
     def pick_fields(self, data0, meta):
+        return data0
+
+    '''
+    def pick_fields(self, data0, meta):
         """
         pick out some fields, add some fields, rename some fields
         """
@@ -543,7 +547,7 @@ class DESAdmomMetacalConcat(DESConcat):
                 else:
                     sb = data[n('flux')][w,band]/data[n('T')][w]
                     data[n('logsb')][w,band] = numpy.log10(numpy.abs(sb))
-
+    '''
 class DESMetacalConcat(DESConcat):
     #def __init__(self,*args,**kwargs):
     #    super(DESMetacalConcat,self).__init__(*args, **kwargs)
