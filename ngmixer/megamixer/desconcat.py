@@ -44,7 +44,14 @@ class DESConcat(Concat):
 
         This also includes the Q values from B&A
         """
-        from blind_des_catalog import blind_arrays
+
+        blinding = self.config['collate']['blinding']
+        if blinding =='y3':
+            from blind_des_catalog_y3 import blind_arrays
+        elif blinding == 'y1':
+            from blind_des_catalog import blind_arrays
+        else:
+            raise ValueError("bad blinding scheme: '%s'" % blinding)
 
         models=self.get_models(data)
 
