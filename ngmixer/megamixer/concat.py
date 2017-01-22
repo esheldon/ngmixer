@@ -150,8 +150,14 @@ class Concat(object):
             print("\tNo good chunks found, skipping entire data set")
             return
 
-        data = numpy.array(dlist,dtype=data.dtype.descr)
-        epoch_data = numpy.array(elist,dtype=epoch_data.dtype.descr)
+        data = numpy.array(
+            dlist,
+            dtype=dlist[0].dtype.descr,
+        )
+        epoch_data = numpy.array(
+            elist,
+            dtype=elist[0].dtype.descr,
+        )
         if len(nlist) > 0:
             nbrs_data = numpy.array(nlist,dtype=ndtype)
         else:
