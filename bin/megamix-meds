@@ -588,7 +588,7 @@ def process_tile_list(args):
 
     for i,tile_id in enumerate(tile_conf['tile_ids']):
 
-        print("%d/%d tile id: %d" % (i+1,ntiles,tile_id))
+        print("%d/%d tile id: %s" % (i+1,ntiles,tile_id))
 
         meds_files = files.get_meds_files(
             tile_conf['campaign'],
