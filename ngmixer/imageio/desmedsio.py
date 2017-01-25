@@ -1023,6 +1023,9 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
                     pattern=ls[2]
                     exp_ccd_name = 'D%08d-%02d' % (expnum,ccdnum)
 
+                else:
+                    raise ValueError("badly formatted psf map line: '%s'" % line.strip())
+
                 psf_map[exp_ccd_name] = pattern
 
         self._psf_map=psf_map
