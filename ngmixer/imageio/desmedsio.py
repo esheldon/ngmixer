@@ -1012,24 +1012,18 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
                 ls=line.strip().split()
 
-                expname=ls[0]
-                pattern=ls[1]
+                if len(ls) == 2:
+                    # standard style
+                    exp_ccd_name=ls[0]
+                    pattern=ls[1]
+                elif len(ls)==3:
+                    # DESDM style
+                    expnum=int(ls[0])
+                    ccdnum=int(ls[1])
+                    pattern=ls[2]
+                    exp_ccd_name = 'D%08d-%02d' % (expnum,ccdnum)
 
-                psf_map[expname] = pattern
-
-                """
-                pattern=line.strip()
-
-                bname=os.path.basename(pattern)
-
-                # bname looks like D00149774_g_c%02d_r2382p01_psfexcat.psf
-                # we will key off the exposure name, e.g. D00149774
-                fs = bname.split('_')
-                expname = fs[0]
-
-                full_pattern = os.path.join('$DESDATA', 'OPS', 'finalcut', pattern)
-                psf_map[expname] = full_pattern
-                """
+                psf_map[exp_ccd_name] = pattern
 
         self._psf_map=psf_map
 
