@@ -35,14 +35,18 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
     sub_file: string
         Where to write the result
 
+    reject_outliers: bool
+        Set the weight to zero for pixels that are outliers
+
     replace_bad: bool
         If True, replace pixels with bits set in the bmask,
         or with zero weight, with the central model.  If the
         central model did not converge (bad fit) then set
         the flag CEN_MODEL_MISSING in the bmask.  Default False.
 
-    reject_outliers: bool
-        Set the weight to zero for pixels that are outliers
+    add_noise: bool
+        If True (default), add Gaussian noise to replaced bad pixels,
+        with variance at the level of the median inverse weight.
 
     min_weight: float
         Min weight to consider "bad".  If the compression preserves
@@ -67,6 +71,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                  sub_file,
                  reject_outliers=False,
                  replace_bad=False,
+                 add_noise=True,
                  min_weight=0.0,
                  # these are the bands in the mof
                  band_names = ['g','r','i','z'],
@@ -83,6 +88,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
 
         self.reject_outliers=reject_outliers
         self.replace_bad=replace_bad
+        self.add_noise=add_noise
 
         self.min_weight=min_weight
         self.make_plots=make_plots
@@ -267,15 +273,16 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                 imravel[wbad] = scaled_cen[wbad]
 
 
-                print("        adding noise to",wbad.size,"replaced")
-                err = numpy.sqrt( 1.0/wtravel[wbad] )
-                rand = numpy.random.normal(
-                    loc=0.0,
-                    scale=1.0,
-                    size=err.size,
-                )
-                rand *= err
-                imravel[wbad] = imravel[wbad] + rand
+                if(self.add_noise==True):
+                    print("        adding noise to",wbad.size,"replaced")
+                    err = numpy.sqrt( 1.0/wtravel[wbad] )
+                    rand = numpy.random.normal(
+                        loc=0.0,
+                        scale=1.0,
+                        size=err.size,
+                    )
+                    rand *= err
+                    imravel[wbad] = imravel[wbad] + rand
 
 
     def _extract(self):
