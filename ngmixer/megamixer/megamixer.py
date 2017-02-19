@@ -537,7 +537,7 @@ fi
         except:
             print("failed to link tile '%s'" % coadd_tile)
 
-    def install_mof_outputs(self,coadd_tile,clobber=True):
+    def install_mof_outputs(self,coadd_tile, blind=True):
         print("installing MOF outputs for tile '%s'" % coadd_tile)
 
         collated_file, files=self.get_collated_file(coadd_tile, blind=blind)
@@ -568,22 +568,27 @@ fi
         collated_file = tc.collated_file
         '''
 
+        if not os.path.exists(collated_file):
+            # maybe we only have the other one
+            from os.path import basename, dirname, join
+            bname=basename(collated_file)
+            d = dirname(dirname(collated_file))
+            collated_file=join(d, 'output', bname )
+            if not os.path.exists(collated_file):
+                print("missing: %s %s" % (coadd_tile, collated_file))
+                return
+
         moff = self.get_mof_file(coadd_tile,files['DESDATA'],self['run'])
         odir = os.path.split(moff)[0]
         if not os.path.exists(odir):
             os.makedirs(odir)
 
-        if os.path.exists(moff):
-            if clobber:
-                try:
-                    os.remove(moff)
-                except:
-                    pass
-            else:
-                raise IOError("MOF output file '%s' already exists in DESDATA!" % moff)
 
-        print("    moving '%s' -> '%s'"%(collated_file,moff))
-        os.system('cp %s %s' % (collated_file,moff))
+        if os.path.exists(moff):
+            os.remove(moff)
+
+        print("    linking '%s' -> '%s'"%(collated_file,moff))
+        os.system('ln -s %s %s' % (collated_file,moff))
 
     def write_job_script(self,files,i,rng):
         """

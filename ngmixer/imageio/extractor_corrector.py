@@ -70,6 +70,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                  model='cm',
                  cleanup=False,
                  make_plots=False,
+                 copy_all=False,
                  verbose=False):
 
         self.mof_file=mof_file
@@ -95,6 +96,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
             end,
             sub_file,
             cleanup=cleanup,
+            copy_all=copy_all,
         )
 
 

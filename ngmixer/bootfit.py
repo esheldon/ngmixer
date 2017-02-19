@@ -1637,7 +1637,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             print("    metacal flags set:",mcal_flags)
             d[n('flags')][dindex] |= METACAL_FAILURE
 
-        for type in ngmix.metacal.METACAL_TYPES:
+        types = self['metacal_pars'].get('types',ngmix.metacal.METACAL_TYPES)
+        for type in types:
             tres=res[type]
             if type=='noshear':
                 back=''
@@ -1677,7 +1678,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             raise RuntimeError("for metacal, only fit one model and "
                                "either coadd or me")
 
-        for type in ngmix.metacal.METACAL_TYPES:
+        types = self['metacal_pars'].get('types',ngmix.metacal.METACAL_TYPES)
+        for type in types:
 
             if type=='noshear':
                 back=''
