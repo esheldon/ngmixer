@@ -1655,6 +1655,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 back='_%s' % type
 
             d['mcal_pars%s' % back][dindex] = tres['pars']
+            d['mcal_pars_cov%s' % back][dindex] = tres['pars_cov']
             d['mcal_g%s' % back][dindex] = tres['g']
             d['mcal_g_cov%s' % back][dindex] = tres['g_cov']
 
@@ -1670,7 +1671,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             d['mcal_s2n_r%s' % back][dindex] = tres['s2n_r']
 
             if type=='noshear':
-                for p in ['pars_cov','gpsf','Tpsf']:
+                for p in ['gpsf','Tpsf']:
                     name='mcal_%s' % p
                     d[name][dindex] = tres[p]
 
@@ -1698,11 +1699,11 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 ('mcal_g%s' % back,'f8',2),
                 ('mcal_g_cov%s' % back,'f8',(2,2)),  # might be used for weights
                 ('mcal_pars%s' % back,'f8',np),
+                ('mcal_pars_cov%s' % back,'f8',(np,np)),
             ]
 
             if type=='noshear':
                 dt += [
-                    ('mcal_pars_cov','f8',(np,np)),
                     ('mcal_gpsf','f8',2),
                     ('mcal_Tpsf','f8'),
                 ]
