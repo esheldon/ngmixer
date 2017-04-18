@@ -607,14 +607,17 @@ class NGMixBootFitter(BaseFitter):
         biggles.configure('screen','width', width)
         biggles.configure('screen','height', height)
         tab = biggles.Table(2,3)
-        tab.title = title
+        #tab.title = title
 
-        tab[0,0] = images.view(obs.image_orig,title='original image',show=False,nonlinear=0.075)
-        tab[0,1] = images.view(nbrsim,title='models of nbrs',show=False,nonlinear=0.075)
+        nl=0.075
+        #nl = 0.1
+        #nl = 0.05
+        tab[0,0] = images.view(obs.image_orig,title='original image',show=False,nonlinear=nl)
+        tab[0,1] = images.view(nbrsim,title='models of nbrs',show=False,nonlinear=nl)
 
         tab[0,2] = images.view(plot_seg(obs.seg),title='seg map',show=False)
 
-        tab[1,0] = images.view(obs.image,title='corrected image',show=False,nonlinear=0.075)
+        tab[1,0] = images.view(obs.image,title='corrected image',show=False,nonlinear=nl)
         msk = totim != 0
         frac = numpy.zeros(totim.shape)
         frac[msk] = cenim[msk]/totim[msk]
@@ -626,8 +629,10 @@ class NGMixBootFitter(BaseFitter):
                 fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d.png' % (ptype,band,icut_cen))
             else:
                 fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd.png' % (ptype,band))
+            fname=fname.replace('.png','.eps')
             print("        making plot %s" % fname)
-            tab.write_img(1920,1200,fname)
+            #tab.write_img(1920,1200,fname)
+            tab.write(fname)
         except:
             print("        caught error plotting nbrs")
             pass
@@ -876,9 +881,9 @@ class NGMixBootFitter(BaseFitter):
                 raise BootPSFFailure("psf fitting failed - band %d has no obs" % band)
 
         if self['make_plots']:
-            self._do_psf_plots(boot)
+            self._do_psf_plots(boot, coadd)
 
-    def _do_psf_plots(self, boot):
+    def _do_psf_plots(self, boot, coadd):
         if (('made_psf_plots' not in self.mb_obs_list.meta) or
                  ('made_psf_plots' in self.mb_obs_list.meta and
                   self.mb_obs_list.meta['made_psf_plots'] == False)):
@@ -1786,7 +1791,7 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
                 raise BootPSFFailure("psf fitting failed - band %d has no obs" % band)
 
         if self['make_plots']:
-            self._do_psf_plots(boot)
+            self._do_psf_plots(boot, coadd)
 
     def _fit_galaxy(self, model, coadd, boot=None,**kwargs):
         """
