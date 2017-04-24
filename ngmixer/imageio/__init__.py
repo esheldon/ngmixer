@@ -10,6 +10,8 @@ from .desmedsio import (SVDESMEDSImageIO,
                         Y1DESMEDSImageIO,
                         Y3DESMEDSImageIO,
                        )
+from .wtg import WTGMEDSImageIO
+
 from .simpsimmedsio import SimpSimMEDSImageIO
 
 from . import extractor_corrector
@@ -25,6 +27,7 @@ IMAGEIO['meds-des-sv'] = SVDESMEDSImageIO
 IMAGEIO['meds-des-sv-mof'] = MOFSVDESMEDSImageIO
 IMAGEIO['meds-des-y1'] = Y1DESMEDSImageIO
 IMAGEIO['meds-des-y3'] = Y3DESMEDSImageIO
+IMAGEIO['meds-wtg'] = WTGMEDSImageIO
 
 # MEDS sim formats
 IMAGEIO['meds-simp-sim'] = SimpSimMEDSImageIO
