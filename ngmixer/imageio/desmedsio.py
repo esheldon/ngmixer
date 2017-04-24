@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 from __future__ import print_function
 import os
 import numpy
@@ -342,7 +341,6 @@ class SVDESMEDSImageIO(MEDSImageIO):
         print('loading psfex')
 
         desdata=files.get_desdata()
-        meds_desdata=self.meds_list[0]._meta['DESDATA'][0]
 
         psfex_lists=[]
         for band in self.iband:
