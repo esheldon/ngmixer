@@ -226,6 +226,10 @@ class SVDESMEDSImageIO(MEDSImageIO):
         """
         Get an image representing the psf
         """
+        if self.conf['psfs_in_file']:
+            return super(SVDESMEDSImageIO,self)._get_psf_image(
+                band, mindex, icut,
+            )
 
         meds=self.meds_list[band]
         file_id=meds['file_id'][mindex,icut]
@@ -977,7 +981,13 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
     this is using Brian Yanny's exposure pattern list format
     """
     def __init__(self, *args, **kw):
-        self._load_psf_map(**kw)
+
+        conf=args[0]
+        conf['psfs_in_file'] = conf.get('psfs_in_file',False)
+
+        if not conf['psfs_in_file']:
+            self._load_psf_map(**kw)
+
         super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
 
     def get_meta_data_dtype(self):
@@ -1001,7 +1011,8 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
         map_file=extra_data.get('psf_map',None)
         if map_file is None:
-            raise RuntimeError("for Y3 you must send a map file")
+            raise RuntimeError("for Y3 you must send a map file or "
+                               "have psfs in the MEDS file")
 
         print("reading psf map:",map_file)
         psf_map={}

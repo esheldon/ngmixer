@@ -60,12 +60,14 @@ class MEDSImageIO(ImageIO):
         self.conf['nband'] = len(self.meds_list)
 
         self.conf['max_cutouts'] = self.conf.get('max_cutouts',None)
+        self.conf['psfs_in_file'] = self.conf.get('psfs_in_file',False)
 
         # indexing of fofs
         self._set_and_check_index_lookups()
 
         # psfs
-        self._load_psf_data()
+        if not self.conf['psfs_in_file']:
+            self._load_psf_data()
 
         # make sure if we are doing nbrs we have the info we need
         if self.conf['model_nbrs']:
@@ -101,7 +103,30 @@ class MEDSImageIO(ImageIO):
 
         The filename is optional and is just for debugging purposes.
         """
-        raise NotImplementedError("_get_psf_image method of ImageIO must be defined in subclass.")
+
+        if not self.conf['psfs_in_file']:
+            raise NotImplementedError("only use base class method when "
+                                      "psfs are in the MEDS file")
+
+        meds=self.meds_list[band]
+        psfim = meds.get_psf(mindex, icut)
+
+        cat = meds.get_cat()
+        names=cat.dtype.names
+        if 'psf_sigma' in names:
+            sigma_pix = cat['psf_sigma'][mindex, icut]
+        else:
+            sigma_pix = 2.5
+
+        if 'psf_cutout_row' in names:
+            cen = (
+                cat['psf_cutout_row'][mindex, icut],
+                cat['psf_cutout_col'][mindex, icut],
+            )
+        else:
+            cen = (numpy.array(psfim.shape)-1.0)/2.0
+
+        return psfim, cen, sigma_pix, 'none'
 
     def _get_sub_fname(self,fname):
         rng_string = '%s-%s' % (self.fof_range[0], self.fof_range[1])

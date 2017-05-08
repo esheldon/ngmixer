@@ -103,6 +103,15 @@ def get_counts_prior(params, nband):
             pclass = ngmix.priors.FlatPrior
         elif typ=='TwoSidedErf':
             pclass = ngmix.priors.TwoSidedErf
+
+        elif typ =='lognormal':
+
+            mean=params['mean']
+            sigma=params['sigma']
+            params['pars'] = [mean, sigma]
+            pclass = ngmix.priors.LogNormal
+
+
         else:
             raise ValueError("bad counts prior type: %s" % typ)
 
