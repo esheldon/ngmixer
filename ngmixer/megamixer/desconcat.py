@@ -125,7 +125,8 @@ class DESConcat(Concat):
         if wkeep.size==0:
             print("None found with cutout_index >= 0")
             print(epoch_data0['cutout_index'])
-            return numpy.zeros(1)
+            #return numpy.zeros(1)
+            return []
 
         epoch_data0=epoch_data0[wkeep]
 

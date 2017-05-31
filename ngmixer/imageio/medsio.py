@@ -153,9 +153,20 @@ class MEDSImageIO(ImageIO):
                 )
 
             min_weight=self.conf.get('min_weight',0.0)
-            for meds_file in self.meds_files:
+
+            band_not_in_name=self.conf.get("band_not_in_name",False)
+
+            for iband,meds_file in enumerate(self.meds_files):
                 print(meds_file)
                 newf = self._get_sub_fname(meds_file)
+
+
+                # we must assume the bands line up with the MOF run
+                if band_not_in_name:
+                    band=iband
+                else:
+                    band=None
+
                 ex=MEDSExtractorCorrector(
                     self.mof_file,
                     meds_file,
@@ -168,6 +179,7 @@ class MEDSImageIO(ImageIO):
                     cleanup=True,
                     verbose=False,
                     make_plots=self.conf['make_plots'],
+                    band=band,
                 )
                 extracted.append(ex)
             extracted.append(None)
@@ -221,6 +233,11 @@ class MEDSImageIO(ImageIO):
         self.meds_files_full = self.meds_files
         self.fof_file_full = self.fof_file
         self.extracted=None
+
+        if 'correct_meds' in self.conf and self.fof_range is None:
+            with meds.MEDS(self.meds_files_full[0]) as m:
+                self.fof_range=[0,m.size-1]
+
         if self.fof_range is not None:
             extracted=self._get_sub()
             meds_files=[ex.sub_file for ex in extracted if ex is not None]
