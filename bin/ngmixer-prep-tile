@@ -23,6 +23,12 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument(
+    'medsconf',
+    help='meds configuration or processing campaign for desdm',
+)
+
+
+parser.add_argument(
     'tilename',
     help=('Name of tile or tile_id to process, e.g. '
           'DES0123-4567 or DES0123-4567_r2590p01'),
@@ -76,12 +82,6 @@ parser.add_argument(
     '--coaddrooturl',
     help='Root path to DESDM file tree for coadd inputs',
     default='https://desar2.cosmology.illinois.edu/DESFiles/desarchive/OPS/multiepoch',
-)
-
-parser.add_argument(
-    '--campaign',
-    help='processing campaign',
-    default='Y3A1',
 )
 
 
@@ -177,11 +177,6 @@ def fetchinputs(args):
 
     info=files.get_meds_info(meds_paths[tilename])
 
-    psf_map_output = files.get_psfmap_file(
-        info['campaign'],
-        info['tile_id'],
-    )
-
     with open(args.psfset) as readpsflist:
         for line in readpsflist:
             psf_rel_path = line.strip()
@@ -203,16 +198,22 @@ def fetchinputs(args):
 
     meds_list=[]	
 
-    print("writing psf map file:",psf_map_output)
     makedirs(os.path.dirname(psf_map_output))
 
-    with open(psf_map_output,'w') as psf_map_fobj:
-        for band in args.bands:
+    for band in args.bands:
+        with open(psf_map_output,'w') as psf_map_fobj:
+
+            psf_map_output = files.get_psfmap_file(
+                info['medsconf'],
+                info['tile_id'],
+                info['band'],
+            )
+            print("writing psf map file:",psf_map_output)
 
             print("    %s" % band)
 
             meds_file=meds_paths[tilename].replace('BAND',band)
-            meds_url=os.path.join(args.coaddrooturl, args.campaign, meds_file)
+            meds_url=os.path.join(args.coaddrooturl, args.medsconf, meds_file)
             meds_local = os.path.join(meds_dir, os.path.basename(meds_file))
             meds_list.append(meds_local)
 
@@ -222,7 +223,7 @@ def fetchinputs(args):
             listfile=list_paths[tilename].replace('BAND',band)
             local_listfile = os.path.join(meds_dir, os.path.basename(listfile))
 
-            list_url=os.path.join(args.coaddrooturl, args.campaign, listfile)
+            list_url=os.path.join(args.coaddrooturl, args.medsconf, listfile)
             if not args.nograblists:
                 fetch_remote(meds_dir, list_url, clobber=args.clobber)
 

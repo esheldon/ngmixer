@@ -80,19 +80,21 @@ parser.add_argument("--seed", default=None,type=int,
                   help=("random seed to make seeds for jobs.  "
                         "If not sent, is gotten from the config file"))
 
+parser.add_argument('--desdm',action='store_true',
+                  help="the MEDS files, psf maps are DESDM style")
 
 class MegaMixer(dict):
     """
     conf has ngmix config plus
     """
-    def __init__(self, ngmix_config, psf_map_file, meds_files,
+    def __init__(self, ngmix_config, psf_map_files, meds_files,
                  missing=False,
                  blind=True,
                  skip_errors=False,
                  clobber=False,
                  seed=None):
         self.ngmix_config    = os.path.abspath( ngmix_config )
-        self.psf_map_file   = os.path.abspath(psf_map_file)
+        self.psf_map_files   = [os.path.abspath(f) for f in psf_map_files]
         self.missing=missing
 
         self.blind=blind
@@ -179,7 +181,7 @@ class MegaMixer(dict):
 
 
         args['ngmix_config'] = self.ngmix_config
-        args['psf_map']      = self.psf_map_file
+        args['psf_maps']     = ','.join(self.psf_map_files)
         args['meds_files']   = self.meds_string
         args['output_file']  = output_file
         args['logfile']      = logfile
@@ -310,7 +312,7 @@ tmplog=$TMPDIR/$logbase
 
 
 config="{ngmix_config}"
-psf_map="{psf_map}"
+psf_maps="{psf_maps}"
 meds="{meds_files}"
 
 outfile="{output_file}"
@@ -320,7 +322,7 @@ stop={stop}
 ngmixit                                   \
     --fof-range=$start,$stop              \
     --work-dir=$TMPDIR                    \
-    --psf-map=$psf_map                    \
+    --psf-map="$psf_maps"                 \
     {nbrs_opt}                            \
     {fof_opt}                             \
     {mof_opt}                             \
@@ -532,7 +534,7 @@ def get_megamixer(system):
 
 def process_meds_files(args, meds_files):
 
-    psf_map_file = files.get_psfmap_file_fromfile(meds_files[0])
+    psf_map_files = [files.get_psfmap_file_fromfile(f) for f in meds_files]
 
     # get command
     cmd = args.command
@@ -542,7 +544,7 @@ def process_meds_files(args, meds_files):
     blind = not args.noblind
     ngmm = MMixer(
         args.ngmix_config,
-        psf_map_file,
+        psf_map_files,
         meds_files,
         seed=args.seed,
         missing=args.missing,
@@ -575,23 +577,28 @@ def process_meds_files(args, meds_files):
         raise ValueError("cmd %s not valid!" % cmd)
 
 
-def find_meds_files(conf, tile_id):
-
-    dir = files.get_meds_dir(conf['campaign'], tile_id)
     
 def process_tile_list(args):
     # this is actually a config file
     tile_conf = read_yaml(args.meds_files[0])
     conf=files.read_config(args.ngmix_config)
 
-    ntiles = len(tile_conf['tile_ids'])
+    if 'tileset' in tile_conf:
+        import desmeds
+        tileset = desmeds.files.read_tileset(tile_conf['tileset'])
 
-    for i,tile_id in enumerate(tile_conf['tile_ids']):
+        tiles = tileset['tile_ids']
+    else:
+        tiles = tile_conf['tile_ids']
+
+    ntiles = tiles
+
+    for i,tile_id in enumerate(tiles):
 
         print("%d/%d tile id: %s" % (i+1,ntiles,tile_id))
 
         meds_files = files.get_meds_files(
-            tile_conf['campaign'],
+            tile_conf['medsconf'],
             tile_id,
             conf['jobs']['bands'],
         )

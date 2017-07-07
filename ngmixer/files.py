@@ -10,6 +10,12 @@ import copy
 import numpy
 import esutil as eu
 
+# we rely on desmeds for MEDS paths
+try:
+    import desmeds
+except ImportError:
+    pass
+
 def get_desdata():
     """
     might not be defined
@@ -47,19 +53,34 @@ def get_meds_info(meds_file):
 
     fs = bname.split('_')
 
-    tilename=fs[0]
-    reqatt = fs[1]
-    band = fs[2]
+    if len(fs)==4:
+        # this is a desdm MEDS file
 
-    # use underscore for consistency
-    tile_id='%s_%s' % (tilename,reqatt)
+        tilename = fs[0]
+        reqatt   = fs[1]
+        band     = fs[2]
 
-    end = bname.split('-')[-1]
-    campaign = end.replace('.fits.fz','').replace('.fits','')
+        # use underscore for consistency
+        tile_id='%s_%s' % (tilename,reqatt)
 
+        end = bname.split('-')[-1]
+        medsconf = end.replace('.fits.fz','').replace('.fits','')
+
+    else:
+
+        # tile id and tilename are the same
+        tilename=fs[0]
+        tile_id=tilename
+        reqatt=None
+        band=fs[1]
+        
+        end=fs[-1]
+
+        # this is actually the meds configuration
+        medsconf = end.replace('.fits.fz','').replace('meds-','')
 
     return {
-        'campaign':campaign,
+        'medsconf':medsconf,
         'tile_id':tile_id,       # tilename_reqatt
         'tilename':tilename,     # coadd tile
         'reqatt':reqatt,         # combination of reqnum and attnum, e.g r2577p01
@@ -68,65 +89,26 @@ def get_meds_info(meds_file):
 
 def get_tile_id(meds_file):
     """
-    e.g. DES0205-3706_r2577p01
+    e.g. DES0205-3706_r2577p01 for desdm, simply the tilename otherwise
     """
     info = get_meds_info(meds_file)
     return info['tile_id']
 
-def get_meds_basedir():
-    if 'MEDS_DIR' not in os.environ:
-        raise RuntimeError("MEDS_DIR environment variable not set")
-    return os.environ['MEDS_DIR']
-
-def get_meds_dir(campaign, tile_id):
+def get_meds_files(medsconf, tile_id, bands):
     """
     this is the directory where we will sync the meds files
     and psf files.  This is not the "usual" place where DESDM
     puts things
     """
 
-    dir=get_meds_basedir()
-    return os.path.join(
-        dir,
-        campaign,
-        tile_id,
-    )
-
-def get_meds_file(campaign, tile_id, band):
-    """
-    this is the directory where we will sync the meds files
-    and psf files.  This is not the "usual" place where DESDM
-    puts things
-    """
-
-    dir=get_meds_dir(campaign, tile_id)
-    fname = '%s_%s_%s.fits.fz' % (tile_id, band, campaign)
-
-    return os.path.join(
-        dir,
-        fname,
-    )
-
-def get_meds_files(campaign, tile_id, bands):
-    """
-    this is the directory where we will sync the meds files
-    and psf files.  This is not the "usual" place where DESDM
-    puts things
-    """
-
-    dir=get_meds_dir(campaign, tile_id)
 
     fnames = []
     for band in bands:
-        fname = '%s_%s_meds-%s.fits.fz' % (tile_id, band, campaign)
-        fname = os.path.join(
-            dir,
-            fname,
-        )
+        fname=desmeds.files.get_meds_file(medsconf, tile_id, band)
+        fname = os.path.join(dir, fname)
         fnames.append(fname)
 
     return fnames
-
 
 def get_meds_dir_fromfile(meds_file):
     """
@@ -134,16 +116,7 @@ def get_meds_dir_fromfile(meds_file):
     """
 
     info = get_meds_info(meds_file)
-    return get_meds_dir(info['campaign'], info['tile_id'])
-
-
-def get_psf_dir(campaign, tile_id):
-    """
-    local location for all psf files associated with
-    a MEDS file
-    """
-    meds_dir=get_meds_dir(campaign, tile_id)
-    return os.path.join(meds_dir, 'psfs')
+    return desmeds.files.get_meds_dir(info['medsconf'], info['tile_id'])
 
 def get_psf_dir_fromfile(meds_file):
     """
@@ -152,25 +125,9 @@ def get_psf_dir_fromfile(meds_file):
     puts things
     """
     info = get_meds_info(meds_file)
-    return get_psf_dir(info['campaign'], info['tile_id'])
-
-def get_psfmap_dir(campaign, tile_id):
-    """
-    we put the psfmap file in the same directory
-    as the MEDS file
-    """
-    return get_meds_dir(campaign, tile_id)
-
-def get_psfmap_file(campaign, tile_id):
-    """
-    we put the psfmap file in the same directory
-    as the MEDS file
-    """
-    dir = get_psfmap_dir(campaign, tile_id)
-    fname = '%s-%s-psfmap.txt' % (tile_id,campaign)
-    return os.path.join(
-        dir,
-        fname,
+    return desmeds.files.get_psf_dir(
+        info['medsconf'],
+        info['tile_id'],
     )
 
 def get_psfmap_dir_fromfile(meds_file):
@@ -185,7 +142,11 @@ def get_psfmap_file_fromfile(meds_file):
     get the psfmap file from a meds file input
     """
     info=get_meds_info(meds_file)
-    return get_psfmap_file(info['campaign'], info['tile_id'])
+    return desmeds.files.get_psfmap_file(
+        info['medsconf'],
+        info['tile_id'],
+        info['band'],
+    )
 
 
 def get_ngmixer_output_dir():

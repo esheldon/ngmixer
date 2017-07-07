@@ -88,7 +88,7 @@ if __name__ == '__main__':
         extra_data['psf_file'] = options.psf_file
 
     if options.psf_map is not None:
-        extra_data['psf_map'] = options.psf_map
+        extra_data['psf_map'] = options.psf_map.split(',')
 
     doMOF = config.get('model_nbrs',False)
 

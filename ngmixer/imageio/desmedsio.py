@@ -1009,33 +1009,35 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
         """
         extra_data=kw.get('extra_data',{})
 
-        map_file=extra_data.get('psf_map',None)
-        if map_file is None:
-            raise RuntimeError("for Y3 you must send a map file or "
+        map_files=extra_data.get('psf_map',None)
+        if map_files is None:
+            raise RuntimeError("for Y3 you must send map files or "
                                "have psfs in the MEDS file")
 
-        print("reading psf map:",map_file)
         psf_map={}
-        with open(map_file) as fobj:
-            for line in fobj:
 
-                ls=line.strip().split()
+        for map_file in map_files:
+            print("reading psf map:",map_file)
+            with open(map_file) as fobj:
+                for line in fobj:
 
-                if len(ls) == 2:
-                    # standard style
-                    exp_ccd_name=ls[0]
-                    pattern=ls[1]
-                elif len(ls)==3:
-                    # DESDM style
-                    expnum=int(ls[0])
-                    ccdnum=int(ls[1])
-                    pattern=ls[2]
-                    exp_ccd_name = 'D%08d-%02d' % (expnum,ccdnum)
+                    ls=line.strip().split()
 
-                else:
-                    raise ValueError("badly formatted psf map line: '%s'" % line.strip())
+                    if len(ls) == 2:
+                        # standard style
+                        exp_ccd_name=ls[0]
+                        pattern=ls[1]
+                    elif len(ls)==3:
+                        # DESDM style
+                        expnum=int(ls[0])
+                        ccdnum=int(ls[1])
+                        pattern=ls[2]
+                        exp_ccd_name = 'D%08d-%02d' % (expnum,ccdnum)
 
-                psf_map[exp_ccd_name] = pattern
+                    else:
+                        raise ValueError("badly formatted psf map line: '%s'" % line.strip())
+
+                    psf_map[exp_ccd_name] = pattern
 
         self._psf_map=psf_map
 
@@ -1046,14 +1048,21 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
         bname = os.path.basename(image_path)
         # these bnames look like DES0157-3914_r2577p01_D00490381_r_c48_nwgint.fits
+        # D00495879_z_c42_r2377p01_immasked_nullwt.fits
         # we need the exposure name, e.g. D00490381 and the ccd number, e.g. 48
 
         fs = bname.split('_')
-
-        expname = fs[2]
-        ccd = fs[4][1:]
+        if bname[0:3] == 'DES':
+            expname = fs[2]
+            ccd = fs[4][1:]
+        else:
+            expname = fs[0]
+            ccd = fs[2][1:]
 
         key='%s-%s' % (expname, ccd)
+
+
+
         psf_path = self._psf_map[key]
 
 
