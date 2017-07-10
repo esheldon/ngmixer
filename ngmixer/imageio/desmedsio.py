@@ -24,6 +24,28 @@ PSF_IN_BLACKLIST=2**1
 PSF_MISSING_S2N=2**2
 PSF_LOW_S2N=2**3
 
+
+BADPIX_MAP={
+    "BPM":          1,  #/* set in bpm (hot/dead pixel/column)        */
+    "SATURATE":     2,  #/* saturated pixel                           */
+    "INTERP":       4,  #/* interpolated pixel                        */
+    "BADAMP":       8,  #/* Data from non-functional amplifier        */
+    "CRAY":        16,  #/* cosmic ray pixel                          */
+    "STAR":        32,  #/* bright star pixel                         */
+    "TRAIL":       64,  #/* bleed trail pixel                         */
+    "EDGEBLEED":  128,  #/* edge bleed pixel                          */
+    "SSXTALK":    256,  #/* pixel potentially effected by xtalk from  */
+                        #/*       a super-saturated source            */
+    "EDGE":       512,  #/* pixel flag to exclude CCD glowing edges   */
+    "STREAK":    1024,  #/* pixel associated with streak from a       */
+                        #/*       satellite, meteor, ufo...           */
+    "SUSPECT":   2048,  #/* nominally useful pixel but not perfect    */
+    "FIXED":     4096,  #/* corrected by pixcorrect                   */
+    "NEAREDGE":  8192,  #/* suspect due to edge proximity             */
+    "TAPEBUMP": 16384,  #/* suspect due to known tape bump            */
+}
+
+
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
 
@@ -40,9 +62,24 @@ class SVDESMEDSImageIO(MEDSImageIO):
         if 'psf_s2n_checks' in conf:
             self._load_psf_s2n(conf)
 
+
         super(SVDESMEDSImageIO,self).__init__(*args, **kw)
 
+        # call this aftersuper init to over ride flags
+        self._set_extra_mask_flags()
+
         self._load_image_metadata()
+
+    def _set_extra_mask_flags(self):
+        flag_list = self.conf.get('extra_mask_flag_list',None)
+
+        if flag_list is not None:
+
+            flags = 0
+            for flagname in flag_list:
+                flags += BADPIX_MAP[flagname]
+
+            self.conf['extra_mask_flags'] = flags
 
     def _load_image_metadata(self):
         """
@@ -564,8 +601,31 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
     def _set_defaults(self):
         super(Y1DESMEDSImageIO,self)._set_defaults()
         self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
-        self.conf['prop_sat_starpix'] = self.conf.get('prop_sat_starpix',False)
+
+        self._set_propagate_saturated_stars()
+
         self.conf['flag_y1_stellarhalo_masked'] = self.conf.get('flag_y1_stellarhalo_masked',False)
+
+    def _set_propagate_saturated_stars(self):
+        """
+        check if we should propagate the SATURATE and INTERP flags
+        for bright stars into other bands
+
+        do not propagate saturated/interpolated pixels for bright
+        stars into other bands/epochs when these bits are also
+        set for the pixel
+        """
+
+        pconf = self.conf.get('propagate_star_flags',None)
+        if pconf is None:
+            self.conf['propagate_star_flags'] = dict(propagate = False)
+        else:
+            flag_list = pconf['ignore_when_set']
+            mask = 0
+            for flag in flag_list:
+                mask += BADPIX_MAP[flag]
+
+            pconf['ignore_when_set_mask'] = mask
 
     def _load_wcs_data(self):
         # should we read from the original file?
@@ -735,6 +795,15 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
 
     def _interpolate_maskbits(self,iobj,m1,icutout1,m2,icutout2):
         """
+
+        we want to propagate SATURATE and INTERP pixels through to all
+        bands if they are associated with a star. this way if such areas
+        are different between bands, we take the largest
+
+        However, do not propagate these flags if certain other flags are set
+        that could have caused the saturation. In other words if the flags
+        were set for reasons other than the object being too bright
+
         Y3 bit masks
 
 #define BADPIX_BPM          1  /* set in bpm (hot/dead pixel/column)        */
@@ -755,6 +824,17 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
 #define BADPIX_FIXED     4096  /* corrected by pixcorrect                   */
 #define BADPIX_NEAREDGE  8192  /* suspect due to edge proximity             */
 #define BADPIX_TAPEBUMP 16384  /* suspect due to known tape bump            */
+
+
+        these are already nulled in the weight maps that we use for Y3
+        BADPIX_BPM
+        BADPIX_BADAMP
+        BADPIX_EDGEBLEED
+        BADPIX_EDGE
+        BADPIX_CRAY
+        BADPIX_SSXTALK
+        BADPIX_STREAK
+        BADPIX_TRAIL
         """
 
         rowcen1 = m1['cutout_row'][iobj,icutout1]
@@ -770,13 +850,23 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         im2[:,:] = 0
         
 
-        msk = numpy.array([16384+8192+2048+1024+512+256+128+16+8+1],dtype='u4')
-        
-        q = numpy.where( ((im1&2 != 0) | (im1&4 != 0)) 
-                         & 
-                         (im1&32 != 0) 
-                         &
-                         (im1&msk == 0))
+
+        msk = self.conf['propagate_star_flags']['ignore_when_set_mask']
+
+        is_sat_or_interp = (
+            (im1 & BADPIX_MAP['SATURATE'] != 0) | (im1 & BADPIX_MAP['INTERP'] != 0)
+        )
+        is_bright_star = (im1 & BADPIX_MAP['STAR'] != 0)
+        not_other_bits = (im1 & msk == 0)
+
+        q = numpy.where(
+             is_sat_or_interp 
+             & 
+             is_bright_star 
+             &
+             not_other_bits 
+        )
+
         im1[:,:] = 0
         im1[q] = 1
         
@@ -901,6 +991,9 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                             obs.weight_orig[q] = 0.0        
 
     def _flag_y1_stellarhalo_masked_one(self,mb_obs_list):
+
+        starflag = BADPIX_MAP['STAR']
+
         mindex = mb_obs_list.meta['meds_index']
         seg_number = self.meds_list[0]['number'][mindex]
         
@@ -915,33 +1008,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                     icut = obs.meta['icut']
                     bmask = self.meds_list[band].get_cutout(mindex,icut,type='bmask')
                     
-                    q = numpy.where((bmask&32 != 0) & (obs.seg == seg_number))
-                    
-                    # debugging code - leave for now
-                    """
-                    if numpy.any(bmask&32 != 0) and q[0].size > 0:
-                        import matplotlib.pyplot as plt
-                        
-                        qq = numpy.where(bmask&32 != 0)
-                        pim = numpy.zeros_like(bmask)
-                        pim[qq] = 1
-                        
-                        pseg = obs.seg.copy()
-                        pseg = pseg.astype('f8')
-                        useg = numpy.sort(numpy.unique(obs.seg))
-                        nuseg = float(len(useg))
-                        for i,sval in enumerate(useg):
-                            qq = numpy.where(obs.seg == sval)
-                            if qq[0].size > 0:
-                                pseg[qq] = float(i)/nuseg
-                                
-                        fig,axs = plt.subplots(1,2)
-                        axs[0].imshow(pim)                                                
-                        axs[1].imshow(pseg)
-                        
-                        import ipdb
-                        ipdb.set_trace()
-                    """
+                    q = numpy.where((bmask & starflag != 0) & (obs.seg == seg_number))
                     
                     if q[0].size > 0:                        
                         flags = 1
@@ -961,7 +1028,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         coadd_mb_obs_list, mb_obs_list = super(Y1DESMEDSImageIO, self)._get_multi_band_observations(mindex)
         
         # mask extra pixels in saturated stars
-        if self.conf['prop_sat_starpix']:
+        if self.conf['propagate_star_flags']['propagate']:
             # get total OR'ed bit mask
             bmasks = self._get_extra_bitmasks(coadd_mb_obs_list,mb_obs_list)
             self._prop_extra_bitmasks(bmasks,mb_obs_list)
