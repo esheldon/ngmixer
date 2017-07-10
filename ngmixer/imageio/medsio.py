@@ -80,6 +80,9 @@ class MEDSImageIO(ImageIO):
         self.conf['ignore_zero_images'] = self.conf.get('ignore_zero_images',False)
 
 
+        # zero the weight map for these
+        self.conf['extra_mask_flags'] = self.conf.get('extra_mask_flags',None)
+
         # max fraction of image masked in bitmask or that has zero weight
         self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',1.0)
         self.conf['max_zero_weight_frac'] = self.conf.get('max_zero_weight_frac',1.0)
@@ -677,7 +680,7 @@ class MEDSImageIO(ImageIO):
             return None
 
 
-        wt,wt_us,wt_raw,seg,skip = self._get_meds_weight(meds, mindex, icut)
+        wt,wt_us,wt_raw,seg,skip = self._get_meds_weight(meds, mindex, icut, bmask)
         if skip:
             return None
 
@@ -886,28 +889,34 @@ class MEDSImageIO(ImageIO):
         wt=wt.clip(min=0.0)
         return wt
 
-    def _get_meds_weight(self, meds, mindex, icut):
+    def _get_meds_weight(self, meds, mindex, icut, bmask):
         """
         Get a weight map from the input MEDS file
         """
-        maxfrac=self.conf['max_zero_weight_frac']
+
+        conf=self.conf
+
+        maxfrac=conf['max_zero_weight_frac']
         skip=False
 
         wt_raw = meds.get_cutout(mindex, icut, type='weight')
-        if self.conf['region'] == 'mof':
+        if conf['region'] == 'mof':
             wt=wt_raw.copy()
             wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
-        elif self.conf['region'] == "cweight-nearest":
+        elif conf['region'] == "cweight-nearest":
             wt = meds.get_cweight_cutout_nearest(mindex, icut)
             wt_us = None
-        elif self.conf['region'] == 'seg_and_sky':
+        elif conf['region'] == 'seg_and_sky':
             wt=meds.get_cweight_cutout(mindex, icut)
             wt_us = None
-        elif self.conf['region'] == 'weight':
+        elif conf['region'] == 'weight':
             wt=wt_raw.copy()
             wt_us = None
         else:
-            raise ValueError("no support for region type %s" % self.conf['region'])
+            raise ValueError("no support for region type %s" % conf['region'])
+
+        if conf['extra_mask_flags'] is not None:
+            self._zero_weights_for_flagged_pixels(wt, wt_us, bmask)
 
         wt = self._clip_weight(wt)
         wt_raw = self._clip_weight(wt_raw)
@@ -921,7 +930,7 @@ class MEDSImageIO(ImageIO):
 
 
         '''
-        if self.conf['symmetrize_weight']:
+        if conf['symmetrize_weight']:
             raise RuntimeError("this is bogus!  Need to zero the map not add")
             wt     = wt     + numpy.rot90(wt)
             wt_raw = wt_raw + numpy.rot90(wt_raw)
@@ -940,6 +949,16 @@ class MEDSImageIO(ImageIO):
             skip=True
 
         return wt,wt_us,wt_raw,seg, skip
+
+    def _zero_weights_for_flagged_pixels(self, wt, wt_us, bmask):
+        w = numpy.where( (bmask & self.conf['extra_mask_flags']) != 0 )
+        if w[0].size > 0:
+            print("    zeroing weight for",w[0].size,"pixels")
+            #if raw_input('hit a key (q to quit): ') == 'q':
+            #    stop
+            wt[w] = 0.0
+            if wt_us is not None:
+                wt_us[w] = 0.0
 
     def _get_jacobian(self, meds, mindex, icut):
         """
