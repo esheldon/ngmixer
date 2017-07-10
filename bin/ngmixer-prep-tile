@@ -75,33 +75,34 @@ class Getter(dict):
         sync the actual meds and psfmap files one at a time
         """
 
-        try:
-            fdict=self.fdict
-            clobber=self['clobber']
+        fdict=self.fdict
+        tmp_dir=fdict['meds_tmp_dir']
+        clobber=self['clobber']
 
-            os.chdir( fdict['meds_dir'] )
+        try:
+
             for info in fdict['file_info']:
 
-                for type in ['meds','psfmap']:
-                    tmp_dir=fdict['%s_tmp_dir' % type]
+                for type in ['psfmap','meds']:
 
-                    fname=info['%s_fname' % type]
+                    local_fname=info['%s_fname' % type]
+                    remote_fname=info['%s_fname_remote' % type]
                     tmp_fname= info['%s_tmp_fname' % type]
 
-                    fexists=os.path.exists(fname)
+                    fexists=os.path.exists(local_fname)
                     if fexists:
                         if clobber:
-                            print("removing existing file:",fname)
-                            os.remove(fname)
+                            print("removing existing file:",local_fname)
+                            os.remove(local_fname)
                         else:
                             continue
 
-                    cmd = ['wget','-q','-P',tmp_dir,info['meds_fname_remote']]
+                    cmd = ['wget','-q','-P',tmp_dir,remote_fname]
                     print(' '.join(cmd))
                     subprocess.check_call(cmd)
 
-                    print("moving:",tmp_fname, local_file)
-                    shutil.move(tmp_fname, local_file)
+                    print("moving:",tmp_fname, local_fname)
+                    shutil.move(tmp_fname, local_fname)
 
         finally:
             for dname in ['meds_tmp_dir','psf_tmp_dir']:
