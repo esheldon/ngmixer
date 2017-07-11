@@ -64,7 +64,15 @@ class Getter(dict):
 
         self._set_files()
         self._makedirs()
-        self._sync_files()
+
+        try:
+            self._sync_files()
+        finally:
+            for dname in ['meds_tmp_dir','psf_tmp_dir']:
+                dir = self.fdict[dname]
+                if os.path.exists(dir):
+                    print('removing tmp dir:',dir)
+                    shutil.rmtree(dir)
 
     def _sync_files(self):
         self._sync_meds()
@@ -79,40 +87,51 @@ class Getter(dict):
         tmp_dir=fdict['meds_tmp_dir']
         clobber=self['clobber']
 
-        try:
 
-            for info in fdict['file_info']:
+        for info in fdict['file_info']:
 
-                for type in ['psfmap','meds']:
+            for type in ['psfmap','meds']:
 
-                    local_fname=info['%s_fname' % type]
-                    remote_fname=info['%s_fname_remote' % type]
-                    tmp_fname= info['%s_tmp_fname' % type]
+                local_fname=info['%s_fname' % type]
+                remote_fname=info['%s_fname_remote' % type]
+                tmp_fname= info['%s_tmp_fname' % type]
 
-                    fexists=os.path.exists(local_fname)
-                    if fexists:
-                        if clobber:
-                            print("removing existing file:",local_fname)
-                            os.remove(local_fname)
-                        else:
-                            continue
+                fexists=os.path.exists(local_fname)
+                if fexists:
+                    if clobber:
+                        print("removing existing file:",local_fname)
+                        os.remove(local_fname)
+                    else:
+                        continue
 
-                    cmd = ['wget','-q','-P',tmp_dir,remote_fname]
-                    print(' '.join(cmd))
-                    subprocess.check_call(cmd)
+                cmd = ['wget','-q','-P',tmp_dir,remote_fname]
+                print(' '.join(cmd))
+                subprocess.check_call(cmd)
 
-                    print("moving:",tmp_fname, local_fname)
-                    shutil.move(tmp_fname, local_fname)
-
-        finally:
-            for dname in ['meds_tmp_dir','psf_tmp_dir']:
-                dir = fdict[dname]
-                if os.path.exists(dir):
-                    print('removing tmp dir:',dir)
-                    shutil.rmtree(dir)
+                print("moving:",tmp_fname, local_fname)
+                shutil.move(tmp_fname, local_fname)
 
     def _sync_psfs(self):
-        print("psf syncing not yet written")
+
+        fdict=self.fdict
+        psflist=os.path.join(fdict['psf_tmp_dir'],'psflist.dat')
+
+        with open(psflist,'w') as output:
+            for info in fdict['file_info']:
+                psfmap_fname=info['psfmap_fname']
+                with open(psfmap_fname) as fobj:
+                    for line in fobj:
+                        ls=line.split()
+                        local_fname=ls[2]
+                        remote_fname=local_fname.replace(
+                            '$MEDS_DIR',
+                            REMOTE_MEDS_DIR,
+                        )
+                        output.write('%s\n' % remote_fname)
+
+        cmd = ['wget','-q','-P',fdict['psf_dir'],'-i',psflist]
+        print(' '.join(cmd))
+        subprocess.check_call(cmd)
 
     def _set_files(self):
         """
