@@ -71,12 +71,13 @@ class Getter(dict):
             for dname in ['meds_tmp_dir','psf_tmp_dir']:
                 dir = self.fdict[dname]
                 if os.path.exists(dir):
-                    print('removing tmp dir:',dir)
+                    #print('removing tmp dir:',dir)
                     shutil.rmtree(dir)
 
     def _sync_files(self):
         self._sync_meds()
         self._sync_psfs()
+        print("files are in",self.fdict['meds_dir'])
 
     def _sync_meds(self):
         """
@@ -113,25 +114,53 @@ class Getter(dict):
 
     def _sync_psfs(self):
 
+        clobber=self['clobber']
         fdict=self.fdict
+        psf_dir=fdict['psf_dir']
+        tmp_dir=fdict['psf_tmp_dir']
         psflist=os.path.join(fdict['psf_tmp_dir'],'psflist.dat')
 
+        num=0
+        #print("opening psf list:",psflist)
         with open(psflist,'w') as output:
             for info in fdict['file_info']:
                 psfmap_fname=info['psfmap_fname']
                 with open(psfmap_fname) as fobj:
                     for line in fobj:
                         ls=line.split()
-                        local_fname=ls[2]
+                        local_fname=os.path.expandvars(ls[2])
+
+                        fexists=os.path.exists(local_fname)
+                        if fexists:
+                            if clobber:
+                                print("removing existing file:",local_fname)
+                                os.remove(local_fname)
+                            else:
+                                continue
+
                         remote_fname=local_fname.replace(
-                            '$MEDS_DIR',
+                            self['meds_base'],
                             REMOTE_MEDS_DIR,
                         )
+                        print("adding",remote_fname)
                         output.write('%s\n' % remote_fname)
+                        num += 1
 
-        cmd = ['wget','-q','-P',fdict['psf_dir'],'-i',psflist]
-        print(' '.join(cmd))
-        subprocess.check_call(cmd)
+        if num > 0:
+            print("downloading psfs")
+            cmd = ['wget','-q','-P',tmp_dir,'-i',psflist]
+            #print(' '.join(cmd))
+            subprocess.check_call(cmd)
+
+            # success, now move the files
+            with open(psflist) as fobj:
+                for f in fobj:
+                    bname=os.path.basename(f.strip())
+                    src=os.path.join(tmp_dir,bname)
+                    dst=os.path.join(psf_dir,bname)
+
+                    print("moving",src,dst)
+                    shutil.move(src, dst)
 
     def _set_files(self):
         """
@@ -208,7 +237,7 @@ def makedirs(dir):
 
     if os.path.exists(dir):
         return
-    print("making directory:",dir)
+    #print("making directory:",dir)
     try:
         os.stat(dir)
     except:
