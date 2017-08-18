@@ -10,12 +10,6 @@ import copy
 import numpy
 import esutil as eu
 
-# we rely on desmeds for MEDS paths
-try:
-    import desmeds
-except ImportError:
-    pass
-
 def get_desdata():
     """
     might not be defined
@@ -100,7 +94,7 @@ def get_meds_files(medsconf, tile_id, bands):
     and psf files.  This is not the "usual" place where DESDM
     puts things
     """
-
+    import desmeds
 
     fnames = []
     for band in bands:
@@ -114,6 +108,7 @@ def get_meds_dir_fromfile(meds_file):
     """
     local meds directory from an input file name
     """
+    import desmeds
 
     info = get_meds_info(meds_file)
     return desmeds.files.get_meds_dir(info['medsconf'], info['tile_id'])
@@ -124,6 +119,7 @@ def get_psf_dir_fromfile(meds_file):
     and psf files.  This is not the "usual" place where DESDM
     puts things
     """
+    import desmeds
     info = get_meds_info(meds_file)
     return desmeds.files.get_psf_dir(
         info['medsconf'],
@@ -141,6 +137,7 @@ def get_psfmap_file_fromfile(meds_file):
     """
     get the psfmap file from a meds file input
     """
+    import desmeds
     info=get_meds_info(meds_file)
     return desmeds.files.get_psfmap_file(
         info['medsconf'],
@@ -156,6 +153,45 @@ def get_ngmixer_output_dir():
     if 'NGMIXER_OUTPUT_DIR' not in os.environ:
         raise ValueError("environment variable NGMIXER_OUTPUT_DIR not set")
     return os.environ['NGMIXER_OUTPUT_DIR']
+
+def get_run_dir(run):
+    """
+    get the base of the run directory
+    """
+    return os.path.join(
+        get_ngmixer_output_dir(),
+        run,
+    )
+
+def get_tile_dir(tile_id, run):
+    """
+    {run}/{tile}
+    """
+    dir=get_run_dir(run)
+    return os.path.join(dir, tile_id)
+
+def get_condor_master_script(tile_id, run):
+    """
+    master script for condor
+    """
+    dir=get_tile_dir(tile_id, run)
+    return os.path.join(dir, 'master.sh')
+
+def get_condor_dir(run):
+    """
+    get the base of the run directory
+    """
+    dir=get_run_dir(run)
+    return os.path.join(dir, 'condor')
+
+
+def get_condor_submit(tile_id, run):
+    """
+    get the base of the run directory
+    """
+    dir=get_condor_dir(run)
+    return os.path.join(dir, '%s.condor' % tile_id)
+
 
 def get_nbrs_dir(tile_id, run):
     """

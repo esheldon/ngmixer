@@ -107,6 +107,8 @@ class MegaMixer(dict):
         self.meds_files=[os.path.abspath(mf) for mf in meds_files]
         self.meds_string=' '.join(self.meds_files)
 
+        self.info= files.get_meds_info(meds_files[0])
+
         self._set_files()
 
     def setup(self):
@@ -226,6 +228,8 @@ class MegaMixer(dict):
 
             os.system('chmod 755 %s' % script_name)
 
+        return dowrite, script_name
+
     def _write_nbrs_script(self):
 
         self._make_nbrs_dir()
@@ -303,16 +307,27 @@ class MegaMixer(dict):
     def _get_script_template(self):
         template=r"""#!/bin/bash
 
-mkdir -p $TMPDIR
+if [[ -n $_CONDOR_SCRATCH_DIR ]]; then
+    # the condor system creates a scratch directory for us,
+    # and cleans up afterward
+    tmpdir=$_CONDOR_SCRATCH_DIR
+    export TMPDIR=$tmpdir
+else
+    # otherwise use the TMPDIR
+    tmpdir=$TMPDIR
+    mkdir -p $tmpdir
+fi
 
 logfile="{logfile}"
 
 logbase=$(basename $logfile)
-tmplog=$TMPDIR/$logbase
+tmplog=$tmpdir/$logbase
 
 
 config="{ngmix_config}"
+
 psf_maps="{psf_maps}"
+
 meds="{meds_files}"
 
 outfile="{output_file}"
@@ -321,7 +336,7 @@ stop={stop}
 
 ngmixit                                   \
     --fof-range=$start,$stop              \
-    --work-dir=$TMPDIR                    \
+    --work-dir=$tmpdir                    \
     --psf-map="$psf_maps"                 \
     {nbrs_opt}                            \
     {fof_opt}                             \
@@ -338,13 +353,22 @@ mv -vf $tmplog $logfile
     def _get_nbrs_script_template(self):
         template=r"""#!/bin/bash
 
-mkdir -p $TMPDIR
+if [[ -n $_CONDOR_SCRATCH_DIR ]]; then
+    # the condor system creates a scratch directory for us,
+    # and cleans up afterward
+    tmpdir=$_CONDOR_SCRATCH_DIR
+    export TMPDIR=$tmpdir
+else
+    # otherwise use the TMPDIR
+    tmpdir=$TMPDIR
+    mkdir -p $tmpdir
+fi
+
 
 logfile="{logfile}"
 
 logbase=$(basename $logfile)
-tmplog=$TMPDIR/$logbase
-
+tmplog=$tmpdir/$logbase
 
 config="{ngmix_config}"
 meds="{meds_file}"
@@ -511,6 +535,139 @@ export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
             fp.write(scr)
 
 
+class BNLMegaMixer(MegaMixer):
+    def _get_master_script(self):
+        """
+        the master script needed for condor
+        One executable allowed in condor submit scripts
+        """
+        return files.get_condor_master_script(
+            self.info['tile_id'],
+            self.conf['run'],
+        )
+
+    def _write_condor_master(self):
+        """
+        One executable allowed in condor submit scripts
+        """
+
+        master_script = self._get_master_script()
+        files.makedirs_fromfile(master_script)
+
+        with open(master_script,'w') as fobj:
+            text = """#!/bin/bash
+
+# this will be a path to a script
+cmd="$1"
+$cmd
+            \n"""
+
+            fobj.write(text)
+
+        os.system('chmod 755 %s' % master_script)
+        
+
+    def _make_scripts(self):
+        """
+        write the scripts and job file
+        """
+
+        self._write_condor_master()
+        scripts=[]
+        for chunk,rng in enumerate(self.chunk_ranges):
+            didwrite, script_name = self._write_script(chunk, rng)
+
+            if didwrite:
+                scripts.append(script_name)
+
+        self._write_submit_script(scripts)
+
+    def _write_submit_script(self, scripts):
+        """
+        write the condor submit script, if there
+        were any jobs
+        """
+        job_script = files.get_condor_submit(
+            self.info['tile_id'],
+            self.conf['run'],
+        )
+        if os.path.exists(job_script):
+            os.remove(job_script)
+
+        if len(scripts) == 0:
+            print("no jobs to write")
+            return
+
+        job_fmt=self._get_job_template()
+
+        files.makedirs_fromfile(job_script)
+        print("writing condor submit:",job_script)
+        with open(job_script,'w') as fobj:
+
+            master_script = self._get_master_script()
+            head = self._get_condor_head()
+            head = head.format(script=master_script)
+            fobj.write(head)
+
+
+            for script in scripts:
+                job_name=os.path.basename(script).replace('.sh','')
+
+                job = job_fmt.format(
+                    job_name=job_name,
+                    script_name=script,
+                )
+
+                fobj.write(job)
+
+
+    def _get_condor_head(self):
+        text="""
+Universe        = vanilla
+
+Notification    = Never
+
+# Run this exe with these args
+Executable      = {script}
+
+Image_Size       = 1000000
+
+GetEnv = True
+
+kill_sig        = SIGINT
+
+
++Experiment     = "astro"\n\n"""
+        return text
+
+    def _get_job_template(self):
+        return """
++job_name = "{job_name}"
+Arguments = {script_name}
+Queue\n"""
+
+
+    def _write_nbrs_job_script(self):
+        raise NotImplementedError("deal with nbrs for condor")
+
+        fmt=self._get_job_template()
+        args = {}
+
+        script_name = self._get_nbrs_file(ext='.sh')
+
+        args['script_name']=script_name
+
+        jobname=os.path.basename(script_name).replace('.sh','')
+        args['jobname'] = jobname
+
+        scr = fmt.format(**args)
+
+        script_name = self._get_nbrs_file(ext='.lsf')
+        print("writing:",script_name)
+        with open(script_name,'w') as fp:
+            fp.write(scr)
+
+
 
 def expand_path(path):
     return os.path.abspath(
@@ -527,6 +684,8 @@ def get_megamixer(system):
         MMixer = MegaMixer
     elif system == 'slac':
         MMixer = SLACMegaMixer
+    elif system=='bnl':
+        MMixer = BNLMegaMixer
     else:
         raise ValueError("system %s not supported!" % system)
 
