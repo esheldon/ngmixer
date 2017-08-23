@@ -146,7 +146,7 @@ class Concat(object):
                     raise err
                 print("\tskipping problematic chunk")
 
-        if len(dlist) == 0:
+        if len(dlist) == 0 or len(elist)==0:
             print("\tNo good chunks found, skipping entire data set")
             return
 
