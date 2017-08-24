@@ -459,6 +459,9 @@ class SVDESMEDSImageIO(MEDSImageIO):
                 except PSFExError as err:
                     raise MissingDataError("problem with psfex file "
                                            "'%s': %s " % (psfpath,str(err)))
+                except IOError as err:
+                    raise MissingDataError("problem with psfex file "
+                                           "'%s': %s " % (psfpath,str(err)))
         return pex, flags
 
     def _get_psfex_objects(self, meds, band):
