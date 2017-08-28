@@ -21,6 +21,11 @@ TODO:
 """
 
 from __future__ import print_function
+try:
+    xrange
+except:
+    xrange=range
+
 import os
 import sys
 import numpy
