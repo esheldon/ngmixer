@@ -41,6 +41,9 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         central model did not converge (bad fit) then set
         the flag CEN_MODEL_MISSING in the bmask.  Default False.
 
+    reject_outliers: bool
+        Set the weight to zero for pixels that are outliers
+
     min_weight: float
         Min weight to consider "bad".  If the compression preserves
         zeros, this can be left at zero.  Default 0.0
@@ -67,12 +70,14 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                  min_weight=0.0,
                  # these are the bands in the mof
                  band_names = ['g','r','i','z'],
+                 band=None,
                  model='cm',
                  cleanup=False,
                  make_plots=False,
                  copy_all=False,
                  verbose=False):
 
+        self.cleanup=cleanup
         self.mof_file=mof_file
 
         self.band_names=band_names
@@ -85,7 +90,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         self.make_plots=make_plots
         self.verbose=verbose
 
-        self._set_band(meds_file)
+        self._set_band(meds_file, band=band)
 
         self._setup_plotting(meds_file)
 
@@ -299,20 +304,29 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                 start_row=cat['start_row'][mindex]
 
                 print("%d/%d  %d" % (mindex+1, nobj, coadd_object_id))
-                if ncutout > 1 and box_size > 0:
+                #if ncutout > 1 and box_size > 0:
+                if ncutout > 0 and box_size > 0:
 
-                    imlist = mfile.get_cutout_list(mindex, type='image')[1:]
-                    wtlist = mfile.get_cutout_list(mindex, type='weight')[1:]
-                    bmlist = mfile.get_cutout_list(mindex, type='bmask')[1:]
+                    #imlist = mfile.get_cutout_list(mindex, type='image')[1:]
+                    #wtlist = mfile.get_cutout_list(mindex, type='weight')[1:]
+                    #bmlist = mfile.get_cutout_list(mindex, type='bmask')[1:]
+                    imlist = mfile.get_cutout_list(mindex, type='image')
+                    wtlist = mfile.get_cutout_list(mindex, type='weight')
+                    bmlist = mfile.get_cutout_list(mindex, type='bmask')
 
                     if self.reject_outliers:
                         self._reject_outliers(imlist, wtlist)
 
-                    for icut in xrange(1,ncutout):
+                    #for icut in xrange(1,ncutout):
+                    for icut in xrange(ncutout):
 
-                        img_orig = imlist[icut-1]
-                        weight   = wtlist[icut-1]
-                        bmask    = bmlist[icut-1]
+                        #img_orig = imlist[icut-1]
+                        #weight   = wtlist[icut-1]
+                        #bmask    = bmlist[icut-1]
+
+                        img_orig = imlist[icut]
+                        weight   = wtlist[icut]
+                        bmask    = bmlist[icut]
 
                         img=img_orig.copy()
 
@@ -548,16 +562,21 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
             **conf
         )
 
-    def _set_band(self, meds_file):
+    def _set_band(self, meds_file, band=None):
+        if band is not None:
+            self.band=band
+            return
+
         # get the band for the file
         band = -1
         for band_name in self.band_names:
-            btest = '-%s-' % band_name
+            #btest = '-%s-' % band_name
+            btest = '_%s_' % band_name
             if btest in meds_file:
                 band = self.band_names.index(band_name)
                 break
         if band == -1:
-            raise ValueError("Could not find band for file '%s'!" % corr_file)
+            raise ValueError("Could not find band for file '%s'!" % meds_file)
 
         self.band = band
 

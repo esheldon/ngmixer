@@ -3,6 +3,7 @@ from __future__ import print_function
 import os
 import ngmix
 import fitsio
+import numpy
 
 def set_priors(conf):
     """
@@ -102,6 +103,15 @@ def get_counts_prior(params, nband):
             pclass = ngmix.priors.FlatPrior
         elif typ=='TwoSidedErf':
             pclass = ngmix.priors.TwoSidedErf
+
+        elif typ =='lognormal':
+
+            mean=params['mean']
+            sigma=params['sigma']
+            params['pars'] = [mean, sigma]
+            pclass = ngmix.priors.LogNormal
+
+
         else:
             raise ValueError("bad counts prior type: %s" % typ)
 
@@ -136,15 +146,23 @@ def get_fracdev_prior(params):
         means=data['means']
         covars=data['covars']
 
-        if len(means.shape) == 1:
-            means = means.reshape( (means.size, 1) )
+    elif 'means' in params:
+        means = numpy.array(params['means'])
+        weights = numpy.array(params['weights'])
+        covars= numpy.array(params['covars'])
 
-        prior = ngmix.gmix.GMixND(weights,
-                                  means,
-                                  covars)
     else:
-        raise ValueError("implement fracdev prior '%s'" % params['fracdev_prior_type'])
+        raise ValueError("set either the weights,means,covars or a "
+                         "file name for the fracdev prior")
 
+    if len(means.shape) == 1:
+        means = means.reshape( (means.size, 1) )
+    if len(covars.shape) == 1:
+        covars = covars.reshape( (covars.size, 1, 1) )
+
+    prior = ngmix.gmix.GMixND(weights,
+                              means,
+                              covars)
     return prior
 
 def get_g_prior(params):

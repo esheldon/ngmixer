@@ -17,19 +17,15 @@ class Concat(object):
     Concatenate split files
     """
     def __init__(self,
-                 run,
                  config_file,
                  chunk_list,
-                 output_dir,
                  output_file,
                  clobber=False,
                  skip_errors=False,
                  **kwargs):
 
-        self.run=run
         self.config_file=config_file
 
-        self.output_dir = output_dir
         self.output_file = output_file
         self.clobber = clobber
         self.skip_errors = skip_errors
@@ -38,7 +34,7 @@ class Concat(object):
         self.config = files.read_yaml(config_file)
 
         self.make_collated_dir()
-        self.set_collated_file()
+        self.tmpdir = files.get_temp_dir() 
 
     def pick_fields(self,data0):
         """
@@ -62,21 +58,8 @@ class Concat(object):
         """
         set collated file output dir
         """
-        files.try_makedir(self.output_dir)
+        files.makedirs_fromfile(self.output_file)
 
-    def set_collated_file(self):
-        """
-        set the output file and the temporary directory
-        """
-
-        #self.collated_file = os.path.join(self.output_dir, "%s-%s%s.fits" % (self.output_file,self.run,extra))
-        self.collated_file = _get_collated_file(
-            self.output_dir,
-            self.output_file,
-            self.run,
-            blind=self.blind,
-        )
-        self.tmpdir = files.get_temp_dir()
 
     def read_chunk(self, fname):
         """
@@ -125,7 +108,7 @@ class Concat(object):
                 print("error found: %s" % str(err))
 
         if len(dlist) == 0:
-            print("found no data! could not make or verify collated file %s!" % self.collated_file)
+            print("found no data! could not make or verify collated file %s!" % self.output_file)
         else:
             data = numpy.array(dlist,dtype=data.dtype.descr)
             if not numpy.array_equal(numpy.sort(numpy.unique(data['number'])),numpy.sort(data['number'])):
@@ -135,9 +118,9 @@ class Concat(object):
         """
         actually concatenate the data, and add any new fields
         """
-        print('writing:',self.collated_file)
+        print('writing:',self.output_file)
 
-        if os.path.exists(self.collated_file) and not self.clobber:
+        if os.path.exists(self.output_file) and not self.clobber:
             print('file already exists, skipping')
             return
 
@@ -163,12 +146,18 @@ class Concat(object):
                     raise err
                 print("\tskipping problematic chunk")
 
-        if len(dlist) == 0:
+        if len(dlist) == 0 or len(elist)==0:
             print("\tNo good chunks found, skipping entire data set")
             return
 
-        data = numpy.array(dlist,dtype=data.dtype.descr)
-        epoch_data = numpy.array(elist,dtype=epoch_data.dtype.descr)
+        data = numpy.array(
+            dlist,
+            dtype=dlist[0].dtype.descr,
+        )
+        epoch_data = numpy.array(
+            elist,
+            dtype=elist[0].dtype.descr,
+        )
         if len(nlist) > 0:
             nbrs_data = numpy.array(nlist,dtype=ndtype)
         else:
@@ -185,7 +174,7 @@ class Concat(object):
         write the data, first to a local file then staging out
         the the final location
         """
-        with files.StagedOutFile(self.collated_file, tmpdir=self.tmpdir) as sf:
+        with files.StagedOutFile(self.output_file, tmpdir=self.tmpdir) as sf:
             with fitsio.FITS(sf.path,'rw',clobber=True) as fits:
                 fits.write(data,extname="model_fits")
                 fits.write(epoch_data,extname='epoch_data')
@@ -193,18 +182,4 @@ class Concat(object):
                     fits.write(nbrs_data,extname='nbrs_data')
                 fits.write(meta,extname="meta_data")
 
-        print('output is in:',self.collated_file)
-
-def _get_collated_file(output_dir, output_front, run, blind=True):
-    """
-    set the output file and the temporary directory
-    """
-    if blind:
-        extra='-blind'
-    else:
-        extra=''
-
-    collated_file = os.path.join(output_dir, "%s-%s%s.fits" % (output_front,run,extra))
-
-    return collated_file
-
+        print('output is in:',self.output_file)

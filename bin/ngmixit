@@ -79,23 +79,25 @@ if __name__ == '__main__':
 
     extra_data = {}
     if options.nbrs_file is not None:
-        extra_data['nbrs'] = fitsio.read(os.path.expandvars(options.nbrs_file))
+        extra_data['nbrs'] = fitsio.read(options.nbrs_file)
 
     if options.obj_flags is not None:
-        extra_data['obj_flags'] = fitsio.read(os.path.expandvars(options.obj_flags))
+        extra_data['obj_flags'] = fitsio.read(options.obj_flags)
 
     if options.psf_file is not None:
         extra_data['psf_file'] = options.psf_file
 
     if options.psf_map is not None:
-        extra_data['psf_map'] = options.psf_map
+        extra_data['psf_map'] = options.psf_map.split(',')
 
     doMOF = config.get('model_nbrs',False)
 
     if options.mof_file is not None and doMOF:
-        extra_data['mof_fit_data'] = fitsio.read(os.path.expandvars(options.mof_file))
-        extra_data['mof_nbrs_data'] = fitsio.read(os.path.expandvars(options.mof_file),
-                                                  ext='nbrs_data')
+        extra_data['mof_fit_data'] = fitsio.read(options.mof_file)
+        extra_data['mof_nbrs_data'] = fitsio.read(
+            options.mof_file,
+            ext='nbrs_data',
+        )
 
     verbosity=int(options.verbosity)
     ngmixer.defaults.VERBOSITY.level = verbosity

@@ -70,6 +70,11 @@ class MOFNGMixer(NGMixer):
         maxerr = numpy.zeros(npars,dtype='f8')
         maxerr[:] = -numpy.inf
 
+        # we allow this to be longer, so the same config can accomodate running
+        # on different flux sets
+        maxfrac_conv = self['mof']['maxfrac_conv'][0:npars]
+        maxabs_conv = self['mof']['maxabs_conv'][0:npars]
+
         for fofind in xrange(foflen):
             print_with_verbosity('    fof obj: %ld' % (fofind+1),verbosity=1)
 
@@ -96,8 +101,9 @@ class MOFNGMixer(NGMixer):
                 self.curr_data[n('mof_abs_diff')][fofind] = absdiff
                 self.curr_data[n('mof_frac_diff')][fofind] = absfracdiff
                 self.curr_data[n('mof_err_diff')][fofind] = abserr
-                if numpy.all((absdiff <= self['mof']['maxabs_conv'])      | \
-                             (absfracdiff <= self['mof']['maxfrac_conv']) | \
+
+                if numpy.all((absdiff <= maxabs_conv)      | \
+                             (absfracdiff <= maxfrac_conv) | \
                              (abserr <= self['mof']['maxerr_conv'])):
                     self.curr_data[n('mof_flags')][fofind] = 0
                 else:
@@ -131,8 +137,8 @@ class MOFNGMixer(NGMixer):
 
         self._set_nbr_mof_flags(foflen,coadd_mb_obs_lists,mb_obs_lists)
 
-        if numpy.all((maxabs <= self['mof']['maxabs_conv'])   | \
-                     (maxfrac <= self['mof']['maxfrac_conv']) | \
+        if numpy.all((maxabs <= maxabs_conv)   | \
+                     (maxfrac <= maxfrac_conv) | \
                      (maxerr <= self['mof']['maxerr_conv'])):
             return True
         else:

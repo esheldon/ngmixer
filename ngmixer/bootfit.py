@@ -5,7 +5,7 @@ import os
 import scipy.stats
 
 # local imports
-from .defaults import DEFVAL, NO_ATTEMPT, \
+from .defaults import DEFVAL, PDEFVAL, NO_ATTEMPT, \
     PSF_FIT_FAILURE, GAL_FIT_FAILURE, \
     LOW_PSF_FLUX, PSF_FLUX_FIT_FAILURE, \
     NBR_HAS_NO_PSF_FIT, METACAL_FAILURE
@@ -33,6 +33,8 @@ def get_bootstrapper(obs, type='boot', **keys):
         boot=CompositeBootstrapper(obs, **keys)
     elif type=='metacal':
         boot=MaxMetacalBootstrapper(obs, **keys)
+    elif type=='metacal-analytic':
+        boot=ngmix.bootstrap.MetacalAnalyticPSFBootstrapper(obs, **keys)
     else:
         raise ValueError("bad bootstrapper type: '%s'" % type)
 
@@ -56,7 +58,7 @@ class NGMixBootFitter(BaseFitter):
         self['use_logpars'] = self.get('use_logpars',False)
 
         # which models to fit
-        self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
+        self._set_models()
 
         # allow pre-selection based on psf flux
         self['min_psf_s2n'] = self.get('min_psf_s2n',-numpy.inf)
@@ -79,6 +81,9 @@ class NGMixBootFitter(BaseFitter):
         # this actually means calculating things like
         # lensfit sens from samples or B&A PQR
         self['do_shear'] = self.get('do_shear',False)
+
+    def _set_models(self):
+        self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
 
     def _get_namer(self, model, coadd):
         if coadd and (self['fit_me_galaxy'] or self['use_coadd_prefix']):
@@ -602,14 +607,17 @@ class NGMixBootFitter(BaseFitter):
         biggles.configure('screen','width', width)
         biggles.configure('screen','height', height)
         tab = biggles.Table(2,3)
-        tab.title = title
+        #tab.title = title
 
-        tab[0,0] = images.view(obs.image_orig,title='original image',show=False,nonlinear=0.075)
-        tab[0,1] = images.view(nbrsim,title='models of nbrs',show=False,nonlinear=0.075)
+        nl=0.075
+        #nl = 0.1
+        #nl = 0.05
+        tab[0,0] = images.view(obs.image_orig,title='original image',show=False,nonlinear=nl)
+        tab[0,1] = images.view(nbrsim,title='models of nbrs',show=False,nonlinear=nl)
 
         tab[0,2] = images.view(plot_seg(obs.seg),title='seg map',show=False)
 
-        tab[1,0] = images.view(obs.image,title='corrected image',show=False,nonlinear=0.075)
+        tab[1,0] = images.view(obs.image,title='corrected image',show=False,nonlinear=nl)
         msk = totim != 0
         frac = numpy.zeros(totim.shape)
         frac[msk] = cenim[msk]/totim[msk]
@@ -621,8 +629,10 @@ class NGMixBootFitter(BaseFitter):
                 fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d.png' % (ptype,band,icut_cen))
             else:
                 fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd.png' % (ptype,band))
+            fname=fname.replace('.png','.eps')
             print("        making plot %s" % fname)
-            tab.write_img(1920,1200,fname)
+            #tab.write_img(1920,1200,fname)
+            tab.write(fname)
         except:
             print("        caught error plotting nbrs")
             pass
@@ -803,8 +813,8 @@ class NGMixBootFitter(BaseFitter):
                     print("    galaxy fitting failed: %s" % err)
                     flags = GAL_FIT_FAILURE
 
-        except BootPSFFailure:
-            print("    psf fitting failed")
+        except BootPSFFailure as err:
+            print("    psf fitting failed: %s" % str(err))
             flags = PSF_FIT_FAILURE
 
         return flags, boot
@@ -828,7 +838,8 @@ class NGMixBootFitter(BaseFitter):
 
             self.data[n('flags')][0,band] = flags
             self.data[n('flux')][0,band] = flux
-            self.data[n('flux_err')][0,band] = flux_err
+            if n('flux_err') in self.data.dtype.names:
+                self.data[n('flux_err')][0,band] = flux_err
 
             if flux_err > 0:
                 s2n = flux/flux_err
@@ -844,7 +855,7 @@ class NGMixBootFitter(BaseFitter):
 
         return flagsall
 
-    def _fit_psfs(self,coadd, boot=None):
+    def _fit_psfs(self, coadd, boot=None):
         """
         fit the psf model to every observation's psf image
         """
@@ -869,10 +880,13 @@ class NGMixBootFitter(BaseFitter):
             if len(obs_list) == 0:
                 raise BootPSFFailure("psf fitting failed - band %d has no obs" % band)
 
-        if (self['make_plots']
-            and (('made_psf_plots' not in self.mb_obs_list.meta) or
+        if self['make_plots']:
+            self._do_psf_plots(boot, coadd)
+
+    def _do_psf_plots(self, boot, coadd):
+        if (('made_psf_plots' not in self.mb_obs_list.meta) or
                  ('made_psf_plots' in self.mb_obs_list.meta and
-                  self.mb_obs_list.meta['made_psf_plots'] == False)) ):
+                  self.mb_obs_list.meta['made_psf_plots'] == False)):
 
             self.mb_obs_list.update_meta_data({'made_psf_plots':True})
             for band,obs_list in enumerate(boot.mb_obs_list):
@@ -1018,7 +1032,7 @@ class NGMixBootFitter(BaseFitter):
         dindex=0
 
         res=self.gal_fitter.get_result()
-        mres=self.boot.get_max_fitter().get_result()
+        mres=self.boot.get_fitter().get_result()
 
         rres=self.boot.get_round_result()
 
@@ -1079,7 +1093,7 @@ class NGMixBootFitter(BaseFitter):
         if 'pars_err' in res:
             print_pars(res['pars_err'],front='    gal_perr: ')
 
-        mres=self.boot.get_max_fitter().get_result()
+        mres=self.boot.get_fitter().get_result()
         if 's2n_w' in mres:
             rres=self.boot.get_round_result()            
             tup=(mres['s2n_w'],
@@ -1152,7 +1166,7 @@ class NGMixBootFitter(BaseFitter):
         """
         get all model names, includeing the coadd_ ones
         """
-        self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
+        #self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
 
         models=[]
         #if coadd:
@@ -1373,14 +1387,13 @@ class MaxNGMixBootFitter(NGMixBootFitter):
     def _fit_galaxy(self, model, coadd, guess=None, **kwargs):
         self._fit_max(model,guess=guess,**kwargs)
 
-        rpars=self['round_pars']
-        self.boot.set_round_s2n(fitter_type=rpars['fitter_type'])
+        self.boot.set_round_s2n()
 
-        self.gal_fitter=self.boot.get_max_fitter()
+        self.gal_fitter=self.boot.get_fitter()
 
         if self['make_plots']:
             self._plot_resids(self.new_mb_obs_list.meta['id'],
-                              self.boot.get_max_fitter(),
+                              self.boot.get_fitter(),
                               model, coadd, 'max')
             self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
 
@@ -1400,7 +1413,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
 
         if self['make_plots']:
             self._plot_resids(self.new_mb_obs_list.meta['id'],
-                              self.boot.get_max_fitter(),
+                              self.boot.get_fitter(),
                               model,
                               coadd,
                               'max')
@@ -1422,8 +1435,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         prior=self['model_pars'][model]['prior']
         self.boot.isample(ipars, prior=prior)
 
-        rpars=self['round_pars']
-        self.boot.set_round_s2n(fitter_type=rpars['fitter_type'])
+        self.boot.set_round_s2n()
 
     def _add_shear_info(self, model):
         """
@@ -1431,7 +1443,7 @@ class ISampNGMixBootFitter(MaxNGMixBootFitter):
         """
 
         boot=self.boot
-        max_fitter=boot.get_max_fitter()
+        max_fitter=boot.get_fitter()
         sampler=boot.get_isampler()
 
         # this is the full prior
@@ -1499,17 +1511,15 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
         super(MetacalNGMixBootFitter,self)._setup()
 
-        self['nrand'] = self.get('nrand',1)
-        if self['nrand'] is None:
-            self['nrand']=1
-
-        self['use_original_weight'] = self.get('use_original_weight',False)
-
         defpars={'step':0.01}
         self['metacal_pars'] = self.get('metacal_pars',defpars)
         self['metacal_pars']['nband'] = self['nband']
         print("metacal pars:")
         pprint(self['metacal_pars'])
+
+        types=self['metacal_pars'].get('types',None)
+        if types is None:
+            self['metacal_pars']['types']=ngmix.metacal.METACAL_TYPES
 
         if 'model_pars' in self['metacal_pars']:
             print("setting separate metacal prior")
@@ -1520,11 +1530,16 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
         get the bootstrapper for fitting psf through galaxy
         """
 
+        if 'analytic_psf' in self['metacal_pars']:
+            type='metacal-analytic'
+        else:
+            type='metacal'
+
         find_cen=self.get('pre_find_center',False)
         boot=get_bootstrapper(
             mb_obs_list,
             find_cen=find_cen,
-            type='metacal',
+            type=type,
             **self
         )
 
@@ -1637,8 +1652,8 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             print("    metacal flags set:",mcal_flags)
             d[n('flags')][dindex] |= METACAL_FAILURE
 
-        types = self['metacal_pars'].get('types',ngmix.metacal.METACAL_TYPES)
-        for type in types:
+        for type in self['metacal_pars']['types']:
+
             tres=res[type]
             if type=='noshear':
                 back=''
@@ -1646,6 +1661,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 back='_%s' % type
 
             d['mcal_pars%s' % back][dindex] = tres['pars']
+            d['mcal_pars_cov%s' % back][dindex] = tres['pars_cov']
             d['mcal_g%s' % back][dindex] = tres['g']
             d['mcal_g_cov%s' % back][dindex] = tres['g_cov']
 
@@ -1661,7 +1677,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             d['mcal_s2n_r%s' % back][dindex] = tres['s2n_r']
 
             if type=='noshear':
-                for p in ['pars_cov','gpsf','Tpsf']:
+                for p in ['gpsf','Tpsf']:
                     name='mcal_%s' % p
                     d[name][dindex] = tres[p]
 
@@ -1678,8 +1694,7 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
             raise RuntimeError("for metacal, only fit one model and "
                                "either coadd or me")
 
-        types = self['metacal_pars'].get('types',ngmix.metacal.METACAL_TYPES)
-        for type in types:
+        for type in self['metacal_pars']['types']:
 
             if type=='noshear':
                 back=''
@@ -1690,11 +1705,11 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
                 ('mcal_g%s' % back,'f8',2),
                 ('mcal_g_cov%s' % back,'f8',(2,2)),  # might be used for weights
                 ('mcal_pars%s' % back,'f8',np),
+                ('mcal_pars_cov%s' % back,'f8',(np,np)),
             ]
 
             if type=='noshear':
                 dt += [
-                    ('mcal_pars_cov','f8',(np,np)),
                     ('mcal_gpsf','f8',2),
                     ('mcal_Tpsf','f8'),
                 ]
@@ -1723,5 +1738,293 @@ class MetacalNGMixBootFitter(MaxNGMixBootFitter):
 
 
 
+class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
+    def _setup(self):
+        # calling super of super
+        super(MetacalNGMixBootFitter,self)._setup()
 
+        self['metacal_pars'] = self.get('metacal_pars',None)
+        self['admom_pars'] = self.get('admom_pars',None)
+
+        self['psf_Tguess_key'] = 'Tguess'
+
+    def _set_models(self):
+        """
+        Just to better interact with the inherited code base
+        """
+        self['fit_models'] = ['gauss']
+
+    def _get_bootstrapper(self, model, mb_obs_list):
+        """
+        get the bootstrapper for fitting psf through galaxy
+        """
+        # note self has admom_pars key
+        return ngmix.bootstrap.AdmomBootstrapper(
+            mb_obs_list,
+            **self
+        )
+
+    def _get_metacal_bootstrapper(self, mb_obs_list):
+        """
+        get the bootstrapper for fitting psf through galaxy
+        """
+        # note self has metacal_pars key
+        return ngmix.bootstrap.AdmomMetacalBootstrapper(
+            mb_obs_list,
+            **self
+        )
+
+    def _fit_psfs(self, coadd, boot=None):
+        """
+        fit the psf model to every observation's psf image
+        """
+
+        print('    fitting the PSFs')
+
+        if boot is None:
+            boot=self.boot
+
+        boot.fit_psfs(Tguess_key=self['psf_Tguess_key'])
+
+        # check for no obs in a band if PSF fit fails
+        for band,obs_list in enumerate(boot.mb_obs_list):
+            if len(obs_list) == 0:
+                raise BootPSFFailure("psf fitting failed - band %d has no obs" % band)
+
+        if self['make_plots']:
+            self._do_psf_plots(boot, coadd)
+
+    def _fit_galaxy(self, model, coadd, boot=None,**kwargs):
+        """
+        model should always be gauss
+        """
+        assert model=="gauss"
+
+        if boot is None:
+            boot=self.boot
+
+        boot.fit()
+
+        self.gal_fitter=self.boot.get_fitter()
+
+        self.mcal_boot=self._do_metacal(self.boot)
+
+        metacal_res = self.mcal_boot.get_metacal_result()
+
+        res=self.gal_fitter.get_result()
+        res.update(metacal_res)
+
+        if self['make_plots']:
+            self._plot_resids(self.new_mb_obs_list.meta['id'],
+                              self.boot.get_fitter(),
+                              model, coadd, 'max')
+            self._plot_images(self.new_mb_obs_list.meta['id'], model, coadd)
+
+
+    def _do_metacal(self, boot):
+        """
+        the basic fitter for this class
+        """
+
+        assert self['replace_bad_pixels']==False
+
+        # new bootstrapper for metacal
+        mcal_boot=self._get_metacal_bootstrapper(boot.mb_obs_list)
+
+        try:
+
+            mcal_boot.fit_metacal(psf_Tguess_key=self['psf_Tguess_key'])
+
+        except BootPSFFailure as err:
+            # the _run_boot code catches this one
+            raise BootGalFailure(str(err))
+
+        return mcal_boot
+
+
+
+
+    def get_num_pars_psf(self):
+        return 6
+
+    def _copy_galaxy_result(self, model, coadd):
+        """
+        Copy from the result dict to the output array
+        """
+
+        dindex=0
+
+        res=self.gal_fitter.get_result()
+
+        n=self._get_namer(model, coadd)
+
+        d=self.data
+
+        d[n('flags')][dindex] = res['flags']
+
+        if res['flags'] == 0:
+
+            d[n('g')][dindex,:] = res['g']
+            d[n('g_cov')][dindex,:,:] = res['g_cov']
+
+            d[n('s2n')][dindex]  = res['s2n']
+            d[n('T')][dindex]    = res['T']
+            d[n('T_err')][dindex]    = res['T_err']
+
+            d[n('flux')][dindex]    = res['flux']
+            d[n('flux_s2n')][dindex]    = res['flux_s2n']
+
+        
+            d['mcal_flags'][dindex] = res['mcal_flags']
+            types=ngmix.bootstrap.AdmomMetacalBootstrapper._default_metacal_pars['types']
+            for type in types:
+                tres=res[type]
+                if type=='noshear':
+                    back=''
+                else:
+                    back='_%s' % type
+
+                d['mcal_g%s' % back][dindex] = tres['g']
+                d['mcal_g_cov%s' % back][dindex] = tres['g_cov']
+
+                d['mcal_s2n%s' % back][dindex] = tres['s2n']
+
+                d['mcal_T%s' % back][dindex] = tres['T']
+                d['mcal_T_err%s' % back][dindex] = tres['T_err']
+
+                d['mcal_flux%s' % back][dindex] = tres['flux']
+                d['mcal_flux_s2n%s' % back][dindex] = tres['flux_s2n']
+
+                if type=='noshear':
+                    for p in ['gpsf','Tpsf']:
+                        name='mcal_%s' % p
+                        d[name][dindex] = tres[p]
+
+
+    def _make_struct(self,coadd):
+        """
+        make the output structure
+        """
+        dt = self._get_fit_data_dtype(coadd=coadd)
+        d= numpy.zeros(1,dtype=dt)
+
+        n=self._get_namer('psf', coadd)
+
+        d[n('flags')] = NO_ATTEMPT
+        d[n('flux')] = DEFVAL
+        d[n('flux_s2n')] = DEFVAL
+
+        n=self._get_namer('', coadd)
+
+        d[n('mask_frac')] = DEFVAL
+        d[n('psfrec_T')] = DEFVAL
+        d[n('psfrec_g')] = DEFVAL
+
+        models=self._get_all_models(coadd)
+        for model in models:
+            n=Namer(model)
+
+            d[n('flags')] = NO_ATTEMPT
+            d[n('g')] = DEFVAL
+            d[n('g_cov')] = DEFVAL
+            d[n('s2n')] = DEFVAL
+            d[n('T')] = DEFVAL
+            d[n('T_err')] = PDEFVAL
+
+            d[n('flux')] = DEFVAL
+            d[n('flux_s2n')] = DEFVAL
+
+        for f in self.mcal_flist:
+            if 'err' in f:
+                dval=PDEFVAL
+            elif 'flags' in f:
+                dval = NO_ATTEMPT
+            else:
+                dval=DEFVAL
+            d[f] = dval
+
+        return d
+
+
+    def _get_fit_data_dtype(self,coadd):
+        dt=[]
+
+        nband=self['nband']
+        bshape=(nband,)
+
+        n=self._get_namer('psf', coadd)
+
+        dt += [(n('flags'),   'i4',bshape),
+               (n('flux'),    'f8',bshape),
+               (n('flux_s2n'),'f8',bshape)]
+
+        n=self._get_namer('', coadd)
+
+        dt += [(n('nimage_use'),'i4',bshape)]
+
+        dt += [(n('mask_frac'),'f8'),
+               (n('psfrec_T'),'f8'),
+               (n('psfrec_g'),'f8', 2)]
+
+        if nband==1:
+            fcov_shape=(nband,)
+        else:
+            fcov_shape=(nband,nband)
+        
+        models=self._get_all_models(coadd)
+        for model in models:
+            n=Namer(model)
+
+            dt+=[
+                (n('flags'),'i4'),
+                (n('g'),'f8',2),
+                (n('g_cov'),'f8',(2,2)),
+                (n('s2n'),'f8'),
+                (n('T'),'f8'),
+                (n('T_err'),'f8'),
+                (n('flux'),'f8',bshape),
+                (n('flux_s2n'),'f8',bshape),
+            ]
+
+        dt += self._get_metacal_dt()
+
+        return dt
+
+    def _get_metacal_dt(self):
+        types=ngmix.bootstrap.AdmomMetacalBootstrapper._default_metacal_pars['types']
+
+
+        nband=self['nband']
+        bshape=(nband,)
+
+        dt=[('mcal_flags','i4')]
+        for type in types:
+
+            if type=='noshear':
+                back=''
+            else:
+                back='_%s' % type
+
+            dt += [
+                ('mcal_g%s' % back,'f8',2),
+                ('mcal_g_cov%s' % back,'f8',(2,2)),  # might be used for weights
+            ]
+
+            if type=='noshear':
+                dt += [
+                    ('mcal_gpsf','f8',2),
+                    ('mcal_Tpsf','f8'),
+                ]
+
+            dt += [
+                ('mcal_s2n%s' % back,'f8'),
+                ('mcal_T%s' % back,'f8'),
+                ('mcal_T_err%s' % back,'f8'),
+                ('mcal_flux%s' % back,'f8',bshape),
+                ('mcal_flux_s2n%s' % back,'f8',bshape),
+            ]
+
+        self.mcal_flist = [d[0] for d in dt]
+
+        return dt
 

@@ -1,10 +1,13 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import os
 import sys
 import copy
 import numpy
 import fitsio
-from .util import PBar
+import meds
+
+from .pbar import prange
 
 def get_dummy_fofs(numbers):
     nobj = len(numbers)
@@ -35,16 +38,14 @@ class MedsNbrs(object):
     """
 
     def __init__(self,meds_list,conf):
+
+        if isinstance(meds_list, meds.MEDS):
+            meds_list=[meds_list]
+
         self.meds_list = meds_list
         self.conf = conf
 
         self._init_bounds()
-        #print config
-        #print "    buff_type:",buff_type
-        #print "    buff_frac:",buff_frac
-        #print "    maxsize_to_replace:",maxsize_to_replace
-        #print "    new_maxsize:",new_maxsize
-        #print "    check_seg:",check_seg
 
     def _init_bounds(self):
         self.l = {}
@@ -75,15 +76,9 @@ class MedsNbrs(object):
         #data types
         nbrs_data = []
         dtype = [('number','i8'),('nbr_number','i8')]
-        print "config:",self.conf
+        print("config:",self.conf)
 
-        #loop through objects, get nbrs in each meds list
-        if verbose:
-            pgr = PBar(self.meds_list[0].size,"finding nbrs")
-            pgr.start()
-        for mindex in xrange(self.meds_list[0].size):
-            if verbose:
-                pgr.update(mindex+1)
+        for mindex in prange(self.meds_list[0].size):
             nbrs = []
             for band,m in enumerate(self.meds_list):
                 #make sure MEDS lists have the same objects!
@@ -100,9 +95,6 @@ class MedsNbrs(object):
             #add to final list
             for nbr in nbrs:
                 nbrs_data.append((m['number'][mindex],nbr))
-
-        if verbose:
-            pgr.finish()
 
         #return array sorted by number
         nbrs_data = numpy.array(nbrs_data,dtype=dtype)
@@ -197,18 +189,9 @@ class NbrsFoF(object):
         #init
         self._init_fofs()
 
-        #link
-        if verbose:
-            bar = PBar(self.Nobj,"making fofs")
-            bar.start()
 
-        for i in xrange(self.Nobj):
-            if verbose:
-                bar.update(i+1)
+        for i in prange(self.Nobj):
             self._link_fof(i)
-
-        if verbose:
-            bar.finish()
 
         for fofid,k in enumerate(self.fofs):
             inds = numpy.array(list(self.fofs[k]),dtype=int)
@@ -290,7 +273,7 @@ class NbrsFoFExtractor(object):
     def close(self):
         if self.cleanup:
             if os.path.exists(self.sub_file):
-                print 'removing sub file:',self.sub_file
+                print('removing sub file:',self.sub_file)
                 os.remove(self.sub_file)
 
     def _get_inds(self, data):
@@ -309,7 +292,7 @@ class NbrsFoFExtractor(object):
     def _extract(self):
 
         with fitsio.FITS(self.fof_file) as infits:
-            print 'opening sub file:',self.sub_file
+            print('opening sub file:',self.sub_file)
             with fitsio.FITS(self.sub_file,'rw',clobber=True) as outfits:
                 old_data = infits[1][:]
                 inds = self._get_inds(old_data)

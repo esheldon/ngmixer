@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import os
 import sys
 import meds
@@ -71,7 +72,7 @@ class CakeNGMegaMixer(NGMegaMixer):
         self._cake_chunk_ids.append(jobname)
         
     def run_chunk(self,files,chunk,rng):
-        print "To run the chunks, build a job using cake (i.e., cake run /path/to/cake_chunks.db)"
+        print("To run the chunks, build a job using cake (i.e., cake run /path/to/cake_chunks.db)")
 
     def write_nbrs_job_script(self,files):
         fname = os.path.join(files['work_output_dir'],'jobnbrs.sh')
@@ -101,4 +102,4 @@ class CakeNGMegaMixer(NGMegaMixer):
             taskdb.add('cd %s && ./jobnbrs.sh && cd -' % dr,id=jobname)
 
     def run_nbrs(self,files):
-        print "To run the chunks, build a job using cake (i.e., cake run /path/to/cake_nbrs.db)"
+        print("To run the chunks, build a job using cake (i.e., cake run /path/to/cake_nbrs.db)")

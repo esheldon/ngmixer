@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 from __future__ import print_function
 import os
 import numpy
@@ -6,9 +5,10 @@ import copy
 import fitsio
 
 from .medsio import MEDSImageIO
+from .. import files
 from .. import nbrsfofs
+from .. import util
 from ..util import print_with_verbosity, \
-    interpolate_image, \
     radec_to_unitvecs_ruv, \
     radec_to_thetaphi, \
     thetaphi_to_unitvecs_ruv, \
@@ -23,6 +23,28 @@ IMAGE_FLAGS_SET=2**0
 PSF_IN_BLACKLIST=2**1
 PSF_MISSING_S2N=2**2
 PSF_LOW_S2N=2**3
+
+
+BADPIX_MAP={
+    "BPM":          1,  #/* set in bpm (hot/dead pixel/column)        */
+    "SATURATE":     2,  #/* saturated pixel                           */
+    "INTERP":       4,  #/* interpolated pixel                        */
+    "BADAMP":       8,  #/* Data from non-functional amplifier        */
+    "CRAY":        16,  #/* cosmic ray pixel                          */
+    "STAR":        32,  #/* bright star pixel                         */
+    "TRAIL":       64,  #/* bleed trail pixel                         */
+    "EDGEBLEED":  128,  #/* edge bleed pixel                          */
+    "SSXTALK":    256,  #/* pixel potentially effected by xtalk from  */
+                        #/*       a super-saturated source            */
+    "EDGE":       512,  #/* pixel flag to exclude CCD glowing edges   */
+    "STREAK":    1024,  #/* pixel associated with streak from a       */
+                        #/*       satellite, meteor, ufo...           */
+    "SUSPECT":   2048,  #/* nominally useful pixel but not perfect    */
+    "FIXED":     4096,  #/* corrected by pixcorrect                   */
+    "NEAREDGE":  8192,  #/* suspect due to edge proximity             */
+    "TAPEBUMP": 16384,  #/* suspect due to known tape bump            */
+}
+
 
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
@@ -40,9 +62,24 @@ class SVDESMEDSImageIO(MEDSImageIO):
         if 'psf_s2n_checks' in conf:
             self._load_psf_s2n(conf)
 
+
         super(SVDESMEDSImageIO,self).__init__(*args, **kw)
 
+        # call this aftersuper init to over ride flags
+        self._set_extra_mask_flags()
+
         self._load_image_metadata()
+
+    def _set_extra_mask_flags(self):
+        flag_list = self.conf.get('extra_mask_flag_list',None)
+
+        if flag_list is not None:
+
+            flags = 0
+            for flagname in flag_list:
+                flags += BADPIX_MAP[flagname]
+
+            self.conf['extra_mask_flags'] = flags
 
     def _load_image_metadata(self):
         """
@@ -62,7 +99,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         if get_extra_meta:
             print("    getting extra image metadata")
-            desdata=os.environ['DESDATA']
+            desdata=files.get_desdata()
             meds_desdata=self.meds_list[0]._meta['DESDATA'][0]
 
             for band in self.iband:
@@ -103,10 +140,10 @@ class SVDESMEDSImageIO(MEDSImageIO):
             clen=len(config_file)
             dt += [('ngmixer_config','S%d' % clen)]
 
-        flen=max([len(mf.replace(os.environ['DESDATA'],'${DESDATA}')) for mf in self.meds_files_full] )
+        mydesdata=files.get_desdata()
+        flen=max([len(mf.replace(mydesdata,'${DESDATA}')) for mf in self.meds_files_full] )
         dt += [('meds_file','S%d' % flen)]
 
-        mydesdata = os.environ['DESDATA']
         dt += [('ngmixer_DESDATA','S%d' % len(mydesdata))]
 
         nband=len(self.meds_files_full)
@@ -122,7 +159,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
             if 'config_file' in self.conf:
                 meta['ngmixer_config'][band] = config_file
-            meta['meds_file'][band] = meds_file.replace(os.environ['DESDATA'],'${DESDATA}')
+            meta['meds_file'][band] = meds_file.replace(mydesdata,'${DESDATA}')
             meta['ngmixer_DESDATA'][band] = mydesdata
 
         return meta
@@ -150,16 +187,19 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
     def get_meta_data_dtype(self):
         dt = super(SVDESMEDSImageIO, self).get_meta_data_dtype()
+
+        desdata=files.get_desdata()
         rlen = len(self.meds_files_full[0]\
-                       .replace(os.environ['DESDATA'],'${DESDATA}')\
+                       .replace(desdata,'${DESDATA}')\
                        .split('/')[3])
         dt += [('coadd_run','S%d' % rlen)]
         return dt
 
     def _get_multi_band_observations(self, mindex):
         coadd_mb_obs_list, mb_obs_list = super(SVDESMEDSImageIO, self)._get_multi_band_observations(mindex)
+        desdata=files.get_desdata()
         run = self.meds_files_full[0]\
-            .replace(os.environ['DESDATA'],'${DESDATA}')\
+            .replace(desdata,'${DESDATA}')\
             .split('/')[3]
         coadd_mb_obs_list.meta['meta_data']['coadd_run'] = run
         mb_obs_list.meta['meta_data']['coadd_run'] = run
@@ -223,6 +263,10 @@ class SVDESMEDSImageIO(MEDSImageIO):
         """
         Get an image representing the psf
         """
+        if self.conf['psfs_in_file']:
+            return super(SVDESMEDSImageIO,self)._get_psf_image(
+                band, mindex, icut,
+            )
 
         meds=self.meds_list[band]
         file_id=meds['file_id'][mindex,icut]
@@ -336,8 +380,8 @@ class SVDESMEDSImageIO(MEDSImageIO):
         include the coadd so we get  the index right
         """
         print('loading psfex')
-        desdata=os.environ['DESDATA']
-        meds_desdata=self.meds_list[0]._meta['DESDATA'][0]
+
+        desdata=files.get_desdata()
 
         psfex_lists=[]
         for band in self.iband:
@@ -352,7 +396,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
         """
         infer the psfex path from the image path.
         """
-        desdata=os.environ['DESDATA']
+        desdata=files.get_desdata()
         meds_desdata=meds._meta['DESDATA'][0]
 
         psfpath=image_path.replace('.fits.fz','_psfcat.psf')
@@ -557,8 +601,31 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
     def _set_defaults(self):
         super(Y1DESMEDSImageIO,self)._set_defaults()
         self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
-        self.conf['prop_sat_starpix'] = self.conf.get('prop_sat_starpix',False)
+
+        self._set_propagate_saturated_stars()
+
         self.conf['flag_y1_stellarhalo_masked'] = self.conf.get('flag_y1_stellarhalo_masked',False)
+
+    def _set_propagate_saturated_stars(self):
+        """
+        check if we should propagate the SATURATE and INTERP flags
+        for bright stars into other bands
+
+        do not propagate saturated/interpolated pixels for bright
+        stars into other bands/epochs when these bits are also
+        set for the pixel
+        """
+
+        pconf = self.conf.get('propagate_star_flags',None)
+        if pconf is None:
+            self.conf['propagate_star_flags'] = dict(propagate = False)
+        else:
+            flag_list = pconf['ignore_when_set']
+            mask = 0
+            for flag in flag_list:
+                mask += BADPIX_MAP[flag]
+
+            pconf['ignore_when_set_mask'] = mask
 
     def _load_wcs_data(self):
         # should we read from the original file?
@@ -727,6 +794,49 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         return cen_obs.get_psf(),J_nbr
 
     def _interpolate_maskbits(self,iobj,m1,icutout1,m2,icutout2):
+        """
+
+        we want to propagate SATURATE and INTERP pixels through to all
+        bands if they are associated with a star. this way if such areas
+        are different between bands, we take the largest
+
+        However, do not propagate these flags if certain other flags are set
+        that could have caused the saturation. In other words if the flags
+        were set for reasons other than the object being too bright
+
+        Y3 bit masks
+
+#define BADPIX_BPM          1  /* set in bpm (hot/dead pixel/column)        */
+#define BADPIX_SATURATE     2  /* saturated pixel                           */
+#define BADPIX_INTERP       4  /* interpolated pixel                        */
+#define BADPIX_BADAMP       8  /* Data from non-functional amplifier        */
+#define BADPIX_LOW (BADPIX_BADAMP) /* too little signal- NOT IN USE        */
+#define BADPIX_CRAY        16  /* cosmic ray pixel                          */
+#define BADPIX_STAR        32  /* bright star pixel                         */
+#define BADPIX_TRAIL       64  /* bleed trail pixel                         */
+#define BADPIX_EDGEBLEED  128  /* edge bleed pixel                          */
+#define BADPIX_SSXTALK    256  /* pixel potentially effected by xtalk from  */
+                               /*       a super-saturated source            */
+#define BADPIX_EDGE       512  /* pixel flag to exclude CCD glowing edges   */
+#define BADPIX_STREAK    1024  /* pixel associated with streak from a       */
+                               /*       satellite, meteor, ufo...           */
+#define BADPIX_SUSPECT   2048  /* nominally useful pixel but not perfect    */
+#define BADPIX_FIXED     4096  /* corrected by pixcorrect                   */
+#define BADPIX_NEAREDGE  8192  /* suspect due to edge proximity             */
+#define BADPIX_TAPEBUMP 16384  /* suspect due to known tape bump            */
+
+
+        these are already nulled in the weight maps that we use for Y3
+        BADPIX_BPM
+        BADPIX_BADAMP
+        BADPIX_EDGEBLEED
+        BADPIX_EDGE
+        BADPIX_CRAY
+        BADPIX_SSXTALK
+        BADPIX_STREAK
+        BADPIX_TRAIL
+        """
+
         rowcen1 = m1['cutout_row'][iobj,icutout1]
         colcen1 = m1['cutout_col'][iobj,icutout1]
         jacob1 = m1.get_jacobian_matrix(iobj,icutout1)
@@ -736,22 +846,50 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         jacob2 = m2.get_jacobian_matrix(iobj,icutout2)
         
         im1 = m1.get_cutout(iobj,icutout1,type='bmask')
+        im2 = m2.get_cutout(iobj,icutout2,type='bmask')
+        im2[:,:] = 0
         
-        msk = numpy.array([2048+1024+512+256+128+16+8+1],dtype='u4')
-        
-        q = numpy.where( ((im1&2 != 0) | (im1&4 != 0)) 
-                         & 
-                         (im1&32 != 0) 
-                         &
-                         (im1&msk == 0))
+
+
+        msk = self.conf['propagate_star_flags']['ignore_when_set_mask']
+
+        is_sat_or_interp = (
+            (im1 & BADPIX_MAP['SATURATE'] != 0) | (im1 & BADPIX_MAP['INTERP'] != 0)
+        )
+        is_bright_star = (im1 & BADPIX_MAP['STAR'] != 0)
+        not_other_bits = (im1 & msk == 0)
+
+        q = numpy.where(
+             is_sat_or_interp 
+             & 
+             is_bright_star 
+             &
+             not_other_bits 
+        )
+
         im1[:,:] = 0
         im1[q] = 1
         
-        assert m1['box_size'][iobj] == m2['box_size'][iobj]
+        #assert m1['box_size'][iobj] == m2['box_size'][iobj]
         assert m1['id'][iobj] == m2['id'][iobj]
 
-        return interpolate_image(rowcen1, colcen1, jacob1, im1, 
-                                 rowcen2, colcen2, jacob2)[0]
+        util.interpolate_image_diffsize(
+            rowcen1, colcen1, jacob1, im1, 
+            rowcen2, colcen2, jacob2, im2,
+        )
+        #im2 = util.interpolate_image(rowcen1, colcen1, jacob1, im1, 
+        #                              rowcen2, colcen2, jacob2)[0]
+
+        if im1.max() > 0 and False:
+            import images
+            print(iobj,icutout1,icutout2)
+            images.view_mosaic(
+                [im1,im2],
+                file='/u/ki/esheldon/public_html/tmp/plots/tmp.png',
+            )
+            if 'q'==raw_input('hit a key: '):
+                stop
+        return im2
     
     def _get_extra_bitmasks(self,coadd_mb_obs_list,mb_obs_list):        
         marr = self.meds_list
@@ -825,21 +963,14 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                     colcen2 = m['cutout_col'][mindex,icut]
                     jacob2 = m.get_jacobian_matrix(mindex,icut)
                     
-                    bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
-                                               rowcen2, colcen2, jacob2)[0]
-                    
-                    """
-                    if band == 0 and mb_obs_list.meta['id'] == 3076597980:
-                        import matplotlib.pyplot as plt
-
-                        fig,axs = plt.subplots(1,3)
-                        axs[0].imshow(bmaski)
-                        axs[1].imshow(self._expand_mask(bmaski,rounds=1))
-                        axs[2].imshow(self._expand_mask(bmaski,rounds=2))
-                        
-                        import ipdb
-                        ipdb.set_trace()
-                    """
+                    #bmaski = interpolate_image(rowcen1, colcen1, jacob1, bmask,
+                    #                           rowcen2, colcen2, jacob2)[0]
+                    bmaski = m.get_cutout(mindex,0,type='bmask')
+                    bmaski[:,:] = 0
+                    util.interpolate_image_diffsize(
+                        rowcen1, colcen1, jacob1, bmask,
+                        rowcen2, colcen2, jacob2, bmaski,
+                    )
                     
                     bmaski = self._expand_mask(bmaski,rounds=2)
                     
@@ -860,6 +991,9 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                             obs.weight_orig[q] = 0.0        
 
     def _flag_y1_stellarhalo_masked_one(self,mb_obs_list):
+
+        starflag = BADPIX_MAP['STAR']
+
         mindex = mb_obs_list.meta['meds_index']
         seg_number = self.meds_list[0]['number'][mindex]
         
@@ -874,33 +1008,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                     icut = obs.meta['icut']
                     bmask = self.meds_list[band].get_cutout(mindex,icut,type='bmask')
                     
-                    q = numpy.where((bmask&32 != 0) & (obs.seg == seg_number))
-                    
-                    # debugging code - leave for now
-                    """
-                    if numpy.any(bmask&32 != 0) and q[0].size > 0:
-                        import matplotlib.pyplot as plt
-                        
-                        qq = numpy.where(bmask&32 != 0)
-                        pim = numpy.zeros_like(bmask)
-                        pim[qq] = 1
-                        
-                        pseg = obs.seg.copy()
-                        pseg = pseg.astype('f8')
-                        useg = numpy.sort(numpy.unique(obs.seg))
-                        nuseg = float(len(useg))
-                        for i,sval in enumerate(useg):
-                            qq = numpy.where(obs.seg == sval)
-                            if qq[0].size > 0:
-                                pseg[qq] = float(i)/nuseg
-                                
-                        fig,axs = plt.subplots(1,2)
-                        axs[0].imshow(pim)                                                
-                        axs[1].imshow(pseg)
-                        
-                        import ipdb
-                        ipdb.set_trace()
-                    """
+                    q = numpy.where((bmask & starflag != 0) & (obs.seg == seg_number))
                     
                     if q[0].size > 0:                        
                         flags = 1
@@ -920,7 +1028,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         coadd_mb_obs_list, mb_obs_list = super(Y1DESMEDSImageIO, self)._get_multi_band_observations(mindex)
         
         # mask extra pixels in saturated stars
-        if self.conf['prop_sat_starpix']:
+        if self.conf['propagate_star_flags']['propagate']:
             # get total OR'ed bit mask
             bmasks = self._get_extra_bitmasks(coadd_mb_obs_list,mb_obs_list)
             self._prop_extra_bitmasks(bmasks,mb_obs_list)
@@ -940,8 +1048,26 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
     this is using Brian Yanny's exposure pattern list format
     """
     def __init__(self, *args, **kw):
-        self._load_psf_map(**kw)
+
+        conf=args[0]
+        conf['psfs_in_file'] = conf.get('psfs_in_file',False)
+
+        if not conf['psfs_in_file']:
+            self._load_psf_map(**kw)
+
         super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
+
+    def get_meta_data_dtype(self):
+        """
+        there is no coadd_run any more, so skip that part from SV/Y1
+        """
+        return super(SVDESMEDSImageIO, self).get_meta_data_dtype()
+
+    def _get_multi_band_observations(self, mindex):
+        """
+        there is no coadd_run any more, so skip that part from SV/Y1
+        """
+        return super(SVDESMEDSImageIO, self)._get_multi_band_observations(mindex)
 
 
     def _load_psf_map(self, **kw):
@@ -950,26 +1076,35 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
         """
         extra_data=kw.get('extra_data',{})
 
-        map_file=extra_data.get('psf_map',None)
-        if map_file is None:
-            raise RuntimeError("for Y3 you must send a map file")
+        map_files=extra_data.get('psf_map',None)
+        if map_files is None:
+            raise RuntimeError("for Y3 you must send map files or "
+                               "have psfs in the MEDS file")
 
-        print("reading psf map:",map_file)
         psf_map={}
-        with open(map_file) as fobj:
-            for line in fobj:
 
-                pattern=line.strip()
+        for map_file in map_files:
+            print("reading psf map:",map_file)
+            with open(map_file) as fobj:
+                for line in fobj:
 
-                bname=os.path.basename(pattern)
+                    ls=line.strip().split()
 
-                # bname looks like D00149774_g_c%02d_r2382p01_psfexcat.psf
-                # we will key off the exposure name, e.g. D00149774
-                fs = bname.split('_')
-                expname = fs[0]
+                    if len(ls) == 2:
+                        # standard style
+                        exp_ccd_name=ls[0]
+                        pattern=ls[1]
+                    elif len(ls)==3:
+                        # DESDM style
+                        expnum=int(ls[0])
+                        ccdnum=int(ls[1])
+                        pattern=ls[2]
+                        exp_ccd_name = 'D%08d-%02d' % (expnum,ccdnum)
 
-                full_pattern = os.path.join('$DESDATA', 'OPS', 'finalcut', pattern)
-                psf_map[expname] = full_pattern
+                    else:
+                        raise ValueError("badly formatted psf map line: '%s'" % line.strip())
+
+                    psf_map[exp_ccd_name] = pattern
 
         self._psf_map=psf_map
 
@@ -980,14 +1115,22 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
         bname = os.path.basename(image_path)
         # these bnames look like DES0157-3914_r2577p01_D00490381_r_c48_nwgint.fits
+        # D00495879_z_c42_r2377p01_immasked_nullwt.fits
         # we need the exposure name, e.g. D00490381 and the ccd number, e.g. 48
 
         fs = bname.split('_')
+        if bname[0:3] == 'DES':
+            expname = fs[2]
+            ccd = fs[4][1:]
+        else:
+            expname = fs[0]
+            ccd = fs[2][1:]
 
-        expname = fs[2]
-        ccd = int( fs[4][1:] )
+        key='%s-%s' % (expname, ccd)
 
-        psf_path = self._psf_map[expname] % ccd
+
+
+        psf_path = self._psf_map[key]
 
 
         psf_path = os.path.expandvars(psf_path)
@@ -997,62 +1140,4 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
         dt = super(SVDESMEDSImageIO, self).get_epoch_meta_data_dtype()
         dt += [('image_id','S49')]  # image_id specified in meds creation, e.g. for image table
         return dt
-
-class Y3DESMEDSImageIOAlt(Y1DESMEDSImageIO):
-    """
-    This is the original, with the explicit filename-psf path mapping
-    """
-    def __init__(self, *args, **kw):
-        self._load_psf_map(**kw)
-        super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
-
-
-    def _load_psf_map(self, **kw):
-        """
-        we fake the coadd psf
-        """
-        extra_data=kw.get('extra_data',{})
-
-        map_file=extra_data.get('psf_map',None)
-        if map_file is None:
-            raise RuntimeError("for Y3 you must send a map file")
-
-        data=fitsio.read(map_file)
-        psf_map={}
-        for i in xrange(data.size):
-
-            if i==0:
-                ii=i+1
-            else:
-                ii=i
-
-            fname=data['im_filename'][i].strip()
-            psf_path = data['psf_local_path'][ii].strip()
-
-            keep = fname.split('_')[0:0+3]
-            key = '-'.join(keep )
-
-            psf_map[key] = psf_path
-
-        self._psf_map=psf_map
-
-    def _psfex_path_from_image_path(self, meds, image_path):
-        """
-        infer the psfex path from the image path.
-        """
-
-        fname = os.path.basename(image_path).replace('.fits.fz','.fits')
-
-        fs = fname.split('_')
-        key = '-'.join( fs[2:2+3] )
-        psfpath = self._psf_map[key]
-
-        psfpath = os.path.expandvars(psfpath)
-        return psfpath
-
-    def get_epoch_meta_data_dtype(self):
-        dt = super(SVDESMEDSImageIO, self).get_epoch_meta_data_dtype()
-        dt += [('image_id','S49')]  # image_id specified in meds creation, e.g. for image table
-        return dt
-
 

@@ -8,7 +8,7 @@ from ..util import Namer
 
 from .concat import Concat,ConcatError
 
-SHAPENOISE=0.16
+SHAPENOISE=0.20
 SHAPENOISE2=SHAPENOISE**2
 
 class DESConcat(Concat):
@@ -22,7 +22,7 @@ class DESConcat(Concat):
         self.blind = kwargs.pop('blind',True)
 
         super(DESConcat,self).__init__(*args,**kwargs)
-        self.config['fit_models'] = list(self.config['model_pars'].keys())
+        #self.config['fit_models'] = list(self.config['model_pars'].keys())
 
     def read_chunk(self, fname):
         """
@@ -44,7 +44,14 @@ class DESConcat(Concat):
 
         This also includes the Q values from B&A
         """
-        from blind_des_catalog import blind_arrays
+
+        blinding = self.config['collate']['blinding']
+        if blinding =='y3':
+            from blind_des_catalog_y3 import blind_arrays
+        elif blinding == 'y1':
+            from blind_des_catalog import blind_arrays
+        else:
+            raise ValueError("bad blinding scheme: '%s'" % blinding)
 
         models=self.get_models(data)
 
@@ -61,7 +68,10 @@ class DESConcat(Concat):
                                    ('g',0,1)]:
                     name=n(type)
                     if name in names:
-                        bg1,bg2 = blind_arrays(data[n('pars')][w,i1],data[n('pars')][w,i2])
+                        bg1,bg2 = blind_arrays(
+                            data[name][w,i1],
+                            data[name][w,i2],
+                        )
                         data[name][w,i1] = bg1
                         data[name][w,i2] = bg2
 
@@ -97,7 +107,10 @@ class DESConcat(Concat):
             for name,i1,i2 in types:
 
                 if name in names:
-                    bg1,bg2 = blind_arrays(data[name][w,i1],data[name][w,i2])
+                    bg1,bg2 = blind_arrays(
+                        data[name][w,i1],
+                        data[name][w,i2],
+                    )
                     data[name][w,i1] = bg1
                     data[name][w,i2] = bg2
 
@@ -112,7 +125,8 @@ class DESConcat(Concat):
         if wkeep.size==0:
             print("None found with cutout_index >= 0")
             print(epoch_data0['cutout_index'])
-            return numpy.zeros(1)
+            #return numpy.zeros(1)
+            return []
 
         epoch_data0=epoch_data0[wkeep]
 
@@ -205,17 +219,11 @@ class DESConcat(Concat):
             names.insert(flux_ind+2,'coadd_psf_mag')
 
 
-        tmpind = names.index('psf_flux_err')
-        if 'psf_flux_s2n' not in names:
-            tmpind += 1
-            dt.insert(tmpind, ('psf_flux_s2n','f8',nbands) )
-            names.insert(tmpind,'psf_flux_s2n')
-
-        tmpind += 1
+        tmpind = names.index('psf_flux_s2n')
         dt.insert(tmpind, ('psf_mag','f8',nbands) )
         names.insert(tmpind,'psf_mag')
 
-        do_T=False
+        T_namers=[]
         do_flux=False
         for ft in models:
 
@@ -228,8 +236,10 @@ class DESConcat(Concat):
                 names.insert(gcind+1, n('weight'))
 
             if n('flux') in names:
+                # we can just copy it over
                 flux_ind = names.index(n('flux'))
             else:
+                # we need to get flux from the pars vector
                 do_flux = True
                 pars_cov_ind = names.index(n('pars_cov'))
 
@@ -253,6 +263,7 @@ class DESConcat(Concat):
                 offset += 1
 
             if n('T') not in data0.dtype.names:
+                T_namers.append(n)
                 fadd=[(n('T'),'f8'),
                       (n('T_err'),'f8'),
                       (n('T_s2n'),'f8')]
@@ -261,8 +272,6 @@ class DESConcat(Concat):
                     dt.insert(ind+1, f)
                     names.insert(ind+1, f[0])
                     ind += 1
-
-                do_T=True
 
         data=numpy.zeros(data0.size, dtype=dt)
         eu.numpy_util.copy_fields(data0, data)
@@ -274,34 +283,38 @@ class DESConcat(Concat):
         if 'psf_flux' in names:
             all_models=all_models + ['psf']
 
-        if do_T:
-            self.add_T_info(data, models)
+        if len(T_namers) > 0:
+            self.add_T_info(T_namers, data)
 
         for ft in all_models:
             for band in xrange(nbands):
-                self.calc_mag_and_flux_stuff(data, meta, ft, band, do_flux=do_flux)
+                self.calc_mag_and_flux_stuff(
+                    data, meta, ft, band,
+                    do_flux=do_flux,
+                )
 
-        self.add_weight(data, models)
+        #self.add_weight(data, models)
 
         return data
 
-    def add_T_info(self, data, models):
+    def add_T_info(self, T_namers, data):
         """
         Add T S/N etc.
         """
-        for ft in models:
-            n=Namer(ft)
+        for n in T_namers:
 
-            data[n('T')][:]   = -9999.0
-            data[n('T_err')][:]  =  9999.0
-            data[n('T_s2n')][:] = -9999.0
+            if n('T_s2n') in data.dtype.names:
 
-            Tcov=data[n('pars_cov')][:,4,4]
-            w,=numpy.where( (data[n('flags')] == 0) & (Tcov > 0.0) )
-            if w.size > 0:
-                data[n('T')][w]   = data[n('pars')][w, 4]
-                data[n('T_err')][w]  =  numpy.sqrt(Tcov[w])
-                data[n('T_s2n')][w] = data[n('T')][w]/data[n('T_err')][w]
+                data[n('T')][:]   = -9999.0
+                data[n('T_err')][:]  =  9999.0
+                data[n('T_s2n')][:] = -9999.0
+
+                Tcov=data[n('pars_cov')][:,4,4]
+                w,=numpy.where( (data[n('flags')] == 0) & (Tcov > 0.0) )
+                if w.size > 0:
+                    data[n('T')][w]   = data[n('pars')][w, 4]
+                    data[n('T_err')][w]  =  numpy.sqrt(Tcov[w])
+                    data[n('T_s2n')][w] = data[n('T')][w]/data[n('T_err')][w]
 
 
     def add_weight(self, data, models):
@@ -315,12 +328,15 @@ class DESConcat(Concat):
             if w.size > 0:
                 if n('g_cov') in data.dtype.names:
                     c=data[n('g_cov')]
-                    weight=1.0/(2.*SHAPENOISE2 + c[w,0,0] + 2*c[w,0,1] + c[w,1,1])
+                    Csum = c[w,0,0] + c[w,1,1]
+                    weight=1.0/(2.*SHAPENOISE2 + Csum)
                     data[n('weight')][w] = weight
 
     def calc_mag_and_flux_stuff(self, data, meta, model, band, do_flux=False):
         """
         Get magnitudes
+
+        if do_flux, we will get flux from pars
         """
 
         do_flux_not_psf=(do_flux and 'psf' not in model)
@@ -365,7 +381,8 @@ class DESConcat(Concat):
                     data[n('flux_cov')][w] = data[n('pars_cov')][w,5,5]
                 else:
                     data[n('flux')][w,band] = data[n('pars')][w,5+band]
-                    data[n('flux_cov')][w,band,band] = data[n('pars_cov')][w,5+band,5+band]
+                    data[n('flux_cov')][w,band,band] = \
+                        data[n('pars_cov')][w,5+band,5+band]
 
             if nband == 1:
                 flux = (data[n('flux')][w]).clip(min=0.001)
@@ -423,3 +440,131 @@ class DESConcat(Concat):
                         flux=flux[w2]
                         flux_err=numpy.sqrt(flux_var[w2])
                         data[n('flux_s2n')][w[w2], band] = flux/flux_err
+
+class DESAdmomMetacalConcat(DESConcat):
+    def get_models(self, data):
+        return ['gauss','mcal']
+
+    def pick_fields(self, data0, meta):
+        return data0
+
+    '''
+    def pick_fields(self, data0, meta):
+        """
+        pick out some fields, add some fields, rename some fields
+        """
+        import esutil as eu
+
+        nbands=self.nbands
+
+        models=self.get_models(data0)
+
+        names=list( data0.dtype.names )
+        dt=[tdt for tdt in data0.dtype.descr]
+
+        tmpind = names.index('psf_flux_s2n')
+        dt.insert(tmpind, ('psf_mag','f8',nbands) )
+        names.insert(tmpind,'psf_mag')
+
+        for ft in models:
+
+            n=Namer(ft)
+
+            gcind = names.index('%s_g_cov' % ft)
+            wtf = (n('weight'), 'f8')
+            dt.insert(gcind+1, wtf)
+            names.insert(gcind+1, n('weight'))
+
+            flux_ind = names.index(n('flux'))
+
+            offset=1
+
+            for fi,name in enumerate(['mag','logsb']):
+                tup=self.make_flux_tuple(n(name),'f8',nbands)
+
+                dt.insert(flux_ind+offset, tup)
+                names.insert(flux_ind+offset,n(name))
+
+                offset += 1
+
+        data=numpy.zeros(data0.size, dtype=dt)
+        eu.numpy_util.copy_fields(data0, data)
+
+        all_models=models
+        if 'psf_flux' in names:
+            all_models=all_models + ['psf']
+
+        for ft in all_models:
+            for band in xrange(nbands):
+                self.calc_mag_and_flux_stuff(
+                    data, meta, ft, band,
+                )
+
+        #self.add_weight(data, models)
+
+        return data
+
+    def calc_mag_and_flux_stuff(self, data, meta, model, band):
+        """
+        Get magnitudes
+        """
+
+        names = data.dtype.names
+
+        n=Namer(model)
+
+        nband=self.nbands
+
+        if nband == 1:
+            data[n('mag')] = -9999.
+        else:
+            data[n('mag')][:,band] = -9999.
+
+        if 'psf' not in model:
+            if nband == 1:
+                data[n('logsb')] = -9999.0
+            else:
+                data[n('logsb')][:,band] = -9999.0
+
+        if model in ['psf']:
+            if nband == 1:
+                w,=numpy.where(data[n('flags')] == 0)
+            else:
+                w,=numpy.where(data[n('flags')][:,band] == 0)
+        else:
+            w,=numpy.where(data[n('flags')] == 0)
+
+        if w.size > 0:
+
+            if nband == 1:
+                flux = (data[n('flux')][w]).clip(min=0.001)
+            else:
+                flux = (data[n('flux')][w,band]).clip(min=0.001)
+
+            magzero=meta['magzp_ref'][band]
+
+            if nband==1:
+                data[n('mag')][w] = magzero - 2.5*numpy.log10( flux )
+            else:
+                data[n('mag')][w,band] = magzero - 2.5*numpy.log10( flux )
+
+            if 'psf' not in model:
+                if nband==1:
+                    sb = data[n('flux')][w]/data[n('T')][w]
+                    data[n('logsb')][w] = numpy.log10(numpy.abs(sb))
+                else:
+                    sb = data[n('flux')][w,band]/data[n('T')][w]
+                    data[n('logsb')][w,band] = numpy.log10(numpy.abs(sb))
+    '''
+class DESMetacalConcat(DESConcat):
+    #def __init__(self,*args,**kwargs):
+    #    super(DESMetacalConcat,self).__init__(*args, **kwargs)
+    #    self.config['fit_models'] += ['mcal']
+
+    def get_models(self, data):
+        models=super(DESMetacalConcat,self).get_models(data)
+
+        # remove max models for metacal
+        models = [m for m in models if 'max' not in m]
+        models += ['mcal']
+        return models

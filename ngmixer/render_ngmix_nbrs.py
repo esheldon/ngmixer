@@ -366,9 +366,15 @@ class RenderNGmixNbrs(object):
         n1 = len(numpy.unique(self.nbrs_data['nbr_id'][q]))
         n2 = len(self.nbrs_data['nbr_id'][q])
 
-        mess=("nbrs list for given band %d and cutout_index "
-              "%d for object %d is not unique!" % (band,cutout_index,cen_id))
-        assert n1==n2, mess
+        if n1 != n2:
+            # not sure why this happens, but it seems to be very rare.
+            # For now ignore
+            mess=("nbrs list for given band %d and cutout_index "
+                  "%d for object %d is not unique! %d:%d" % (band,cutout_index,cen_id,n1,n2))
+            print(self.nbrs_data['nbr_id'][q])
+            print(mess)
+            return None
+            #raise RuntimeError(mess)
 
         nbrs_inds = [i+1 for i in xrange(len(q))]
 

@@ -93,6 +93,49 @@ def interpolate_image(rowcen1, colcen1, jacob1, im1,
 
     return im2,wbad,wgood
 
+def interpolate_image_diffsize(rowcen1, colcen1, jacob1, im1, 
+                               rowcen2, colcen2, jacob2, im2):
+    """
+    interpolate from im1 to im2 using jacobs
+    
+    assumes im1 and im2 are the same size
+    
+    returns 
+        
+        interpolated image, pixels in im2 off of im1, pixels in im2 on im1
+    """
+
+    rows2abs,cols2abs = numpy.mgrid[0:im2.shape[0], 0:im2.shape[1]]
+    rows2 = rows2abs - rowcen2
+    cols2 = cols2abs - colcen2
+
+    jinv1 = jacob1.getI()
+            
+    # convert pixel coords in second cutout to u,v
+    u = rows2*jacob2[0,0] + cols2*jacob2[0,1]
+    v = rows2*jacob2[1,0] + cols2*jacob2[1,1]
+    
+    # now convert into pixels for first image
+    row1 = rowcen1 + u*jinv1[0,0] + v*jinv1[0,1]
+    col1 = colcen1 + u*jinv1[1,0] + v*jinv1[1,1]
+    
+    row1 = row1.round().astype('i8')
+    col1 = col1.round().astype('i8')
+
+    wgood = numpy.where((row1 >= 0)            &
+                        (row1 < im1.shape[0])  &
+                        (col1 >= 0)            &
+                        (col1 < im1.shape[1]))
+    
+    # clipping makes the notation easier
+    row1 = row1.clip(0,im1.shape[0]-1)
+    col1 = col1.clip(0,im1.shape[1]-1)
+    
+    # fill the image
+    im2[rows2abs[wgood],cols2abs[wgood]] = im1[row1[wgood],col1[wgood]]
+
+
+
 def print_with_verbosity(*args,**kwargs):
     """
     print with verbosity=XXX keyword
@@ -101,115 +144,6 @@ def print_with_verbosity(*args,**kwargs):
     if verbosity <= VERBOSITY():
         print(*args,**kwargs)
 
-class PBar(object):
-    """
-    Prints a progressbar to the screen.
-
-    Use like this
-    pgr = PBar(N,"doing work")
-    pgr.start()
-    for i in xrange(N):
-        pgr.update(i+1)
-    pgr.finish()
-    """
-    def __init__(self,Nmax,name=""):
-        self.name = name
-        if len(name) > 0:
-            self.name += ": "
-        self.width = None
-        self.Nmax = Nmax
-        self.di = None
-        self.pc = None
-        self.ic = 0
-        self.lp = None
-        self.columnsp = None
-
-    def __getdipc(self,slen):
-        if slen < self.Nmax:
-            self.di = int(float(self.Nmax)/float(slen))
-            self.pc = "|"
-        else:
-            self.di = 1
-            self.pc = "|" * int(float(slen)/float(self.Nmax))
-        #print slen,self.Nmax,self.di,self.pc
-
-    def _get_width(self):
-        try:
-            with open(os.devnull, 'w') as silent:
-                line = check_output(['stty','size'], stderr=silent)
-                columns = line.strip().split()[-1]
-        except:
-            columns= '80'
-        return columns
-
-    def start(self):
-        self.tstart = time.time()
-        self.tp = time.time()
-        columns = self._get_width()
-        self.width = int(columns)
-        tail = " %3d%% ETA: --:--:--" % 0
-        slen = self.width - len(self.name)-len(tail)
-        line = self.name + " " * slen + tail
-        print(line,end="")
-        sys.stdout.flush()
-        self.__getdipc(slen)
-        self.lp = line
-
-    def update(self,i):
-        if i-self.ic >= self.di:
-            columns = self._get_width()
-
-            if self.lp is not None:
-                if self.columnsp is not None and self.columnsp > int(columns):
-                    sys.stdout.write('\n')
-                else:
-                    nb = len(self.lp)+1
-                    sys.stdout.write('\b' * nb)
-                sys.stdout.flush()
-            self.width = int(columns)
-            dn = int(float(i)/float(self.Nmax)*100.0)
-
-            tn = time.time()
-            telapsed = tn-self.tstart
-            deta = telapsed/float(i)*float(self.Nmax-i)
-
-            dt = tn-self.tp
-            eta = dt/float(i-self.ic)*float(self.Nmax-i)
-            self.tp = tn
-            self.ic = i
-            meta = numpy.sqrt(deta*eta)
-
-            tail = " %3d%% ETA: " % dn
-            tail += time.strftime('%H:%M:%S', time.gmtime(meta))
-            tlen = self.width - len(self.name)-len(tail)
-            self.__getdipc(tlen)
-            clen = int(float(i)/float(self.di))
-            if clen > tlen: clen = tlen
-            slen = tlen-clen
-            line = self.name + self.pc * clen
-            if slen > 0:
-                line += " " * slen
-            line += tail
-            print(line,end="")
-            sys.stdout.flush()
-            self.lp = line
-            self.columnsp = int(columns)
-
-    def finish(self):
-        if self.lp is not None:
-            nb = len(self.lp)+1
-            sys.stdout.write('\b' * nb)
-            sys.stdout.flush()
-        columns = self._get_width()
-        self.width = int(columns)
-        telapsed = time.time()-self.tstart
-        tail = " %3d%% Time: " % 100
-        tail += time.strftime('%H:%M:%S', time.gmtime(telapsed))
-        clen = self.width - len(self.name)-len(tail)
-        line = self.name + "|" * clen
-        line += tail
-        print(line)
-        sys.stdout.flush()
 
 def clip_element_wise(arr, minvals, maxvals):
     """

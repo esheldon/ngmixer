@@ -60,12 +60,14 @@ class MEDSImageIO(ImageIO):
         self.conf['nband'] = len(self.meds_list)
 
         self.conf['max_cutouts'] = self.conf.get('max_cutouts',None)
+        self.conf['psfs_in_file'] = self.conf.get('psfs_in_file',False)
 
         # indexing of fofs
         self._set_and_check_index_lookups()
 
         # psfs
-        self._load_psf_data()
+        if not self.conf['psfs_in_file']:
+            self._load_psf_data()
 
         # make sure if we are doing nbrs we have the info we need
         if self.conf['model_nbrs']:
@@ -77,6 +79,9 @@ class MEDSImageIO(ImageIO):
         self.conf['model_nbrs'] = self.conf.get('model_nbrs',False)
         self.conf['ignore_zero_images'] = self.conf.get('ignore_zero_images',False)
 
+
+        # zero the weight map for these
+        self.conf['extra_mask_flags'] = self.conf.get('extra_mask_flags',None)
 
         # max fraction of image masked in bitmask or that has zero weight
         self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',1.0)
@@ -101,7 +106,30 @@ class MEDSImageIO(ImageIO):
 
         The filename is optional and is just for debugging purposes.
         """
-        raise NotImplementedError("_get_psf_image method of ImageIO must be defined in subclass.")
+
+        if not self.conf['psfs_in_file']:
+            raise NotImplementedError("only use base class method when "
+                                      "psfs are in the MEDS file")
+
+        meds=self.meds_list[band]
+        psfim = meds.get_psf(mindex, icut)
+
+        cat = meds.get_cat()
+        names=cat.dtype.names
+        if 'psf_sigma' in names:
+            sigma_pix = cat['psf_sigma'][mindex, icut]
+        else:
+            sigma_pix = 2.5
+
+        if 'psf_cutout_row' in names:
+            cen = (
+                cat['psf_cutout_row'][mindex, icut],
+                cat['psf_cutout_col'][mindex, icut],
+            )
+        else:
+            cen = (numpy.array(psfim.shape)-1.0)/2.0
+
+        return psfim, cen, sigma_pix, 'none'
 
     def _get_sub_fname(self,fname):
         rng_string = '%s-%s' % (self.fof_range[0], self.fof_range[1])
@@ -128,9 +156,20 @@ class MEDSImageIO(ImageIO):
                 )
 
             min_weight=self.conf.get('min_weight',0.0)
-            for meds_file in self.meds_files:
+
+            band_not_in_name=self.conf.get("band_not_in_name",False)
+
+            for iband,meds_file in enumerate(self.meds_files):
                 print(meds_file)
                 newf = self._get_sub_fname(meds_file)
+
+
+                # we must assume the bands line up with the MOF run
+                if band_not_in_name:
+                    band=iband
+                else:
+                    band=None
+
                 ex=MEDSExtractorCorrector(
                     self.mof_file,
                     meds_file,
@@ -140,10 +179,10 @@ class MEDSImageIO(ImageIO):
                     replace_bad=corrmeds['replace_bad'],
                     reject_outliers=corrmeds['reject_outliers'],
                     min_weight=min_weight,
-                    copy_all=True,
                     cleanup=True,
                     verbose=False,
                     make_plots=self.conf['make_plots'],
+                    band=band,
                 )
                 extracted.append(ex)
             extracted.append(None)
@@ -197,6 +236,11 @@ class MEDSImageIO(ImageIO):
         self.meds_files_full = self.meds_files
         self.fof_file_full = self.fof_file
         self.extracted=None
+
+        if 'correct_meds' in self.conf and self.fof_range is None:
+            with meds.MEDS(self.meds_files_full[0]) as m:
+                self.fof_range=[0,m.size-1]
+
         if self.fof_range is not None:
             extracted=self._get_sub()
             meds_files=[ex.sub_file for ex in extracted if ex is not None]
@@ -410,6 +454,8 @@ class MEDSImageIO(ImageIO):
     def get_meta_data_dtype(self):
         dt=[('id','i8'),
             ('number','i4'),
+            ('ra','f8'),
+            ('dec','f8'),
             ('nimage_tot','i4',(self.conf['nband'],)),
             ('fofid','i8')]
         return dt
@@ -520,6 +566,8 @@ class MEDSImageIO(ImageIO):
         meta_row = self._get_meta_row()
         meta_row['id'][0] = self.meds_list[0]['id'][mindex]
         meta_row['number'][0] = self.meds_list[0]['number'][mindex]
+        meta_row['ra'][0] = self.meds_list[0]['ra'][mindex]
+        meta_row['dec'][0] = self.meds_list[0]['dec'][mindex]
 
         # to account for max_cutouts limit, we count the actual number
         #meta_row['nimage_tot'][0,:] = numpy.array([self.meds_list[b]['ncutout'][mindex]-1 for b in xrange(self.conf['nband'])],dtype='i4')
@@ -632,7 +680,7 @@ class MEDSImageIO(ImageIO):
             return None
 
 
-        wt,wt_us,wt_raw,seg,skip = self._get_meds_weight(meds, mindex, icut)
+        wt,wt_us,wt_raw,seg,skip = self._get_meds_weight(meds, mindex, icut, bmask)
         if skip:
             return None
 
@@ -841,28 +889,34 @@ class MEDSImageIO(ImageIO):
         wt=wt.clip(min=0.0)
         return wt
 
-    def _get_meds_weight(self, meds, mindex, icut):
+    def _get_meds_weight(self, meds, mindex, icut, bmask):
         """
         Get a weight map from the input MEDS file
         """
-        maxfrac=self.conf['max_zero_weight_frac']
+
+        conf=self.conf
+
+        maxfrac=conf['max_zero_weight_frac']
         skip=False
 
         wt_raw = meds.get_cutout(mindex, icut, type='weight')
-        if self.conf['region'] == 'mof':
+        if conf['region'] == 'mof':
             wt=wt_raw.copy()
             wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
-        elif self.conf['region'] == "cweight-nearest":
+        elif conf['region'] == "cweight-nearest":
             wt = meds.get_cweight_cutout_nearest(mindex, icut)
             wt_us = None
-        elif self.conf['region'] == 'seg_and_sky':
+        elif conf['region'] == 'seg_and_sky':
             wt=meds.get_cweight_cutout(mindex, icut)
             wt_us = None
-        elif self.conf['region'] == 'weight':
+        elif conf['region'] == 'weight':
             wt=wt_raw.copy()
             wt_us = None
         else:
-            raise ValueError("no support for region type %s" % self.conf['region'])
+            raise ValueError("no support for region type %s" % conf['region'])
+
+        if conf['extra_mask_flags'] is not None:
+            self._zero_weights_for_flagged_pixels(wt, wt_us, bmask)
 
         wt = self._clip_weight(wt)
         wt_raw = self._clip_weight(wt_raw)
@@ -876,7 +930,7 @@ class MEDSImageIO(ImageIO):
 
 
         '''
-        if self.conf['symmetrize_weight']:
+        if conf['symmetrize_weight']:
             raise RuntimeError("this is bogus!  Need to zero the map not add")
             wt     = wt     + numpy.rot90(wt)
             wt_raw = wt_raw + numpy.rot90(wt_raw)
@@ -895,6 +949,16 @@ class MEDSImageIO(ImageIO):
             skip=True
 
         return wt,wt_us,wt_raw,seg, skip
+
+    def _zero_weights_for_flagged_pixels(self, wt, wt_us, bmask):
+        w = numpy.where( (bmask & self.conf['extra_mask_flags']) != 0 )
+        if w[0].size > 0:
+            print("    zeroing weight for",w[0].size,"pixels")
+            #if raw_input('hit a key (q to quit): ') == 'q':
+            #    stop
+            wt[w] = 0.0
+            if wt_us is not None:
+                wt_us[w] = 0.0
 
     def _get_jacobian(self, meds, mindex, icut):
         """

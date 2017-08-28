@@ -1,236 +1,412 @@
 #!/usr/bin/env python
 """
-    %prog [options] config_file command meds_file1 meds_file2 ..
-    Process the input meds files in chunks
+Process the input meds files in chunks
 
-    Possible commands are:
-        setup - setup jobs
-        collate - combine job outputs into a single file
-        verify - verify that all job outputs are present and OK
-        clean - clean all outputs from a run
-        archive - run after collate to delete intermediate files and tar logs
-        link - make symlinks to all final outputs under {run}/output
-        collate-link - collate and link the final outputs
+Possible commands are:
+    setup - setup jobs
+    setup-nbrs - set up jobs for neighbor finding
+    collate - combine job outputs into a single file
+    verify - verify that all job outputs are present and OK
+    clean - clean all outputs from a run
+    archive - run after collate to delete intermediate files and tar logs
+    link - make symlinks to all final outputs under {run}/output
+    collate-link - collate and link the final outputs
+
+You must have the following environment variables set
+    $NGMIXER_OUTPUT_DIR - base output dir
+    $TMPDIR - temporary directory for work
+
+TODO: 
+    - work on list of tile ids
 """
 
 from __future__ import print_function
 import os
 import sys
+import numpy
 import meds
 import fitsio
-import numpy as np
 import glob
 
-from optparse import OptionParser
-parser = OptionParser(__doc__)
-
-
-parser.add_option("--system",default='shell',
-                  help=("name of system for jobs"))
-
-parser.add_option("--queue",default=None,
-                  help=("queue to submit to"))
-
-parser.add_option("--extra-cmds",default='',
-                  help=("extra commands to run in job script"))
-
-parser.add_option('--noblind',action='store_true',default=False,
-                  help="don't blind the catalog")
-
-parser.add_option('--clobber',action='store_true',default=False,
-                  help="clobber existing catalog, else skip over")
-
-parser.add_option('--skip-errors',action='store_true',default=False,
-                  help="skip over errors")
-
-parser.add_option('--nocompress',action='store_true',default=False,
-                  help="do not compress when archiving logs")
-
-parser.add_option("--verbosity", default=0, type=int,
-                  help=("set verbosity level"))
-
-parser.add_option("--seed", default=None,type=int,
-                  help=("random seed to make seeds for jobs"))
-
+import ngmixer
+from ngmixer import files
+from ngmixer.files import read_yaml
 from ngmixer.megamixer import NGMegaMixer
 from ngmixer.megamixer import SLACNGMegaMixer,SLACArrayNGMegaMixer
 from ngmixer.megamixer import CakeNGMegaMixer
-import ngmixer
 
-class SLACMEDSMegaMixer(dict):
+
+from argparse import ArgumentParser
+from argparse import RawTextHelpFormatter
+parser = ArgumentParser(
+    description=__doc__,
+    formatter_class=RawTextHelpFormatter,
+)
+
+parser.add_argument('ngmix_config',help='config file path')
+parser.add_argument('command',help='command to run')
+parser.add_argument(
+    'meds_files',
+    nargs='+',
+    help=('the meds files to process, or a yaml file '
+          'describing the tile set to use'),
+)
+
+parser.add_argument("--system",default='shell',
+                  help=("name of system for jobs"))
+
+parser.add_argument("--queue",default=None,
+                  help=("queue to submit to"))
+
+parser.add_argument('--missing',action='store_true',default=False,
+                    help="write scripts only for missing output files")
+
+parser.add_argument('--noblind',action='store_true',default=False,
+                  help="don't blind the catalog")
+
+parser.add_argument('--clobber',action='store_true',default=False,
+                  help="clobber existing catalog, else skip over")
+
+parser.add_argument('--skip-errors',action='store_true',default=False,
+                  help="skip over errors")
+
+parser.add_argument('--nocompress',action='store_true',default=False,
+                  help="do not compress when archiving logs")
+
+parser.add_argument("--verbosity", default=0, type=int,
+                  help=("set verbosity level"))
+
+parser.add_argument("--seed", default=None,type=int,
+                  help=("random seed to make seeds for jobs.  "
+                        "If not sent, is gotten from the config file"))
+
+parser.add_argument('--desdm',action='store_true',
+                  help="the MEDS files, psf maps are DESDM style")
+
+class MegaMixer(dict):
     """
     conf has ngmix config plus
-
-    run:
-        name: "some name"
-        identifier_nchar: 12
-        chunksize: 1000
-        output_dir: "/some/path"
     """
-    def __init__(self, config_file, meds_files, seed=None):
-        self.config_file = config_file
+    def __init__(self, ngmix_config, psf_map_files, meds_files,
+                 missing=False,
+                 blind=True,
+                 skip_errors=False,
+                 clobber=False,
+                 seed=None):
+        self.ngmix_config    = os.path.abspath( ngmix_config )
+        self.psf_map_files   = [os.path.abspath(f) for f in psf_map_files]
+        self.missing=missing
+
+        self.blind=blind
+        self.skip_errors=skip_errors
+        self.clobber=clobber
+
         self._load_config()
-        self.meds_files=meds_files
-        self.rng = np.random.RandomState(seed=seed)
+        self._make_rng(seed=seed)
+
+        self.meds_files=[os.path.abspath(mf) for mf in meds_files]
+        self.meds_string=' '.join(self.meds_files)
+
+        self.info= files.get_meds_info(meds_files[0])
 
         self._set_files()
 
     def setup(self):
         """
-        make directories, write scripts, copy the config file
+        make directories, write scripts
         """
 
         print("setting up scripts")
 
-        self._make_output_dirs()
+        self._set_chunk_ranges()
         self._make_scripts()
-    
+
+    def setup_nbrs(self):
+        """
+        make directories, write scripts
+        """
+
+        print("setting up nbrs scripts")
+        self._write_nbrs_script()
+
+    def collate(self):
+        """
+        concatenate all the chunk files, adding in
+        some calculated information such as mags
+        """
+
+        self._set_chunk_ranges()
+
+        cls = ngmixer.megamixer.concat_io.get_concat_class(
+            self.conf['collate']['concat_type'],
+        )
+        flist = []
+        for chunk,rng in enumerate(self.chunk_ranges):
+            fname = self._get_chunk_file(chunk,rng,ext='.fits')
+            flist.append(fname)
+
+        collated_file=files.get_collated_file_fromfile(
+            self.meds_files[0],
+            self.conf['run'],
+            blind=self.blind,
+        )
+
+        concatter = cls(
+            self.ngmix_config,
+            flist,
+            collated_file,
+            bands=self.conf['jobs']['bands'],
+            blind=self.blind,
+            clobber=self.clobber,
+            skip_errors=self.skip_errors,
+        )
+
+        concatter.concat()
+
+
     def _make_scripts(self):
         """
-        write the scripts, assuming the directories are in place
+        write the scripts
         """
-        print("writing under:",self.files['work_dir'])
         for chunk,rng in enumerate(self.chunk_ranges):
-            self._write_script(chunk,rng)
-            self._write_job_script(chunk,rng)
+            self._write_script(chunk, rng)
 
     def _write_script(self, chunk, rng):
-        files=self.files
+
+        self._make_chunk_dir(chunk, rng)
 
         fmt=self._get_script_template()
         args = {}
 
-        args['ngmix_config'] = self.config_file
-        args['output_file'] = self._get_chunk_output_file(chunk,rng)
-        args['meds_files'] = ','.join(self.meds_files)
-        args['start'] = rng[0]
-        args['stop'] = rng[1]
+        output_file  = self._get_chunk_file(chunk,rng,ext='.fits')
+        logfile      = self._get_chunk_file(chunk,rng,ext='.log')
 
-        if 'seed' not in self:
-            seed = self.rng.randint(low=1,high=1000000000)
-            args['seed_opt'] = '--seed=%d' % seed
+
+        args['ngmix_config'] = self.ngmix_config
+        args['psf_maps']     = ','.join(self.psf_map_files)
+        args['meds_files']   = self.meds_string
+        args['output_file']  = output_file
+        args['logfile']      = logfile
+        args['start']        = rng[0]
+        args['stop']         = rng[1]
+
+        args['mof_opt'] = ''
+        model_nbrs = self.conf.get('model_nbrs',False)
+        if model_nbrs:
+            fof_file = self._get_fof_file(ext='.fits')
+            args['fof_opt'] = '--fof-file=%s'% fof_file 
+
+            nbrs_file = self._get_nbrs_file(ext='.fits')
+            args['nbrs_opt'] = '--nbrs-file=%s'% nbrs_file 
+
         else:
-            args['seed_opt'] = ''
+            args['fof_opt'] = ''
+            args['nbrs_opt'] = ''
+
+            if 'correct_meds' in self.conf:
+                mof_file = self._get_mof_file()
+                args['mof_opt'] = '--mof-file=%s' % mof_file
+
+        seed = self.rng.randint(low=1,high=1000000000)
+        args['seed_opt'] = '--seed=%d' % seed
 
         scr = fmt.format(**args)
 
-        scr_name = self._get_chunk_script_file(chunk,rng)
-        with open(scr_name,'w') as fp:
-            fp.write(scr)
+        script_name = self._get_chunk_file(chunk,rng,ext='.sh')
 
-        os.system('chmod 755 %s' % scr_name)
+        dowrite=True
+        if self.missing:
+            if os.path.exists(script_name):
+                os.remove(script_name)
+            if os.path.exists(output_file):
+                dowrite=False
 
-    def _write_job_script(self, chunk, rng):
-        fmt=self._get_job_template()
+        if dowrite:
+            print("writing:",script_name)
+            with open(script_name,'w') as fp:
+                fp.write(scr)
+
+            os.system('chmod 755 %s' % script_name)
+
+        return dowrite, script_name
+
+    def _write_nbrs_script(self):
+
+        self._make_nbrs_dir()
+
+        fmt=self._get_nbrs_script_template()
         args = {}
 
-        args['jobname'] = self._get_chunk_output_base(chunk,rng)
-        args['logfile'] = self._get_chunk_log_file(chunk,rng)
+        logfile      = self._get_nbrs_file(ext='.log')
+
+        args['ngmix_config'] = self.ngmix_config
+        args['meds_file']    = self.meds_files[0]
+        args['logfile']      = logfile
 
         scr = fmt.format(**args)
 
-        scr_name = self._get_chunk_job_file(chunk,rng)
-        with open(scr_name,'w') as fp:
+        script_name = self._get_nbrs_file(ext='.sh')
+
+        print("writing:",script_name)
+        with open(script_name,'w') as fp:
             fp.write(scr)
 
-        os.system('chmod 755 %s' % scr_name)
+        os.system('chmod 755 %s' % script_name)
+
+
+    def _get_mof_file(self):
+        """
+        mof file used for subtracting neighbor light
+        """
+
+        mof_file = files.get_collated_file_fromfile(
+            self.meds_files[0],
+            self.conf['correct_meds']['mof_run'],
+        )
+        return mof_file
+
+    def _make_chunk_dir(self, chunk, rng):
+        f=files.get_chunk_file_fromfile(
+            self.meds_files[0],
+            self.conf['run'],
+            rng,
+        )
+        files.makedirs_fromfile(f)
+
+    def _get_chunk_file(self, chunk, rng, ext='.fits'):
+        fname = files.get_chunk_file_fromfile(
+            self.meds_files[0],
+            self.conf['run'],
+            rng,
+            missing=self.missing,
+            ext=ext,
+        )
+        return expand_path(fname)
+
+    def _get_nbrs_file(self, ext='.fits'):
+        fname = files.get_nbrs_file_fromfile(
+            self.meds_files[0],
+            self.conf['run'],
+            ext=ext,
+        )
+        return expand_path(fname)
+
+    def _get_fof_file(self, ext='.fits'):
+        fname = files.get_fof_file_fromfile(
+            self.meds_files[0],
+            self.conf['run'],
+            ext=ext,
+        )
+        return expand_path(fname)
+
+
+    def _make_nbrs_dir(self):
+        f=self._get_nbrs_file()
+        files.makedirs_fromfile(f)
+
+    def _get_script_template(self):
+        template=r"""#!/bin/bash
+
+if [[ -n $_CONDOR_SCRATCH_DIR ]]; then
+    # the condor system creates a scratch directory for us,
+    # and cleans up afterward
+    tmpdir=$_CONDOR_SCRATCH_DIR
+    export TMPDIR=$tmpdir
+else
+    # otherwise use the TMPDIR
+    tmpdir=$TMPDIR
+    mkdir -p $tmpdir
+fi
+
+logfile="{logfile}"
+
+logbase=$(basename $logfile)
+tmplog=$tmpdir/$logbase
+
+
+config="{ngmix_config}"
+
+psf_maps="{psf_maps}"
+
+meds="{meds_files}"
+
+outfile="{output_file}"
+start={start}
+stop={stop}
+
+ngmixit                                   \
+    --fof-range=$start,$stop              \
+    --work-dir=$tmpdir                    \
+    --psf-map="$psf_maps"                 \
+    {nbrs_opt}                            \
+    {fof_opt}                             \
+    {mof_opt}                             \
+    {seed_opt}                            \
+    $config $outfile $meds &> $tmplog
+
+
+mv -vf $tmplog $logfile
+"""
+
+        return template
+
+    def _get_nbrs_script_template(self):
+        template=r"""#!/bin/bash
+
+if [[ -n $_CONDOR_SCRATCH_DIR ]]; then
+    # the condor system creates a scratch directory for us,
+    # and cleans up afterward
+    tmpdir=$_CONDOR_SCRATCH_DIR
+    export TMPDIR=$tmpdir
+else
+    # otherwise use the TMPDIR
+    tmpdir=$TMPDIR
+    mkdir -p $tmpdir
+fi
+
+
+logfile="{logfile}"
+
+logbase=$(basename $logfile)
+tmplog=$tmpdir/$logbase
+
+config="{ngmix_config}"
+meds="{meds_file}"
+
+ngmixer-meds-make-nbrs-data $config $meds &> $tmplog
+mv -vf $tmplog $logfile
+"""
+
+        return template
+
+
 
     def _set_files(self):
         files={
-            'config_file':self.config_file,
+            'ngmix_config':self.ngmix_config,
             'meds_files':self.meds_files,
-            'output_dir':self._get_output_dir(),
         }
-
-        self._set_output_dirs(files)
 
         self.files=files
 
-    def _set_output_dirs(self,files):
+    def _get_num(self):
 
-        bname=os.path.basename(self.meds_files[0])
-        nchar=self.run_conf['identifier_nchar']
-        files['identifier'] = bname[0:nchar]
+        model_nbrs = self.conf.get('model_nbrs',False)
+        if model_nbrs:
+            fname = self._get_fof_file()
+            fofs = fitsio.read(fname)
+            num = numpy.unique(fofs['fofid']).size
+        else:
+            fname=self.meds_files[0]
 
-        odir=files['output_dir']
+            if not os.path.exists(fname):
+                raise ngmixer.util.MissingDataError("missing meds file: %s" % fname)
 
-        files['run_dir'] = os.path.join(
-            odir,
-            self.run_conf['name'],
-        )
+            with fitsio.FITS(fname) as fits:
+                num = fits['object_data'].get_nrows()
 
-        files['work_dir'] = os.path.join(
-            files['run_dir'],
-            files['identifier'],
-        )
+        return num
 
-    def _get_output_dir(self):
-        odir=self.run_conf['output_dir']
-        odir=os.path.expandvars(odir)
-        odir=os.path.expanduser(odir)
-        return odir
-
-    def _get_chunk_output_dir(self,chunk,rng):
-        work_dir = self.files['work_dir']
-        return os.path.join(
-            work_dir,
-            'chunk%05d_%06d_%06d' % (chunk,rng[0],rng[1]))
-
-    
-    def _get_chunk_output_base(self,chunk,rng):
-        fmt='%s-%s-%06d-%06d'
-        return fmt % (self.files['identifier'],
-                      self.run_conf['name'],
-                      rng[0],rng[1])
-
-    def _get_chunk_output_file_generic(self,chunk,rng, ext):
-        dir=self._get_chunk_output_dir(chunk, rng)
-
-        base=self._get_chunk_output_base(chunk, rng)
-
-        fname = '%s%s' % (base, ext)
-        fname = os.path.join(dir, fname)
-        return fname
-
-    def _get_chunk_output_file(self,chunk,rng):
-        return self._get_chunk_output_file_generic(
-            chunk,
-            rng,
-            '.fits',
-        )
-    def _get_chunk_log_file(self,chunk,rng):
-        return self._get_chunk_output_file_generic(
-            chunk,
-            rng,
-            '.log',
-        )
-    def _get_chunk_script_file(self,chunk,rng):
-        dir=self._get_chunk_output_dir(chunk, rng)
-        return os.path.join(dir, "runchunk.sh")
-
-    def _get_chunk_job_file(self,chunk,rng):
-        dir=self._get_chunk_output_dir(chunk, rng)
-        return os.path.join(dir, "job.sh")
-
-    def _make_output_dirs(self, skip_chunks=False):
-        files=self.files
-        if not os.path.exists(files['work_dir']):
-            os.makedirs(files['work_dir'])
-
-        if not skip_chunks:
-            self._set_chunk_ranges()
-
-            for chunk,rng in enumerate(self.chunk_ranges):
-                dr = self._get_chunk_output_dir(chunk,rng)
-                if not os.path.exists(dr):
-                    os.mkdir(dr)
-
-    def _get_nrows(self):
-        fname=self.meds_files[0]
-        with fitsio.FITS(fname) as fits:
-            nrows = fits['object_data'].get_nrows()
-
-        return nrows
 
     def _set_chunk_ranges(self):
 
@@ -239,10 +415,12 @@ class SLACMEDSMegaMixer(dict):
 
         files=self.files
 
-        nrows = self._get_nrows()
+        # could be number of objects or number of
+        # fof groups
+        nrows = self._get_num()
 
-        chunksize=self.run_conf['chunksize']
-        nchunks = nrows/chunksize
+        chunksize=self.jobs_conf['chunksize']
+        nchunks = nrows//chunksize
         if nchunks*chunksize < nrows:
             nchunks += 1
 
@@ -256,13 +434,73 @@ class SLACMEDSMegaMixer(dict):
 
         self.chunk_ranges = chunk_ranges
 
-
     def _load_config(self):
-        from ngmixer.files import read_yaml
-        self.conf = read_yaml(self.config_file)
-        self.run_conf = self.conf['run']
+        self.conf = files.read_config(self.ngmix_config)
+        self.jobs_conf = self.conf['jobs']
+
+    def _make_rng(self, seed=None):
+        if seed is None:
+            if 'global_seed' not in self.conf:
+                raise RuntimeError("either set 'global_seed' in the"
+                                   "config or send --seed=")
+            seed=self.conf['global_seed']
+
+        self.rng = numpy.random.RandomState(seed=seed)
+
+
+
+class SLACMegaMixer(MegaMixer):
+    def setup_nbrs(self):
+        """
+        make directories, write scripts
+        """
+
+        print("setting up nbrs scripts")
+        self._write_nbrs_script()
+        self._write_nbrs_job_script()
+
+
+    def _make_scripts(self):
+        """
+        write the scripts and job files
+        """
+        for chunk,rng in enumerate(self.chunk_ranges):
+            self._write_script(chunk, rng)
+            self._write_job_script(chunk,rng)
+
+    def _write_job_script(self, chunk, rng):
+        fmt=self._get_job_template()
+        args = {}
+
+        output_file = self._get_chunk_file(chunk,rng,ext='.fits')
+        script_name = self._get_chunk_file(chunk,rng,ext='.sh')
+
+        args['script_name']=script_name
+
+        jobname=os.path.basename(script_name).replace('.sh','')
+        args['jobname'] = jobname
+
+        scr = fmt.format(**args)
+
+        script_name = self._get_chunk_file(chunk,rng,ext='.lsf')
+
+        dowrite=True
+        if self.missing:
+            if os.path.exists(script_name):
+                os.remove(script_name)
+            if os.path.exists(script_name+'.submitted'):
+                #print("removing:",script_name+'.submitted')
+                os.remove(script_name+'.submitted')
+            if os.path.exists(output_file):
+                dowrite=False
+
+        if dowrite:
+            print("writing:",script_name)
+            with open(script_name,'w') as fp:
+                fp.write(scr)
 
     def _get_job_template(self):
+
         template=r"""#!/bin/bash
 #BSUB -J {jobname}
 #BSUB -oo ./{jobname}.oe
@@ -272,104 +510,283 @@ class SLACMEDSMegaMixer(dict):
 #BSUB -W 48:00
 
 export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
-mkdir -p $TMPDIR
 
-logfile={logfile}
-
-logbase=$(basename $logfile)
-tmplog=$TMPDIR/$logbase
-
-./runchunk.sh &> $tmplog
-
-mv -vf $tmplog $logfile
-
-rm -rf $TMPDIR
-
+{script_name}
 """
 
         return template
 
-    def _get_script_template(self):
-        template = r"""#!/bin/bash
+    def _write_nbrs_job_script(self):
+        fmt=self._get_job_template()
+        args = {}
 
-config={ngmix_config}
-outfile={output_file}
-meds="{meds_files}"
+        script_name = self._get_nbrs_file(ext='.sh')
 
-ngmixit \
-    --fof-range={start},{stop} \
-    --work-dir=$TMPDIR \
-    {seed_opt} \
-    $config $outfile $meds
+        args['script_name']=script_name
 
-"""
-        return template
+        jobname=os.path.basename(script_name).replace('.sh','')
+        args['jobname'] = jobname
+
+        scr = fmt.format(**args)
+
+        script_name = self._get_nbrs_file(ext='.lsf')
+        print("writing:",script_name)
+        with open(script_name,'w') as fp:
+            fp.write(scr)
+
+
+class BNLMegaMixer(MegaMixer):
+    def _get_master_script(self):
+        """
+        the master script needed for condor
+        One executable allowed in condor submit scripts
+        """
+        return files.get_condor_master_script(
+            self.info['tile_id'],
+            self.conf['run'],
+        )
+
+    def _write_condor_master(self):
+        """
+        One executable allowed in condor submit scripts
+        """
+
+        master_script = self._get_master_script()
+        files.makedirs_fromfile(master_script)
+
+        with open(master_script,'w') as fobj:
+            text = """#!/bin/bash
+
+# this will be a path to a script
+cmd="$1"
+$cmd
+            \n"""
+
+            fobj.write(text)
+
+        os.system('chmod 755 %s' % master_script)
+        
+
+    def _make_scripts(self):
+        """
+        write the scripts and job file
+        """
+
+        self._write_condor_master()
+        scripts=[]
+        for chunk,rng in enumerate(self.chunk_ranges):
+            didwrite, script_name = self._write_script(chunk, rng)
+
+            if didwrite:
+                scripts.append(script_name)
+
+        self._write_submit_script(scripts)
+
+    def _write_submit_script(self, scripts):
+        """
+        write the condor submit script, if there
+        were any jobs
+        """
+        job_script = files.get_condor_submit(
+            self.info['tile_id'],
+            self.conf['run'],
+        )
+        if os.path.exists(job_script):
+            os.remove(job_script)
+
+        if len(scripts) == 0:
+            print("no jobs to write")
+            return
+
+        job_fmt=self._get_job_template()
+
+        files.makedirs_fromfile(job_script)
+        print("writing condor submit:",job_script)
+        with open(job_script,'w') as fobj:
+
+            master_script = self._get_master_script()
+            head = self._get_condor_head()
+            head = head.format(script=master_script)
+            fobj.write(head)
+
+
+            for script in scripts:
+                job_name=os.path.basename(script).replace('.sh','')
+
+                job = job_fmt.format(
+                    job_name=job_name,
+                    script_name=script,
+                )
+
+                fobj.write(job)
+
+
+    def _get_condor_head(self):
+        text="""
+Universe        = vanilla
+
+Notification    = Never
+
+# Run this exe with these args
+Executable      = {script}
+
+Image_Size       = 1000000
+
+GetEnv = True
+
+kill_sig        = SIGINT
+
+
++Experiment     = "astro"\n\n"""
+        return text
+
+    def _get_job_template(self):
+        return """
++job_name = "{job_name}"
+Arguments = {script_name}
+Queue\n"""
+
+
+    def _write_nbrs_job_script(self):
+        raise NotImplementedError("deal with nbrs for condor")
+
+        fmt=self._get_job_template()
+        args = {}
+
+        script_name = self._get_nbrs_file(ext='.sh')
+
+        args['script_name']=script_name
+
+        jobname=os.path.basename(script_name).replace('.sh','')
+        args['jobname'] = jobname
+
+        scr = fmt.format(**args)
+
+        script_name = self._get_nbrs_file(ext='.lsf')
+        print("writing:",script_name)
+        with open(script_name,'w') as fp:
+            fp.write(scr)
+
+
+
+def expand_path(path):
+    return os.path.abspath(
+        os.path.expandvars(
+            os.path.expanduser(
+                path,
+            )
+        )
+    )
 
 
 def get_megamixer(system):
     if system == 'shell':
-        MMixer = NGMegaMixer
+        MMixer = MegaMixer
     elif system == 'slac':
-        MMixer = SLACMEDSMegaMixer
-    elif system == 'slac-array':
-        MMixer = SLACArrayNGMegaMixer
-    elif system == 'bnl-condor':
-        MMixer = ngmixer.megamixer.BNLCondorMegaMixer
-    elif system == 'cake':
-        MMixer = CakeNGMegaMixer
+        MMixer = SLACMegaMixer
+    elif system=='bnl':
+        MMixer = BNLMegaMixer
     else:
         raise ValueError("system %s not supported!" % system)
 
     return MMixer
 
-def main():
-    from ngmixer.files import read_yaml
+def process_meds_files(args, meds_files):
 
-    options, args = parser.parse_args(sys.argv[1:])
-    if len(args) < 3:
-        parser.print_help()
-        sys.exit(45)
-
-    ngmixer.defaults.VERBOSITY.level = options.verbosity
+    psf_map_files = [files.get_psfmap_file_fromfile(f) for f in meds_files]
 
     # get command
-    config_file = args[0]
-    cmd = args[1]
-    meds_files=args[2:]
+    cmd = args.command
 
-    MMixer = get_megamixer(options.system)
+    MMixer = get_megamixer(args.system)
 
-    ngmm = MMixer(config_file, meds_files, seed=options.seed)
+    blind = not args.noblind
+    ngmm = MMixer(
+        args.ngmix_config,
+        psf_map_files,
+        meds_files,
+        seed=args.seed,
+        missing=args.missing,
+        blind=blind,
+        clobber=args.clobber,
+        skip_errors=args.skip_errors,
+    )
 
     if cmd == 'setup':
         ngmm.setup()
 
+    elif cmd=='setup-nbrs':
+        ngmm.setup_nbrs()
+
     elif 'collate' in cmd:
-        ngmm.collate(coadd_run,
-                     verify=False,
-                     blind=not options.noblind,
-                     clobber=options.clobber,
-                     skip_errors=options.skip_errors)
-        if 'link' in cmd:
-            ngmm.link(coadd_run,
-                      verify=False,
-                      blind=not options.noblind,
-                      clobber=options.clobber,
-                      skip_errors=options.skip_errors)
+        ngmm.collate()
 
     elif cmd == 'verify':
-        ngmm.verify(coadd_run,
-                    blind=not options.noblind,
-                    clobber=options.clobber,
-                    skip_errors=False)
+        # not yet implemented
+        ngmm.verify()
+
     elif cmd == 'clean':
+        # not yet implemented
         ngmm.clean(coadd_run)
     elif cmd == 'archive':
+        # not yet implemented
         ngmm.archive(coadd_run,
-                     compress=not options.nocompress)
+                     compress=not args.nocompress)
     else:
         raise ValueError("cmd %s not valid!" % cmd)
 
+
+    
+def process_tile_list(args):
+    # this is actually a config file
+    tile_conf = read_yaml(args.meds_files[0])
+    conf=files.read_config(args.ngmix_config)
+
+    if 'tileset' in tile_conf:
+        import desmeds
+        tileset = desmeds.files.read_tileset(tile_conf['tileset'])
+
+        tiles = tileset['tile_ids']
+    else:
+        tiles = tile_conf['tile_ids']
+
+    ntiles = len(tiles)
+
+    for i,tile_id in enumerate(tiles):
+
+        print("%d/%d tile id: %s" % (i+1,ntiles,tile_id))
+
+        meds_files = files.get_meds_files(
+            tile_conf['medsconf'],
+            tile_id,
+            conf['jobs']['bands'],
+        )
+
+        try:
+            process_meds_files(args, meds_files)
+        except ngmixer.util.MissingDataError as err:
+            if ntiles==1 and not args.skip_errors:
+                raise
+            print("caught MissingDataError error: %s" % str(err))
+        except IOError as err:
+            if ntiles==1 and not args.skip_errors:
+                raise
+            print("caught error: %s" % str(err))
+        except ngmixer.megamixer.concat.ConcatError as err:
+            if ntiles==1 and not args.skip_errors:
+                raise
+            print("failed to concatenate tile: %s" % str(err))
+
+def main():
+
+    args = parser.parse_args()
+
+    ngmixer.defaults.VERBOSITY.level = args.verbosity
+
+    if 'yaml' in args.meds_files[0]:
+        process_tile_list(args)
+    else:
+        process_meds_files(args, args.meds_files)
 
 if __name__ == '__main__':
     main()
