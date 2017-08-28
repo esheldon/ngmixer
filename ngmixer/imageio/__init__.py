@@ -1,7 +1,7 @@
-import imageio
-import medsio
-import simpsimmedsio
-import desmedsio
+from . import imageio
+from . import medsio
+from . import simpsimmedsio
+from . import desmedsio
 
 from .imageio import ImageIO
 from .medsio import MEDSImageIO
