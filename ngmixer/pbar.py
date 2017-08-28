@@ -85,12 +85,7 @@ def prange(*args, **kwargs):
         print(i)
         time.sleep(0.1)
     """
-    try:
-        f = xrange
-    except NameError:
-        f = range
-    
-    return PBar(f(*args), **kwargs)
+    return PBar(xrange(*args), **kwargs)
 
 
 def format_interval(t):
