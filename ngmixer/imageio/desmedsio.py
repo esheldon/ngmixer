@@ -23,6 +23,7 @@ IMAGE_FLAGS_SET=2**0
 PSF_IN_BLACKLIST=2**1
 PSF_MISSING_S2N=2**2
 PSF_LOW_S2N=2**3
+PSF_FILE_READ_ERROR=2**4
 
 
 BADPIX_MAP={
@@ -451,12 +452,17 @@ class SVDESMEDSImageIO(MEDSImageIO):
         if flags == 0:
             # we expect a well-formed, existing file if there are no flags set
             if not os.path.exists(psfpath):
+                #print("missing psfex: %s" % psfpath)
+                #flags |= PSF_FILE_READ_ERROR
                 raise MissingDataError("missing psfex: %s" % psfpath)
             else:
                 print_with_verbosity("loading: %s" % psfpath,verbosity=2)
                 try:
                     pex=PSFEx(psfpath)
-                except PSFExError as err:
+                except (PSFExError,IOError) as err:
+                    #print("problem with psfex file "
+                    #      "'%s': %s " % (psfpath,str(err)))
+                    #flags |= PSF_FILE_READ_ERROR
                     raise MissingDataError("problem with psfex file "
                                            "'%s': %s " % (psfpath,str(err)))
         return pex, flags
