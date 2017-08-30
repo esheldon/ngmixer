@@ -1120,8 +1120,13 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
         fs = bname.split('_')
         if bname[0:3] == 'DES':
-            expname = fs[2]
-            ccd = fs[4][1:]
+            if 'nullwt' in bname or 'nwgint' in bname:
+                expname = fs[2]
+                ccd = fs[4][1:]
+            else:
+                'D%08d-%02d'
+                expname = 'D%08d' % -9999
+                ccd = '%02d' % -9999
         else:
             expname = fs[0]
             ccd = fs[2][1:]
