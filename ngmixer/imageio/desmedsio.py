@@ -26,7 +26,7 @@ PSF_LOW_S2N=2**3
 PSF_FILE_READ_ERROR=2**4
 
 
-BADPIX_MAP={
+DES_BADPIX_MAP={
     "BPM":          1,  #/* set in bpm (hot/dead pixel/column)        */
     "SATURATE":     2,  #/* saturated pixel                           */
     "INTERP":       4,  #/* interpolated pixel                        */
@@ -78,7 +78,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
             flags = 0
             for flagname in flag_list:
-                flags += BADPIX_MAP[flagname]
+                flags += DES_BADPIX_MAP[flagname]
 
             self.conf['extra_mask_flags'] = flags
 
@@ -562,6 +562,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
             image_flags[1:] = cimage_flags
             self.all_image_flags.append(image_flags)
 
+        self._verify_meds() 
         self.nobj_tot = self.meds_list[0].size
 
 # SV multifit with one-off WCS
@@ -602,7 +603,8 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
     def __init__(self,*args,**kwargs):
         super(Y1DESMEDSImageIO,self).__init__(*args,**kwargs)
 
-        self._load_wcs_data()
+        if 'mof' in self.conf:
+            self._load_wcs_data()
 
     def _set_defaults(self):
         super(Y1DESMEDSImageIO,self)._set_defaults()
@@ -626,12 +628,13 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         if pconf is None:
             self.conf['propagate_star_flags'] = dict(propagate = False)
         else:
-            flag_list = pconf['ignore_when_set']
-            mask = 0
-            for flag in flag_list:
-                mask += BADPIX_MAP[flag]
+            if self.conf['propagate_star_flags']['propagate']:
+                flag_list = pconf['ignore_when_set']
+                mask = 0
+                for flag in flag_list:
+                    mask += DES_BADPIX_MAP[flag]
 
-            pconf['ignore_when_set_mask'] = mask
+                pconf['ignore_when_set_mask'] = mask
 
     def _load_wcs_data(self):
         # should we read from the original file?
@@ -860,9 +863,9 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         msk = self.conf['propagate_star_flags']['ignore_when_set_mask']
 
         is_sat_or_interp = (
-            (im1 & BADPIX_MAP['SATURATE'] != 0) | (im1 & BADPIX_MAP['INTERP'] != 0)
+            (im1 & DES_BADPIX_MAP['SATURATE'] != 0) | (im1 & DES_BADPIX_MAP['INTERP'] != 0)
         )
-        is_bright_star = (im1 & BADPIX_MAP['STAR'] != 0)
+        is_bright_star = (im1 & DES_BADPIX_MAP['STAR'] != 0)
         not_other_bits = (im1 & msk == 0)
 
         q = numpy.where(
@@ -998,7 +1001,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
 
     def _flag_y1_stellarhalo_masked_one(self,mb_obs_list):
 
-        starflag = BADPIX_MAP['STAR']
+        starflag = DES_BADPIX_MAP['STAR']
 
         mindex = mb_obs_list.meta['meds_index']
         seg_number = self.meds_list[0]['number'][mindex]
