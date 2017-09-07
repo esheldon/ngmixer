@@ -1035,6 +1035,6 @@ def verify_meds(meds_list):
 
     w, = numpy.where(sizes != sizes[0])
     if w.size != 0:
-        raise ValueError("not all meds files are same size: %s" % sizes)
+        raise IOError("not all meds files are same size: %s" % sizes)
 
 
