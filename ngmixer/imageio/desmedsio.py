@@ -562,7 +562,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
             image_flags[1:] = cimage_flags
             self.all_image_flags.append(image_flags)
 
-        verify_meds(self._meds_list)
+        verify_meds(self.meds_list)
         self.nobj_tot = self.meds_list[0].size
 
 # SV multifit with one-off WCS
