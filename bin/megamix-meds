@@ -110,6 +110,10 @@ class MegaMixer(dict):
         self._make_rng(seed=seed)
 
         self.meds_files=[os.path.abspath(mf) for mf in meds_files]
+        meds_list = [meds.MEDS(f) for f in self.meds_files]
+
+        ngmixer.imageio.medsio.verify_meds(meds_list)
+
         self.meds_string=' '.join(self.meds_files)
 
         self.info= files.get_meds_info(meds_files[0])

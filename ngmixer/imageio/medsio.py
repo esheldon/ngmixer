@@ -1018,15 +1018,8 @@ class MEDSImageIO(ImageIO):
             self.meds_list.append(medsi)
             self.meds_meta_list.append(medsi_meta)
 
-        self._verify_meds() 
+        verify_meds(self.meds_list)
         self.nobj_tot = self.meds_list[0].size
-
-    def _verify_meds(self):
-        sizes = numpy.array([m.size for m in self.meds_list])
-
-        w, = numpy.where(sizes != sizes[0])
-        if w.size != 0:
-            raise ValueError("not all meds files are same size: %s" % sizes)
 
 
 def _clip_pixel(pixel, npix):
@@ -1036,5 +1029,12 @@ def _clip_pixel(pixel, npix):
     if pixel > (npix-1):
         pixel = (npix-1)
     return pixel
+
+def verify_meds(meds_list):
+    sizes = numpy.array([m.size for m in meds_list])
+
+    w, = numpy.where(sizes != sizes[0])
+    if w.size != 0:
+        raise ValueError("not all meds files are same size: %s" % sizes)
 
 

@@ -4,7 +4,7 @@ import numpy
 import copy
 import fitsio
 
-from .medsio import MEDSImageIO
+from .medsio import MEDSImageIO, verify_meds
 from .. import files
 from .. import nbrsfofs
 from .. import util
@@ -562,7 +562,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
             image_flags[1:] = cimage_flags
             self.all_image_flags.append(image_flags)
 
-        self._verify_meds() 
+        verify_meds(self._meds_list)
         self.nobj_tot = self.meds_list[0].size
 
 # SV multifit with one-off WCS
