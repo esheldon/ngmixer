@@ -6,6 +6,8 @@ import fitsio
 from .. import files
 from ..util import Namer
 
+import esutil as eu
+
 class ConcatError(Exception):
     def __init__(self, value):
         self.value = value
@@ -80,6 +82,9 @@ class Concat(object):
         except IOError as err:
             raise ConcatError(str(err))
 
+        if 'magzp_ref' not in meta.dtype.names:
+            meta = self._add_magzp_ref(meta)
+
         data = self.pick_fields(data0,meta)
         epoch_data = self.pick_epoch_fields(epoch_data0)
         if nbrs_data0 is not None:
@@ -88,6 +93,17 @@ class Concat(object):
             nbrs_data = None
 
         return data, epoch_data, nbrs_data, meta
+
+    def _add_magzp_ref(self, meta):
+        if 'magzp_ref' not in self.config:
+            raise ValueError("You must have magzp_ref in the "
+                             "meta_data extension or in the config file")
+        #print("adding magzp_ref from config file")
+        add_dt=[('magzp_ref','f8')]
+        new_meta = eu.numpy_util.add_fields(meta, add_dt)
+        new_meta['magzp_ref'] = self.config['magzp_ref']
+
+        return new_meta
 
     def verify(self):
         """
