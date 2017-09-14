@@ -874,22 +874,6 @@ class MEDSImageIO(ImageIO):
 
         return bmask, skip
 
-    def _clip_weight(self,wt):
-        wt = wt.astype('f8', copy=False)
-
-        w = numpy.where(wt < self.conf['min_weight'])
-        if w[0].size > 0:
-            wt[w] = 0.0
-
-            if self.conf['symmetrize_weight']:
-                #print("    symmetrizing weight")
-                wt_rot = numpy.rot90(wt)
-                w_rot = numpy.where(wt_rot < self.conf['min_weight'])
-                wt[w_rot] = 0.0
-
-        wt=wt.clip(min=0.0)
-        return wt
-
     def _get_meds_weight(self, band, meds, mindex, icut, bmask):
         """
         Get a weight map from the input MEDS file
@@ -919,26 +903,14 @@ class MEDSImageIO(ImageIO):
         if conf['extra_mask_flags'] is not None:
             self._zero_weights_for_flagged_pixels(wt, wt_us, bmask)
 
-        wt = self._clip_weight(wt)
-        wt_raw = self._clip_weight(wt_raw)
-        if wt_us is not None:
-            wt_us = self._clip_weight(wt_us)
-
         try:
             seg = meds.interpolate_coadd_seg(mindex, icut)
         except:
             seg = meds.get_cutout(mindex, icut, type='seg')
 
 
-        '''
         if conf['symmetrize_weight']:
-            raise RuntimeError("this is bogus!  Need to zero the map not add")
-            wt     = wt     + numpy.rot90(wt)
-            wt_raw = wt_raw + numpy.rot90(wt_raw)
-
-            if wt_us is not None:
-                wt_us  = wt_us  + numpy.rot90(wt_us)
-        '''
+            self._symmetrize_weight_images(wt_raw, wt, wt_us)
 
         # check raw weight map for zero pixels
         wzero=numpy.where(wt_raw == 0.0)
@@ -950,6 +922,26 @@ class MEDSImageIO(ImageIO):
             skip=True
 
         return wt,wt_us,wt_raw,seg, skip
+
+    def _symmetrize_weight_images(self, wt_raw, wt, wt_us):
+        """
+        symmetrize raw weight pixels in all of the maps
+
+        so we don't symmetrize the ubserseg, we are mainly worried
+        about bad columns, edges, bleeds
+        """
+        assert wt.shape[0] == wt.shape[1]
+
+        wt_raw_rot=numpy.rot90(wt_raw)
+        wzero = numpy.where(wt_raw_rot == 0.0)
+
+        if wzero[0].size > 0:
+            wt_raw[wzero] = 0.0
+            wt[wzero] = 0.0
+
+            if wt_us is not None:
+                wt_us[wzero] = 0.0
+
 
     def _zero_weights_for_flagged_pixels(self, wt, wt_us, bmask):
         w = numpy.where( (bmask & self.conf['extra_mask_flags']) != 0 )
