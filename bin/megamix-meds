@@ -123,6 +123,10 @@ class MegaMixer(dict):
         self._make_rng(seed=seed)
 
         self.meds_files=[os.path.abspath(mf) for mf in meds_files]
+        meds_list = [meds.MEDS(f) for f in self.meds_files]
+
+        ngmixer.imageio.medsio.verify_meds(meds_list)
+
         self.meds_string=' '.join(self.meds_files)
 
         self.info= files.get_meds_info(meds_files[0])
@@ -564,6 +568,16 @@ export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
 
 
 class BNLMegaMixer(MegaMixer):
+    def setup_nbrs(self):
+        """
+        make directories, write scripts
+        """
+
+        print("setting up nbrs scripts")
+        self._write_nbrs_script()
+        self._write_nbrs_job_script()
+
+
     def _get_master_script(self):
         """
         the master script needed for condor
@@ -676,24 +690,24 @@ Queue\n"""
 
 
     def _write_nbrs_job_script(self):
-        raise NotImplementedError("deal with nbrs for condor")
-
-        fmt=self._get_job_template()
-        args = {}
 
         script_name = self._get_nbrs_file(ext='.sh')
+        head=self._get_condor_head()
 
-        args['script_name']=script_name
+        head = head.format(script=script_name)
 
-        jobname=os.path.basename(script_name).replace('.sh','')
-        args['jobname'] = jobname
+        jobcall = """
++job_name = "{job_name}"
+Queue\n"""
 
-        scr = fmt.format(**args)
+        job_name=os.path.basename(script_name).replace('.sh','')
+        jobcall=jobcall.format(job_name=job_name)
 
-        script_name = self._get_nbrs_file(ext='.lsf')
-        print("writing:",script_name)
-        with open(script_name,'w') as fp:
-            fp.write(scr)
+        job_script_name = self._get_nbrs_file(ext='.condor')
+        print("writing:",job_script_name)
+        with open(job_script_name,'w') as fp:
+            fp.write(head)
+            fp.write(jobcall)
 
 
 

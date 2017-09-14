@@ -675,12 +675,12 @@ class MEDSImageIO(ImageIO):
 
         meds=self.meds_list[band]
 
-        bmask,skip = self._get_meds_bmask(meds, mindex, icut)
+        bmask,skip = self._get_meds_bmask(band, meds, mindex, icut)
         if skip:
             return None
 
 
-        wt,wt_us,wt_raw,seg,skip = self._get_meds_weight(meds, mindex, icut, bmask)
+        wt,wt_us,wt_raw,seg,skip = self._get_meds_weight(band, meds, mindex, icut, bmask)
         if skip:
             return None
 
@@ -708,8 +708,8 @@ class MEDSImageIO(ImageIO):
         obs.weight_raw = wt_raw
         obs.seg = seg
 
-        fname = self._get_meds_orig_filename(meds, mindex, icut)
-        obs.filename=fname
+        #fname = self._get_meds_orig_filename(meds, mindex, icut)
+        #obs.filename=fname
 
         if 'trim_image' in self.conf:
             self._trim_obs(obs)
@@ -798,7 +798,7 @@ class MEDSImageIO(ImageIO):
 
         return meds.get_cutout(mindex, icut)
 
-    def _badfrac_too_high(self, icut, nbad, shape, maxfrac, type):
+    def _badfrac_too_high(self, band, icut, nbad, shape, maxfrac, type):
         ntot=shape[0]*shape[1]
         frac = float(nbad)/ntot
 
@@ -806,13 +806,13 @@ class MEDSImageIO(ImageIO):
             maxfrac=1.0/min(shape)
 
         if frac > maxfrac:
-            print("    skipping cutout",icut,"due to high ",type,"frac:",frac)
+            print("    skipping cutout band:",band,"icut:",icut,"due to high ",type,"frac:",frac)
             return True
         else:
             return False
 
 
-    def _get_meds_bmask(self, meds, mindex, icut):
+    def _get_meds_bmask(self, band, meds, mindex, icut):
         """
         Get an image cutout from the input MEDS file
         """
@@ -834,7 +834,7 @@ class MEDSImageIO(ImageIO):
             w=numpy.where(bmask != 0)
 
             notok=self._badfrac_too_high(
-                icut, w[0].size, bmask.shape, maxfrac, 'bmask'
+                band, icut, w[0].size, bmask.shape, maxfrac, 'bmask'
             )
             if notok:
                 skip=True
@@ -889,7 +889,7 @@ class MEDSImageIO(ImageIO):
         wt=wt.clip(min=0.0)
         return wt
 
-    def _get_meds_weight(self, meds, mindex, icut, bmask):
+    def _get_meds_weight(self, band, meds, mindex, icut, bmask):
         """
         Get a weight map from the input MEDS file
         """
@@ -943,7 +943,7 @@ class MEDSImageIO(ImageIO):
         wzero=numpy.where(wt_raw == 0.0)
 
         notok=self._badfrac_too_high(
-            icut, wzero[0].size, wt_raw.shape, maxfrac, 'zero weight'
+            band, icut, wzero[0].size, wt_raw.shape, maxfrac, 'zero weight'
         )
         if notok:
             skip=True
@@ -1018,7 +1018,9 @@ class MEDSImageIO(ImageIO):
             self.meds_list.append(medsi)
             self.meds_meta_list.append(medsi_meta)
 
+        verify_meds(self.meds_list)
         self.nobj_tot = self.meds_list[0].size
+
 
 def _clip_pixel(pixel, npix):
     pixel=int(pixel)
@@ -1027,5 +1029,12 @@ def _clip_pixel(pixel, npix):
     if pixel > (npix-1):
         pixel = (npix-1)
     return pixel
+
+def verify_meds(meds_list):
+    sizes = numpy.array([m.size for m in meds_list])
+
+    w, = numpy.where(sizes != sizes[0])
+    if w.size != 0:
+        raise IOError("not all meds files are same size: %s" % sizes)
 
 
