@@ -57,6 +57,13 @@ parser.add_argument(
           'describing the tile set to use'),
 )
 
+parser.add_argument("--walltime",default='48:00',
+                  help=("wall time for queue determination (e.g. in lsf)"))
+parser.add_argument("--walltime-e",default='4:00',
+                  help=("esimated wall time for scheduling (e.g. in lsf)"))
+parser.add_argument("--ncores",type=int,default=1,
+                  help=("number of cores per job"))
+
 parser.add_argument("--system",default='shell',
                   help=("name of system for jobs"))
 
@@ -93,6 +100,9 @@ class MegaMixer(dict):
     conf has ngmix config plus
     """
     def __init__(self, ngmix_config, psf_map_files, meds_files,
+                 walltime='48:00',
+                 walltime_e='4:00',
+                 ncores=1,
                  missing=False,
                  blind=True,
                  skip_errors=False,
@@ -101,6 +111,9 @@ class MegaMixer(dict):
         self.ngmix_config    = os.path.abspath( ngmix_config )
         self.psf_map_files   = [os.path.abspath(f) for f in psf_map_files]
         self.missing=missing
+        self.walltime=walltime
+        self.walltime_e=walltime_e
+        self.ncores=ncores
 
         self.blind=blind
         self.skip_errors=skip_errors
@@ -475,7 +488,11 @@ class SLACMegaMixer(MegaMixer):
 
     def _write_job_script(self, chunk, rng):
         fmt=self._get_job_template()
-        args = {}
+        args = {
+            'walltime':self.walltime,
+            'walltime_e':self.walltime_e,
+            'ncores':self.ncores,
+        }
 
         output_file = self._get_chunk_file(chunk,rng,ext='.fits')
         script_name = self._get_chunk_file(chunk,rng,ext='.sh')
@@ -509,10 +526,11 @@ class SLACMegaMixer(MegaMixer):
         template=r"""#!/bin/bash
 #BSUB -J {jobname}
 #BSUB -oo ./{jobname}.oe
+#BSUB -n {ncores}
+#BSUB -We {walltime_e}
+#BSUB -W {walltime}
 #BSUB -R "linux64 && rhel60 && scratch > 6"
-#BSUB -n 1
-#BSUB -We 24:00
-#BSUB -W 48:00
+#BSUB -R span[hosts=1]
 
 export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
 
@@ -523,7 +541,12 @@ export TMPDIR=/scratch/$USER/$LSB_JOBID-$LSB_JOBINDEX
 
     def _write_nbrs_job_script(self):
         fmt=self._get_job_template()
-        args = {}
+        args = {
+            'walltime':'4:00',
+            'walltime_e':'1:00',
+            'ncores':1,
+        }
+
 
         script_name = self._get_nbrs_file(ext='.sh')
 
@@ -715,6 +738,9 @@ def process_meds_files(args, meds_files):
         blind=blind,
         clobber=args.clobber,
         skip_errors=args.skip_errors,
+        walltime_e=args.walltime_e,
+        walltime=args.walltime,
+        ncores=args.ncores,
     )
 
     if cmd == 'setup':
