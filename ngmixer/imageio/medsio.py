@@ -178,6 +178,7 @@ class MEDSImageIO(ImageIO):
                     newf,
                     replace_bad=corrmeds['replace_bad'],
                     reject_outliers=corrmeds['reject_outliers'],
+                    bad_flags=corrmeds['bad_flags'],
                     min_weight=min_weight,
                     cleanup=True,
                     verbose=False,
@@ -902,9 +903,9 @@ class MEDSImageIO(ImageIO):
         wt_raw = meds.get_cutout(mindex, icut, type='weight')
         if conf['region'] == 'mof':
             wt=wt_raw.copy()
-            wt_us = meds.get_cweight_cutout_nearest(mindex, icut)
-        elif conf['region'] == "cweight-nearest":
-            wt = meds.get_cweight_cutout_nearest(mindex, icut)
+            wt_us = meds.get_uberseg(mindex, icut)
+        elif conf['region'] in ["cweight-nearest","uberseg"]:
+            wt = meds.get_uberseg(mindex, icut)
             wt_us = None
         elif conf['region'] == 'seg_and_sky':
             wt=meds.get_cweight_cutout(mindex, icut)

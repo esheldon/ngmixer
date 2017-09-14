@@ -7,17 +7,9 @@ import meds
 
 from ..render_ngmix_nbrs import RenderNGmixNbrs
 
-#
-# should test against the corrector script
-#
-
 # these are higher than anything in Y1 DES masks
-NBRS_MASKED = 2**14
-CEN_MODEL_MISSING = 2**13
-
-# we didn't always set the bmask when we made the
-# weight zero in the meds maker
-ZERO_WEIGHT = 2**13
+NBRS_MASKED = 2**29
+CEN_MODEL_MISSING = 2**30
 
 class MEDSExtractorCorrector(meds.MEDSExtractor):
     """
@@ -35,14 +27,20 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
     sub_file: string
         Where to write the result
 
-    replace_bad: bool
-        If True, replace pixels with bits set in the bmask,
-        or with zero weight, with the central model.  If the
-        central model did not converge (bad fit) then set
-        the flag CEN_MODEL_MISSING in the bmask.  Default False.
-
     reject_outliers: bool
-        Set the weight to zero for pixels that are outliers
+        Set the weight to zero for pixels that are outliers.  Happens
+        before bad pixel replacement
+
+    replace_bad: bool
+        If True, replace pixels the value for pixels with zero weight using the
+        central model.  If bad_flags is also sent, also perform the replacement
+        for pixels with those bits set.  If the central model did not converge
+        (bad fit) then set the flag CEN_MODEL_MISSING in the bmask and force
+        the weight to zero.  Default False.
+
+    bad_flags: int or sequence
+        If replace_bad is True, and bad_flags is sent, replacement also occurs
+        for pixels with those flags set
 
     min_weight: float
         Min weight to consider "bad".  If the compression preserves
@@ -67,6 +65,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                  sub_file,
                  reject_outliers=False,
                  replace_bad=False,
+                 bad_flags=None,
                  min_weight=0.0,
                  # these are the bands in the mof
                  band_names = ['g','r','i','z'],
@@ -86,6 +85,8 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         self.reject_outliers=reject_outliers
         self.replace_bad=replace_bad
 
+        self._set_bad_flags(bad_flags)
+
         self.min_weight=min_weight
         self.make_plots=make_plots
         self.verbose=verbose
@@ -104,6 +105,16 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
             copy_all=copy_all,
         )
 
+    def _set_bad_flags(self, bad_flags):
+        if bad_flags is not None:
+            try:
+                bflags=sum(bad_flags)
+            except:
+                bflags=bad_flags
+        else:
+            bflags=None
+
+        self.bad_flags=bflags
 
     def _setup_plotting(self, meds_file):
         if self.make_plots:
@@ -196,22 +207,6 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         # zero in the seg map of the neighbor
         weight *= nbrs_mask
 
-    def _mask_zero_weight(self, weight, bmask):
-        """
-        Set the ZERO_WEIGHT flag in the bitmask where
-        the weight is zero
-        """
-        # mark zero weight pixels in the mask; this is to
-        # deal with forgetting to do so in the meds code
-        # when we set the weight to zero
-        # we should do this in the meds reader
-        weight_logic = (weight <= self.min_weight)
-        wbad_wt=numpy.where(weight_logic)
-        if wbad_wt[0].size > 0:
-            bmask[wbad_wt] = bmask[wbad_wt] | ZERO_WEIGHT
-
-        return wbad_wt, weight_logic
-
     def _mask_nbrs_mask(self, icut, nbrs_mask, bmask):
         """
         set the NBRS_MASKED flag in the bitmask where
@@ -226,59 +221,79 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
 
     def _replace_bad_pixels(self,
                             icut,
-                            img, weight, bmask, cen_img, pixel_scale,
-                            wbad_wt, weight_logic):
+                            img,
+                            weight,
+                            bmask,
+                            cen_img,
+                            pixel_scale):
         """
         set masked or zero weight pixels to the value of the central.
         For codes that use the weight, such as max like, this makes
         no difference, but it may be important for codes that
         take moments or use FFTs
 
-        note zero weight has been marked in the bmask
+        Note if NBRS_MASKED  is set, the weight map is already zerod
         """
 
         imravel = img.ravel()
         wtravel = weight.ravel()
         bmravel = bmask.ravel()
 
-        # working with unravelled images for efficiency
-        bmask_logic  = (bmravel != 0)
-        wbad,=numpy.where(bmask_logic)
+        weight_logic = (wtravel <= self.min_weight)
+        wbad_wt,  = numpy.where(weight_logic==True)
+        wgood_wt, = numpy.where(weight_logic==False)
 
-        if wbad.size > 0 and wbad.size != bmask.size:
+        logic = weight_logic
+        if self.bad_flags is not None:
+            bmask_logic  = (bmravel & self.bad_flags) != 0
+            logic = logic & bmask_logic
+
+        wbad,=numpy.where(logic)
+
+        if wbad.size > 0 and wbad.size != imravel.size:
+
             if cen_img is None:
+
                 print("        bad central fit for",icut,
-                      "could not replace bad pixels")
+                      "could not replace bad pixels. forcing "
+                      "weight to zero")
                 bmravel[wbad] = bmravel[wbad] | CEN_MODEL_MISSING
+
+                if self.bad_flags is not None:
+                    # make sure we don't use these pixels, at least in
+                    # maximum likelihood codes
+                    wtravel[wbad] = 0.0
 
             else:
 
-                wgood_wt=numpy.where(weight_logic == False)
-                if wgood_wt[0].size > 0 and wbad_wt[0].size > 0:
-                    # fix the weight map.  We are going to add noise
-                    # as well as signal in the bad pixels.  The problem
-                    # pixels will still be marked in the bad pixel mask
-                    medwt = numpy.median(weight[wgood_wt])
-                    print("        replacing",wbad_wt[0].size,
-                          "weight in replaced pixels with",medwt)
-                    weight[wbad_wt] = medwt
+                # weight map for adding noise; use median where the
+                # weight is zero
+                weight_for_noise = wtravel.copy()
 
+                if wbad_wt.size > 0 and wgood_wt.size > 0:
+
+                    medwt = numpy.median(weight_for_noise[wgood_wt])
+                    print("        replacing",wbad_wt.size,
+                          "weight in replaced pixels with",medwt)
+                    weight_for_noise[wbad_wt] = medwt
+
+                # replace zero weight and bad pixels with model
                 scaled_cen = cen_img.ravel()*pixel_scale**2
                 print("        setting",wbad.size,
                       "bad pixels in cutout",icut,
                       "to central model")
                 imravel[wbad] = scaled_cen[wbad]
 
-
+                # add appropriate noise as well
                 print("        adding noise to",wbad.size,"replaced")
-                err = numpy.sqrt( 1.0/wtravel[wbad] )
-                rand = numpy.random.normal(
+                err = numpy.sqrt( 1.0/weight_for_noise )
+                noise = numpy.random.normal(
                     loc=0.0,
                     scale=1.0,
                     size=err.size,
                 )
-                rand *= err
-                imravel[wbad] = imravel[wbad] + rand
+                noise *= err
+                imravel[wbad] += noise[wbad]
 
 
     def _extract(self):
@@ -317,7 +332,9 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                     if self.reject_outliers:
                         self._reject_outliers(imlist, wtlist)
 
-                    #for icut in xrange(1,ncutout):
+                    # do coadd too
+                    # if we ran MOF without fitting the coadd, we will get
+                    # a warning "central not in epochs data"
                     for icut in xrange(ncutout):
 
                         #img_orig = imlist[icut-1]
@@ -338,18 +355,18 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                                 img, weight, nbrs_img, nbrs_mask, pixel_scale,
                             )
 
-                        wbad_wt, weight_logic = \
-                                self._mask_zero_weight(weight, bmask)
-
+                        # zeros the weight and sets flag for neighbors that were
+                        # not rendered
                         self._mask_nbrs_mask(icut, nbrs_mask, bmask)
 
                         if self.replace_bad:
                             self._replace_bad_pixels(
                                 icut,
-                                img, weight, bmask, cen_img,
+                                img,
+                                weight,
+                                bmask,
+                                cen_img,
                                 pixel_scale,
-                                wbad_wt,
-                                weight_logic,
                             )
 
                         # now overwrite pixels on disk
