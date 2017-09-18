@@ -4,6 +4,7 @@ import numpy
 import os
 import fitsio
 import meds
+import esutil as eu
 
 from copy import deepcopy
 
@@ -117,7 +118,6 @@ class RenderNGmixNbrs(object):
 
         you must send epoch_data= to the constructor
         """
-        import esutil as eu
 
         #
         # set and check some parameters
@@ -192,6 +192,7 @@ class RenderNGmixNbrs(object):
         )
 
         if cen_img is None:
+            print("slow: cen image is none")
             return None
 
         return cen_img, pixel_scale
@@ -321,6 +322,7 @@ class RenderNGmixNbrs(object):
         # get cen stuff
         q, = numpy.where(self.fit_data['id'] == cen_id)
         if len(q) != 1:
+            print("    no cen match in fits")
             return None
 
         cen_ind = 0
@@ -382,6 +384,7 @@ class RenderNGmixNbrs(object):
         for nbr_id in self.nbrs_data['nbr_id'][q]:
             qq, = numpy.where(self.fit_data['id'] == nbr_id)
             if len(qq) != 1:
+                print("    nbr",nbr_id,"not found in fit data")
                 return None
             fit_inds.append(qq[0])
 
@@ -656,6 +659,257 @@ class RenderNGmixNbrs(object):
         else:
             raise ValueError("no support for unmodeled nbrs "
                              "masking type %s" % unmodeled_nbrs_masking_type)
+
+
+class RenderNGmixNbrsFromFile(RenderNGmixNbrs):
+    """
+    neighbors data can get huge, so just read what we need to
+    """
+    def __init__(self, fname, **kwargs):
+        self._conf = {}
+        self._conf.update(kwargs)
+
+        self._fits = fitsio.FITS(fname)
+
+        print("    loading model ids")
+        self.fit_ids   = self._fits['model_fits'].read(columns='id')
+        print("    loading nbrs ids")
+        self.nbrs_ids  = self._fits['nbrs_data'].read(columns='id')
+        print("    loading epoch ids")
+        self.epoch_ids = self._fits['epoch_data'].read(columns='id')
+
+    def render_central(self,
+                       cen_id,
+                       meds_data,
+                       mindex,
+                       cutout_index,
+                       model,
+                       band,
+                       image_shape):
+        """
+        just render the central.  This is needed since Matt does not
+        store data for the central i the nbrs data structure if there
+        are no neighbors
+
+        you must send epoch_data= to the constructor
+        """
+
+        pars_tag = '%s_max_pars' % model
+        if model == 'cm':
+            fracdev_tag = 'cm_fracdev'
+            TdByTe_tag = 'cm_TdByTe'
+        else:
+            fracdev_tag=None
+            TdByTe_tag=None
+
+        #
+        # get data needed to render the central
+        #
+        we,=numpy.where(self.epoch_ids == cen_id)
+        if we.size == 0:
+            print("    central not in epochs data")
+            return None
+
+        # read all the data now
+        epoch_data=self._fits['epoch_data'][we]
+
+        we, = numpy.where(epoch_data['cutout_index'] == cutout_index)
+        if we.size == 0:
+            print("    central not in epochs data")
+            return None
+
+        psf_pars=epoch_data['psf_fit_pars'][we[0],:]
+        psf_gmix = GMix(pars=psf_pars)
+        e1,e2,T=psf_gmix.get_e1e2T()
+        if T <= 0.0:
+            print("    bad psf fit for central")
+            return None
+
+        pixel_scale=epoch_data['pixel_scale'][we[0]]
+
+        jdict=meds_data.get_jacobian(mindex, cutout_index)
+        jac=Jacobian(
+            row=jdict['row0'],
+            col=jdict['col0'],
+            dudrow=jdict['dudrow'],
+            dudcol=jdict['dudcol'],
+            dvdrow=jdict['dvdrow'],
+            dvdcol=jdict['dvdcol'],
+        )
+
+
+        # fit information for central
+        wfit, = numpy.where(self.fit_ids == cen_id)
+        if wfit.size != 1:
+            # not sure why this would happen
+            print("    Central not found in fit_data")
+            return None
+
+        fit_data = self._fits['model_fits'][wfit]
+        cen_flags=fit_data['flags'][0]
+        if cen_flags != 0:
+            print("    bad central fit:",cen_flags)
+            return None
+
+        cen_img = RenderNGmixNbrs._render_single(
+            model,
+            band,
+            image_shape,
+            pars_tag,
+            fit_data,
+            psf_gmix,
+            jac,
+            fracdev_tag=fracdev_tag,
+            TdByTe_tag=TdByTe_tag,
+        )
+
+        if cen_img is None:
+            print("fast: cen image is none")
+            return None
+
+        return cen_img, pixel_scale
+
+
+    def _get_nbrs_data(self,cen_id,band,cutout_index):
+        """
+        return cen and nbrs info for a given cen_id
+
+        Parameters
+        ----------
+        cen_id: id of central object
+        band: integer for band (e.g., 0 for griz MOF)
+        cutout_index: index of epoch in MEDS file for nbrs
+
+        Returns
+        -------
+        cen_ind: index of central intp returned fit_data
+        cen_flags: flags for central from nbrs_data
+        cen_psf_gmix: an ngmix GMix for PSF of central
+        cen_jac: an ngmix Jacobian for the central
+        nbrs_inds: list of indexes into returned fit_data of nbrs
+        nbrs_flags: flags of nbrs (only use flags == 0)
+        nbrs_psf_gmixes: a list of ngmix GMixes of the PSF models for the nbrs
+        nbrs_jacs: a list of ngmix Jacobians for the nbrs
+        fit_data: entries of input fit_data corresponding to cen_ind and nbrs_inds
+        pixel_scale: the pixel_scale of the jacobian associated with the image
+
+        will return None if thete is an error or if not all quantities are found
+        """
+
+        fit_inds = []
+
+        # get cen stuff
+        qids, = numpy.where(self.fit_ids == cen_id)
+        if len(qids) != 1:
+            print("    no cen match in fits")
+            return None
+
+        cen_ind = 0
+        fit_inds.append(qids[0])
+
+        qnbrs_ids, = numpy.where(self.nbrs_ids == cen_id)
+        if len(qnbrs_ids) == 0:
+            return None
+
+        # extract just the data we need
+        nbrs_data = self._fits['nbrs_data'][qnbrs_ids]
+
+        qcen, = numpy.where(
+            (nbrs_data['nbr_id'] == cen_id)
+            & (nbrs_data['band_num'] == band)
+            & (nbrs_data['cutout_index'] == cutout_index)
+        )
+        if len(qcen) != 1:
+            return None
+
+        ind = qcen[0]
+        cen_flags = nbrs_data['nbr_flags'][ind]
+        if cen_flags == 0:
+            cen_jac = Jacobian(
+                row=nbrs_data['nbr_jac_row0'][ind],
+                col=nbrs_data['nbr_jac_col0'][ind],
+                dudrow=nbrs_data['nbr_jac_dudrow'][ind],
+                dudcol=nbrs_data['nbr_jac_dudcol'][ind],
+                dvdrow=nbrs_data['nbr_jac_dvdrow'][ind],
+                dvdcol=nbrs_data['nbr_jac_dvdcol'][ind]
+            )
+            cen_psf_gmix = GMix(pars=nbrs_data['nbr_psf_fit_pars'][ind,:])
+        else:
+            cen_psf_gmix = None
+            cen_jac = None
+
+        pixel_scale = nbrs_data['pixel_scale'][ind]
+
+        # get nbr ids
+        qnbr, = numpy.where(
+            (nbrs_data['nbr_id'] != cen_id)
+            & (nbrs_data['band_num'] == band)
+            & (nbrs_data['cutout_index'] == cutout_index)
+        )
+        if len(qnbr) == 0:
+            return None
+
+        n1 = len(numpy.unique(nbrs_data['nbr_id'][qnbr]))
+        n2 = len(nbrs_data['nbr_id'][qnbr])
+
+        if n1 != n2:
+            # not sure why this happens, but it seems to be very rare.
+            # For now ignore
+            mess=("nbrs list for given band %d and cutout_index "
+                  "%d for object %d is not unique! %d:%d" % (band,cutout_index,cen_id,n1,n2))
+            print(nbrs_data['nbr_id'][qnbr])
+            print(mess)
+            return None
+            #raise RuntimeError(mess)
+
+        nbrs_inds = [i+1 for i in xrange(len(qnbr))]
+
+        # find location of nbrs in fit_data
+        for nbr_id in nbrs_data['nbr_id'][qnbr]:
+            qq, = numpy.where(self.fit_ids == nbr_id)
+            if len(qq) != 1:
+                print("    nbr",nbr_id,"not found in fit data")
+                return None
+            fit_inds.append(qq[0])
+
+        # doing fit data
+        # the data come out in row order, we need to reorder
+
+        fit_data_list=[]
+        for tmp_ind in fit_inds:
+            fit_data_list.append( self._fits['model_fits'][tmp_ind] )
+
+        fit_data = eu.numpy_util.combine_arrlist(fit_data_list)
+
+        # build flag, psf and jacobian lists
+        nbrs_flags = []
+        nbrs_psf_gmixes = []
+        nbrs_jacs = []
+        for i,ind in enumerate(qnbr):
+            check=fit_data['id'][i+1] == nbrs_data['nbr_id'][ind]
+            assert check,"Matching of nbr_ids to ids in fit_data did not work!"
+            nbrs_flags.append(nbrs_data['nbr_flags'][ind])
+
+            if nbrs_flags[-1] == 0:
+                nbrs_jacs.append(
+                    Jacobian(
+                        row=nbrs_data['nbr_jac_row0'][ind],
+                        col=nbrs_data['nbr_jac_col0'][ind],
+                        dudrow=nbrs_data['nbr_jac_dudrow'][ind],
+                        dudcol=nbrs_data['nbr_jac_dudcol'][ind],
+                        dvdrow=nbrs_data['nbr_jac_dvdrow'][ind],
+                        dvdcol=nbrs_data['nbr_jac_dvdcol'][ind]
+                    )
+                )
+                tgm = GMix(pars=nbrs_data['nbr_psf_fit_pars'][ind,:])
+                nbrs_psf_gmixes.append(tgm)
+            else:
+                nbrs_jacs.append(None)
+                nbrs_psf_gmixes.append(None)
+
+        return cen_ind, cen_flags, cen_psf_gmix, cen_jac, \
+            nbrs_inds, nbrs_flags, nbrs_psf_gmixes, nbrs_jacs, \
+            fit_data, pixel_scale
 
 
 class DESRenderNGmixNbrs(RenderNGmixNbrs):

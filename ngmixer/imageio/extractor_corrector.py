@@ -5,7 +5,7 @@ import time
 import fitsio
 import meds
 
-from ..render_ngmix_nbrs import RenderNGmixNbrs
+from ..render_ngmix_nbrs import RenderNGmixNbrs, RenderNGmixNbrsFromFile
 
 # these are higher than anything in Y1 DES masks
 NBRS_MASKED = 2**29
@@ -563,21 +563,29 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                     print("    not writing ncutout:",ncutout,"box_size:",box_size)
 
     def _load_ngmix_data(self):
-        self.fit_data = fitsio.read(self.mof_file)
-        self.nbrs_data = fitsio.read(self.mof_file,ext='nbrs_data')
-        self.epoch_data = fitsio.read(self.mof_file,ext='epoch_data')
+        #self.fit_data = fitsio.read(self.mof_file)
+        #self.nbrs_data = fitsio.read(self.mof_file,ext='nbrs_data')
+        #self.epoch_data = fitsio.read(self.mof_file,ext='epoch_data')
+        pass
 
     def _set_renderer(self):
         self._load_ngmix_data()
 
         # build the renderer, set options
         conf = {'unmodeled_nbrs_masking_type':'nbrs-seg'}
+        self.renderer = RenderNGmixNbrsFromFile(
+            self.mof_file,
+            **conf
+        )
+        """
         self.renderer = RenderNGmixNbrs(
             self.fit_data,
             self.nbrs_data,
             epoch_data=self.epoch_data,
             **conf
         )
+        """
+
 
     def _set_band(self, meds_file, band=None):
         if band is not None:
