@@ -84,10 +84,10 @@ class MEDSImageIO(ImageIO):
         self.conf['extra_mask_flags'] = self.conf.get('extra_mask_flags',None)
 
         # max fraction of image masked in bitmask or that has zero weight
-        self.conf['max_bmask_frac'] = self.conf.get('max_bmask_frac',1.0)
         self.conf['max_zero_weight_frac'] = self.conf.get('max_zero_weight_frac',1.0)
         self.conf['symmetrize_weight'] = self.conf.get('symmetrize_weight',False)
 
+        self.conf['image_flags2check'] = self.conf.get('image_flags2check',0)
 
         # check this region around the center
         self.conf['central_bmask_radius'] = \
@@ -818,7 +818,10 @@ class MEDSImageIO(ImageIO):
         """
         Get an image cutout from the input MEDS file
         """
-        maxfrac=self.conf['max_bmask_frac']
+        if 'max_bmask_frac' in self.conf:
+            raise RuntimeError("no longer support max_bmask_frac")
+
+        #maxfrac=self.conf['max_bmask_frac']
         skip=False
 
         if 'bmask_cutouts' in meds._fits:
@@ -833,6 +836,8 @@ class MEDSImageIO(ImageIO):
                 else:
                     raise RuntimeError("cannot symmetrize non-square bmask")
 
+            # we now rely on the weight map
+            """
             w=numpy.where(bmask != 0)
 
             notok=self._badfrac_too_high(
@@ -841,6 +846,7 @@ class MEDSImageIO(ImageIO):
             if notok:
                 skip=True
                 return None,skip
+            """
 
             if 'bmask_skip_flags' in self.conf:
                 w=numpy.where( (bmask & self.conf['bmask_skip_flags']) != 0)
