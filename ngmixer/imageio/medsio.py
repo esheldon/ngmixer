@@ -820,6 +820,8 @@ class MEDSImageIO(ImageIO):
         """
         if 'max_bmask_frac' in self.conf:
             raise RuntimeError("no longer support max_bmask_frac")
+        if 'symmetrize_bmask' in self.conf:
+            raise RuntimeError("no longer support symmetrize_bmask")
 
         #maxfrac=self.conf['max_bmask_frac']
         skip=False
@@ -828,6 +830,8 @@ class MEDSImageIO(ImageIO):
             bmask=meds.get_cutout(mindex, icut, type='bmask')
             bmask=numpy.array(bmask, dtype='i4', copy=False)
 
+            # we now rely on the weight map
+            """
             if self.conf['symmetrize_bmask']:
                 if bmask.shape[0] == bmask.shape[1]:
                     borig=bmask.copy()
@@ -836,8 +840,6 @@ class MEDSImageIO(ImageIO):
                 else:
                     raise RuntimeError("cannot symmetrize non-square bmask")
 
-            # we now rely on the weight map
-            """
             w=numpy.where(bmask != 0)
 
             notok=self._badfrac_too_high(
@@ -915,6 +917,9 @@ class MEDSImageIO(ImageIO):
         except:
             seg = meds.get_cutout(mindex, icut, type='seg')
 
+
+        # note this happens *after* we zero according to bmask flags
+        # see above extra_mask_flags
 
         if conf['symmetrize_weight']:
             self._symmetrize_weight_images(wt_raw, wt, wt_us)
