@@ -48,73 +48,31 @@ class DESConcat(Concat):
         blinding = self.config['collate']['blinding']
         if blinding =='y3':
             from blind_des_catalog_y3 import blind_arrays
-        elif blinding == 'y1':
-            from blind_des_catalog import blind_arrays
         else:
             raise ValueError("bad blinding scheme: '%s'" % blinding)
 
         models=self.get_models(data)
 
         names=data.dtype.names
-        for model in models:
 
-            n=Namer(model)
+        if 'mcal_g' not in names:
+            raise RuntimeError("you requested blinding but "
+                               "mcal_g field is not present in the data")
 
-            w,=numpy.where(data[n('flags')] == 0)
-            if w.size > 0:
+        w,=numpy.where(data['mcal_flags'] == 0)
+        types=[
+            ('mcal_pars',   2,3),
+            ('mcal_g',      0,1),
+        ]
 
-                for type,i1,i2 in [('pars',2,3),
-                                   ('pars_best',2,3),
-                                   ('g',0,1)]:
-                    name=n(type)
-                    if name in names:
-                        bg1,bg2 = blind_arrays(
-                            data[name][w,i1],
-                            data[name][w,i2],
-                        )
-                        data[name][w,i1] = bg1
-                        data[name][w,i2] = bg2
+        for name,i1,i2 in types:
 
-        if 'mcal_g' in names:
-            w,=numpy.where(data['mcal_flags'] == 0)
-            types=[
-                ('mcal_pars',   2,3),
-
-                ('mcal_pars_1p',2,3),
-                ('mcal_pars_1m',2,3),
-                ('mcal_pars_2p',2,3),
-                ('mcal_pars_2m',2,3),
-
-                ('mcal_pars_1p_psf',2,3),
-                ('mcal_pars_1m_psf',2,3),
-                ('mcal_pars_2p_psf',2,3),
-                ('mcal_pars_2m_psf',2,3),
-
-                ('mcal_g',   0,1),
-
-                ('mcal_g_1p',0,1),
-                ('mcal_g_1m',0,1),
-                ('mcal_g_2p',0,1),
-                ('mcal_g_2m',0,1),
-
-                ('mcal_g_1p_psf',0,1),
-                ('mcal_g_1m_psf',0,1),
-                ('mcal_g_2p_psf',0,1),
-                ('mcal_g_2m_psf',0,1),
-
-            ]
-
-            for name,i1,i2 in types:
-
-                if name in names:
-                    bg1,bg2 = blind_arrays(
-                        data[name][w,i1],
-                        data[name][w,i2],
-                    )
-                    data[name][w,i1] = bg1
-                    data[name][w,i2] = bg2
-
-
+            bg1,bg2 = blind_arrays(
+                data[name][w,i1],
+                data[name][w,i2],
+            )
+            data[name][w,i1] = bg1
+            data[name][w,i2] = bg2
 
     def pick_epoch_fields(self, epoch_data0):
         """
