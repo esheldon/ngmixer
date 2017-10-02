@@ -25,7 +25,7 @@ except ImportError:
     from distutils.command.build_py import build_py
 
 setup(name="ngmixer", 
-      version="0.1.0",
+      version="y3v0.9.5",
       description="Run ngmix on data",
       license = "GPL",
       author="Matthew R. Becker, Erin Scott Sheldon",
