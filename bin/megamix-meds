@@ -636,6 +636,10 @@ $cmd
         if os.path.exists(job_script):
             os.remove(job_script)
 
+        submitted=job_script+'.submitted'
+        if os.path.exists(submitted):
+            os.remove(submitted)
+
         if len(scripts) == 0:
             print("no jobs to write")
             return
