@@ -30,6 +30,12 @@ else:
     PSF_FLUX_FIT_FAILURE = 2**2
     LOW_PSF_FLUX         = 2**3
 
+    # when doing forced photometry, there were flags in the models file for
+    # this object
+
+    FORCEPHOT_BAD_MODEL = 2**4
+    FORCEPHOT_FAILURE = 2**5
+
 object_blacklist=[3126629751,3126910598]
 OBJECT_IN_BLACKLIST = 2**24
 

@@ -16,6 +16,7 @@ from .defaults import NO_ATTEMPT,NO_CUTOUTS,BOX_SIZE_TOO_BIG,IMAGE_FLAGS,BAD_OBJ
 
 from .util import UtterFailure, seed_numpy
 
+
 class NGMixer(dict):
     def __init__(self,
                  config_file,
@@ -25,6 +26,7 @@ class NGMixer(dict):
                  fof_range=None,
                  fof_file=None,
                  mof_file=None,
+                 models_file=None,
                  extra_data={},
                  random_seed=None,
                  init_only=False,
@@ -45,6 +47,7 @@ class NGMixer(dict):
         self['fit_me_galaxy'] = self.get('fit_me_galaxy',True)
         self['max_box_size']=self.get('max_box_size',2048)
         self['verbosity'] = verbosity
+
         self.profile = profile
         self.extra_data = extra_data
         
@@ -52,7 +55,10 @@ class NGMixer(dict):
         seed_numpy(random_seed)
 
         self._set_defaults()
+        self.fof_range=fof_range
         self._set_imageio(data_files, fof_range, fof_file, mof_file, extra_data)
+
+
         self._set_priors()
         self._set_fitter_and_data()
 
@@ -65,6 +71,7 @@ class NGMixer(dict):
         self.start_fofindex = 0
         self._setup_checkpoints()
         self._setup_output_data()
+
 
         # run the code
         if not init_only:
@@ -113,6 +120,7 @@ class NGMixer(dict):
                                      mof_file=mof_file,
                                      extra_data=extra_data)
         self.curr_fofindex = 0
+
         self['nband'] = self.imageio.get_num_bands()
         self.iband = range(self['nband'])
 
@@ -207,7 +215,12 @@ class NGMixer(dict):
 
                 num += 1
                 ti = time.time()
-                self.fit_obj(coadd_mb_obs_list,mb_obs_list,nbrs_fit_data=nbrs_fit_data,nbrs_meta_data=nbrs_meta_data)
+                self.fit_obj(
+                    coadd_mb_obs_list,
+                    mb_obs_list,
+                    nbrs_fit_data=nbrs_fit_data,
+                    nbrs_meta_data=nbrs_meta_data,
+                )
                 ti = time.time()-ti
                 print('    time: %f' % ti)
 
@@ -712,4 +725,5 @@ class NGMixer(dict):
 
                     if self.githashes is not None:
                         fobj.write(self.githashes,extname="githashes")
+
 

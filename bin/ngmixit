@@ -8,6 +8,7 @@ import sys
 import fitsio
 from ngmixer.ngmixing import NGMixer
 from ngmixer.mofngmixing import MOFNGMixer
+from ngmixer.forcephot import ForcedPhotometryNGMixer
 import ngmixer
 
 from optparse import OptionParser
@@ -38,6 +39,10 @@ parser.add_option("--nbrs-file", default=None,
 
 parser.add_option("--mof-file", default=None,
                   help=("file with the MOF fit data for doing nbrs subtraction"))
+
+parser.add_option("--models-file", default=None,
+                  help=("file with outputs of a separate ngmixer run, for "
+                        "forced photometry"))
 
 parser.add_option("--psf-file", default=None,
                   help=("file with PSF images"))
@@ -116,6 +121,23 @@ if __name__ == '__main__':
                    make_plots=options.make_plots,
                    verbosity=verbosity,
                    config=config)
+    elif options.models_file is not None:
+        ForcedPhotometryNGMixer(
+            config_file,
+            data_files,
+            output_file=out_file,
+            fof_range=fof_range,
+            fof_file=options.fof_file,
+            mof_file=options.mof_file,
+            models_file=options.models_file,
+            work_dir=options.work_dir,
+            random_seed=seed,
+            extra_data=extra_data,
+            profile=options.profile,
+            make_plots=options.make_plots,
+            verbosity=verbosity,
+            config=config,
+        )
     else:
         NGMixer(config_file,
                 data_files,

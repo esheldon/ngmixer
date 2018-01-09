@@ -11,6 +11,8 @@ from . import megamixer
 from . import render_ngmix_nbrs
 from .render_ngmix_nbrs import RenderNGmixNbrs, DESRenderNGmixNbrs
 
+from . import forcephot
+
 #######################################################
 # setup fitter dict
 # each time you create a new fitter class, add it to this dict
@@ -27,6 +29,10 @@ from . import deconvolvers
 FITTERS['deconv'] = deconvolvers.Deconvolver
 FITTERS['metacal-deconv'] = deconvolvers.MetacalDeconvolver
 FITTERS['metacal-deconv-psfbase'] = deconvolvers.MetacalDeconvolverPSFBase
+
+# forced photometry fitter
+from . import forcephot
+FITTERS['ngmix-forcephot'] = forcephot.ForcedPhotometryFitter
 
 
 try:
