@@ -138,15 +138,20 @@ class ForcedPhotometryNGMixer(NGMixer):
 
         model_name = self['forced_photometry']['model']
         columns = [
+            'id',
             'flags',
             '%s_pars' % model_name,
         ]
         if model_name == 'cm':
             columns += ['cm_fracdev', 'cm_TdByTe']
 
-        numtot = self.imageio.get_num_fofs()
-        beg=self.start_fofindex 
-        end=beg+numtot
+        if self.fof_range is not None:
+            beg = self.fof_range[0]
+            end = self.fof_range[1]+1
+        else:
+            beg=0
+            end = self.imageio.get_num_fofs()
+
         with fitsio.FITS(models_file) as fits:
             if end > fits['model_fits'].get_nrows():
                 raise ValueError("requested fof range is larger than "
@@ -239,10 +244,13 @@ class ForcedPhotometryFitter(BaseFitter):
         if len(obs_list)==0:
             raise BootPSFFailure("no epochs for band %d" % i)
 
-        fitter = self._get_template_fitter(obs_list, gm_model)
-        fitter.go()
-
-        res=fitter.get_result()
+        try:
+            fitter = self._get_template_fitter(obs_list, gm_model)
+            fitter.go()
+            res=fitter.get_result()
+        except GMixRangeError as err:
+            print(err)
+            res = {'flags':FORCEPHOT_FAILURE}
 
         return res
 

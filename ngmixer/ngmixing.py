@@ -717,7 +717,7 @@ class NGMixer(dict):
                     if self.epoch_data is not None:
                         fobj.write(self.get_epoch_data(),extname="epoch_data")
 
-                    if self.nbrs_data is not None:
+                    if self.nbrs_data is not None and len(self.nbrs_data) > 0:
                         fobj.write(self.get_nbrs_data(),extname="nbrs_data")
 
                     if self.meta is not None:
