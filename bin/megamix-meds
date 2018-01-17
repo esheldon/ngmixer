@@ -229,6 +229,16 @@ class MegaMixer(dict):
                 mof_file = self._get_mof_file()
                 args['mof_opt'] = '--mof-file=%s' % mof_file
 
+        if 'forced_photometry' in self.conf:
+            models_file = files.get_collated_file_fromfile(
+                self.meds_files[0],
+                self.conf['forced_photometry']['models_run'],
+            )
+            args['models_opt'] = '--models="%s"' % models_file
+
+        else:
+            args['models_opt'] = ''
+
         seed = self.rng.randint(low=1,high=1000000000)
         args['seed_opt'] = '--seed=%d' % seed
 
@@ -360,6 +370,7 @@ ngmixit                                   \
     --fof-range=$start,$stop              \
     --work-dir=$tmpdir                    \
     --psf-map="$psf_maps"                 \
+    {models_opt}                          \
     {nbrs_opt}                            \
     {fof_opt}                             \
     {mof_opt}                             \
