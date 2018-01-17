@@ -25,14 +25,16 @@ FITTERS['metacal-ngmix-boot'] = bootfit.MetacalNGMixBootFitter
 FITTERS['metacal-admom-boot'] = bootfit.MetacalAdmomBootFitter
 FITTERS['isamp-ngmix-boot'] = bootfit.ISampNGMixBootFitter
 
+# deprecated
 from . import deconvolvers
 FITTERS['deconv'] = deconvolvers.Deconvolver
 FITTERS['metacal-deconv'] = deconvolvers.MetacalDeconvolver
-FITTERS['metacal-deconv-psfbase'] = deconvolvers.MetacalDeconvolverPSFBase
+FITTERS['metacal-deconv-psfbase'] = \
+        deconvolvers.MetacalDeconvolverPSFBase
 
 # forced photometry fitter
 from . import forcephot
-FITTERS['ngmix-forcephot'] = forcephot.ForcedPhotometryFitter
+FITTERS['galsim-forcephot'] = forcephot.ForcedPhotometryFitter
 
 
 try:

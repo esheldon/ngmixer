@@ -112,7 +112,8 @@ class NGMixer(dict):
         related attributes
         """
         # read the data
-        imageio_class = imageio.get_imageio_class(self['imageio_type'])
+        io_type = self['imageio']['io_type']
+        imageio_class = imageio.get_imageio_class(io_type)
         self.imageio = imageio_class(self,
                                      data_files,
                                      fof_range=fof_range,

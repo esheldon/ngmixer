@@ -225,20 +225,49 @@ class SVDESMEDSImageIO(MEDSImageIO):
         return use
 
     def _get_band_observations(self, band, mindex):
-        coadd_obs_list, obs_list = super(SVDESMEDSImageIO, self)._get_band_observations(band,mindex)
+        """
+        if fitting with a gaussian mixture fitter, and
+        image is not surface brightness, convert it
+
+        galsim fitters are never surface brightness fitters
+        """
+        coadd_obs_list, obs_list = \
+          super(SVDESMEDSImageIO, self)._get_band_observations(band,mindex)
         
-        # divide by jacobian scale^2 in order to apply zero-points correctly
-        for olist in [coadd_obs_list,obs_list]:
-            for obs in olist:
-                if obs.meta['flags'] == 0:
-                    pixel_scale2 = obs.jacobian.get_det()
-                    pixel_scale4 = pixel_scale2*pixel_scale2
-                    obs.image /= pixel_scale2
-                    obs.weight *= pixel_scale4
-                    if obs.weight_raw is not None:
-                        obs.weight_raw *= pixel_scale4
-                    if obs.weight_us is not None:
-                        obs.weight_us *= pixel_scale4
+        imtype = self.conf['imageio']['image_type']
+        fitter_type = self.conf['fitter_type']
+
+        if imtype == 'surface_brightness' and 'galsim' in fitter_type:
+
+            # multiply by jacobian scale^2 to change from surface brightness
+            # flux image type
+            for olist in [coadd_obs_list,obs_list]:
+                for obs in olist:
+                    if obs.meta['flags'] == 0:
+                        pixel_scale2 = obs.jacobian.get_det()
+                        pixel_scale4 = pixel_scale2*pixel_scale2
+                        obs.image *= pixel_scale2
+                        obs.weight /= pixel_scale4
+                        if obs.weight_raw is not None:
+                            obs.weight_raw /= pixel_scale4
+                        if obs.weight_us is not None:
+                            obs.weight_us /= pixel_scale4
+
+
+        elif imtype != 'surface_brightness' and 'galsim' not in fitter_type:
+
+            # divide by jacobian scale^2 to convert to surface brightness
+            for olist in [coadd_obs_list,obs_list]:
+                for obs in olist:
+                    if obs.meta['flags'] == 0:
+                        pixel_scale2 = obs.jacobian.get_det()
+                        pixel_scale4 = pixel_scale2*pixel_scale2
+                        obs.image /= pixel_scale2
+                        obs.weight *= pixel_scale4
+                        if obs.weight_raw is not None:
+                            obs.weight_raw *= pixel_scale4
+                        if obs.weight_us is not None:
+                            obs.weight_us *= pixel_scale4
 
         return coadd_obs_list, obs_list
 
