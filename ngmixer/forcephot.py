@@ -16,6 +16,7 @@ from .defaults import (
     FORCEPHOT_FAILURE,
 )
 from .fitting import BaseFitter
+from .bootfit import NGMixBootFitter
 from .util import Namer, print_pars
 
 # ngmix imports
@@ -42,7 +43,7 @@ class ForcedPhotometryNGMixer(NGMixer):
         also setup models etc.
         """
         self._check_forced_photometry()
-        self._set_models(self.models_file)
+        self._set_fp_models(self.models_file)
         super(ForcedPhotometryNGMixer,self).go()
 
     def _check_forced_photometry(self):
@@ -128,7 +129,7 @@ class ForcedPhotometryNGMixer(NGMixer):
         else:
             return data, 0
 
-    def _set_models(self, models_file):
+    def _set_fp_models(self, models_file):
         """
         load models for use in forced photometry
         """
@@ -164,7 +165,21 @@ class ForcedPhotometryNGMixer(NGMixer):
 
 
 
-class ForcedPhotometryFitter(BaseFitter):
+#class ForcedPhotometryFitter(BaseFitter):
+class ForcedPhotometryFitter(NGMixBootFitter):
+    #def __init__(self, conf):
+    #    super(NGMixBootFitter,self).__init__(conf)
+
+    #def _setup(self):
+    #    """
+    #    put setups, particularly checking for some stuff that is optional
+    #    only steups that would be used for *any* fitter go here
+    #    """
+    #    pass
+    def _set_models(self):
+        pass
+        #self['fit_models'] = self.get('fit_models',list(self['model_pars'].keys()))
+
     def __call__(self,
                  mb_obs_list,
                  coadd=False,
@@ -182,15 +197,16 @@ class ForcedPhotometryFitter(BaseFitter):
         self.data = mb_obs_list.meta['fit_data']
 
         # do the forced photometry for each band
-        fit_flags = self._do_fits(
+        psf_flags, fit_flags = self._do_fits(
             new_mb_obs_list,
             coadd,
         )
 
         # fill the epoch data
-        #self._fill_epoch_data(mb_obs_list,boot.mb_obs_list)
+        self._fill_epoch_data(mb_obs_list,new_mb_obs_list)
 
         self._fill_nimage_used(mb_obs_list,new_mb_obs_list,coadd)
+        self._calc_mask_frac(mb_obs_list, coadd)
 
         return fit_flags
 
@@ -204,6 +220,9 @@ class ForcedPhotometryFitter(BaseFitter):
         """
         use psf as a template, measure flux (linear)
         """
+
+        psf_flags = self._do_psf_fits(mb_obs_list, coadd)
+        #psf_flags=0
 
         nband = len(mb_obs_list)
 
@@ -235,7 +254,20 @@ class ForcedPhotometryFitter(BaseFitter):
 
         if flagsall != 0:
             flagsall = FORCEPHOT_FAILURE 
-        return flagsall
+
+        return psf_flags, flagsall
+
+    def _do_psf_fits(self, mb_obs_list, coadd):
+        # use a bootstrapper just for the psf fits
+        self.boot = self._get_bootstrapper("gauss", mb_obs_list)
+        psf_flags = 0
+        try:
+            self._fit_psfs(coadd)
+        except BootPSFFailure as err:
+            print("    psf fitting failed: %s" % str(err))
+            psf_flags = PSF_FIT_FAILURE
+
+        return psf_flags
 
     def _fit_one_band(self, obs_list, gm_model):
         """
@@ -298,9 +330,6 @@ class ForcedPhotometryFitter(BaseFitter):
         n=self._get_namer('', coadd)
 
         data[n('mask_frac')] = DEFVAL
-        data[n('psfrec_T')] = DEFVAL
-        data[n('psfrec_g')] = DEFVAL
-
         return data
 
 
@@ -340,8 +369,6 @@ class ForcedPhotometryFitter(BaseFitter):
             #('flags','i4'),
             ('nimage_use','i4',bshape),
             ('mask_frac','f8'),
-            ('psfrec_T','f8'),
-            ('psfrec_g','f8', 2),
             (n('flags'),   'i4',bshape),
             (n('flux'),    'f8',bshape),
             (n('flux_err'),'f8',bshape),
@@ -433,4 +460,29 @@ class ForcedPhotometryFitter(BaseFitter):
 
         self.data[n('nimage_use')][0,:] = nim_used
 
+    def _calc_mask_frac(self,mb_obs_list,coadd):
+        print('    doing PSF stats')
 
+        n=self._get_namer('', coadd)
+
+        wrelsum = 0.0
+        npix = 0.0
+        did_one_max = False
+        for band,obs_list in enumerate(mb_obs_list):
+            for obs in obs_list:
+
+                fdata=obs.meta.get('fit_data',None)
+                if (obs.meta['flags'] == 0
+                        and fdata is not None
+                        and fdata['psf_fit_flags'][0] == 0):
+
+                    assert obs.meta['fit_flags'] == 0
+                    assert obs.get_psf().has_gmix()
+
+                    if fdata['wmax'][0] > 0.0:
+                        did_one_max = True
+                        npix += fdata['npix'][0]
+                        wrelsum += fdata['wsum'][0]/fdata['wmax'][0]
+
+        if did_one_max:
+            self.data[n('mask_frac')][0] = 1.0 - wrelsum/npix
