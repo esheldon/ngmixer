@@ -11,6 +11,9 @@ CONCAT['concat-des'] = DESConcat
 CONCAT['concat-metacal-des'] = DESMetacalConcat
 CONCAT['concat-metacal-admom-des'] = DESAdmomMetacalConcat
 
+from .forcephotconcat import FPConcat
+CONCAT['concat-forcephot'] = FPConcat
+
 def get_concat_class(concat_name):
     """
     returns the concat class for a given concat_name
