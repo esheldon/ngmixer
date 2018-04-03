@@ -145,6 +145,20 @@ def get_psfmap_file_fromfile(meds_file):
         info['band'],
     )
 
+def get_piff_map_file_fromfile(piff_run, meds_file):
+    """
+    get the psfmap file from a meds file input
+    """
+    import desmeds
+    info=get_meds_info(meds_file)
+    return desmeds.files.get_piff_map_file(
+        info['medsconf'],
+        piff_run,
+        info['tile_id'],
+        info['band'],
+    )
+
+
 
 def get_ngmixer_output_dir():
     """
