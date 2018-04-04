@@ -1222,6 +1222,9 @@ class PIFFWrapper(dict):
 
         image is normalized
         """
+        #import images
+        #print("file:",self['filename'])
+        #print("drawing at",row,col)
         gsim = self.piff_obj.draw(x=col, y=row)
         im = gsim.array
 
@@ -1229,6 +1232,8 @@ class PIFFWrapper(dict):
 
         self._cache_center(row, col, im)
 
+        #images.multiview(im, file='test.png')
+        #stop
         return im
     
     def get_center(self, row, col):

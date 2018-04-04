@@ -924,9 +924,8 @@ class MEDSImageIO(ImageIO):
         if conf['symmetrize_weight']:
             self._symmetrize_weight_images(wt_raw, wt, wt_us)
 
-        # check raw weight map for zero pixels
-        #wzero=numpy.where(wt_raw == 0.0)
-        wzero=numpy.where(wt == 0.0)
+        # check raw (possibly symmetrized) weight map for zero pixels
+        wzero=numpy.where(wt_raw == 0.0)
 
         notok=self._badfrac_too_high(
             band, icut, wzero[0].size, wt_raw.shape, maxfrac, 'zero weight'
