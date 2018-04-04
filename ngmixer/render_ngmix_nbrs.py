@@ -611,6 +611,7 @@ class RenderNGmixNbrs(object):
         band_pars_obj[5] = pars_obj[5+band]
         assert len(band_pars_obj) == 6
 
+        image=None
         for i in [1,2]:
             try:
                 if model != 'cm':
@@ -630,11 +631,14 @@ class RenderNGmixNbrs(object):
                 else:
                     gmix_image=None
 
-        if gmix_image is None:
-            return None
-        else:
-            image = gmix_image.make_image(img_shape, jacobian=jac, fast_exp=True)
-            return image
+        if gmix_image is not None:
+            try:
+                image = gmix_image.make_image(img_shape, jacobian=jac, fast_exp=True)
+            except GMixRangeError as err:
+                print("caught error: '%s'" % str(err))
+                pass
+
+        return image
 
     @staticmethod
     def _mask_nbr_seg(seg,nbr_number,masked_pix,unmodeled_nbrs_masking_type='nbrs-seg'):
