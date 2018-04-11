@@ -58,6 +58,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         if conf['use_psf_rerun']:
             rerun=conf['psf_rerun_version']
+            raise RuntimeError("old blacklist not supported")
             self._load_psf_blacklist(rerun)
 
         if 'psf_s2n_checks' in conf:
@@ -375,6 +376,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
         key='%s-%s-%02d' % (run,expname,ccd)
         return key
 
+    '''
     def _load_psf_blacklist(self, rerun):
         """
         each psfex rerun has an associated blacklist file
@@ -399,6 +401,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
                 blacklist[key] = flags
 
         self._psf_blacklist=blacklist
+    '''
 
     def _load_psf_s2n(self, conf):
         fname=conf['psf_s2n_checks']['file']
@@ -444,6 +447,18 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         return psf_path
 
+    def _extract_piff_key(self, psf_path):
+        """
+        D00243626_i_c30_r2363p01_piff.fits
+        """
+        bname=os.path.basename(psf_path)
+        bs=bname.split('_')
+        exp=bs[0]
+        ccd=bs[2].replace('c','')
+
+        key='%s-%s' % (exp, ccd)
+        return key
+
     def _get_piff_object(self, psf_path):
         """
         read a single PIFF object
@@ -451,14 +466,27 @@ class SVDESMEDSImageIO(MEDSImageIO):
         flags=0
         psf_obj=None
 
-        # we expect a well-formed, existing file if there are no flags set
-        if not os.path.exists(psf_path):
-            #print("missing psfex: %s" % psf_path)
-            #flags |= PSF_FILE_READ_ERROR
-            raise MissingDataError("missing psf file: %s" % psf_path)
+        if psf_path=="missing":
+            # treat as blacklisted
+            print("skipping PIFF file marked as missing")
+            flags=PSF_IN_BLACKLIST
         else:
-            print_with_verbosity("loading: %s" % psf_path,verbosity=2)
-            psf_obj = PIFFWrapper(psf_path)
+
+            key=self._extract_piff_key(psf_path)
+            if key in self.psf_blacklist:
+                flags=PSF_IN_BLACKLIST
+                print("skipping blacklisted PSF:",psf_path)
+            else:
+
+
+                # we expect a well-formed, existing file if there are no flags set
+                if not os.path.exists(psf_path):
+                    #print("missing psfex: %s" % psf_path)
+                    #flags |= PSF_FILE_READ_ERROR
+                    raise MissingDataError("missing psf file: %s" % psf_path)
+                else:
+                    print_with_verbosity("loading: %s" % psf_path,verbosity=2)
+                    psf_obj = PIFFWrapper(psf_path)
 
         return psf_obj, flags
 
@@ -544,7 +572,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
                     psf_path = self._psf_path_from_image_path(meds, impath)
 
                     # psf_obj might be None with flags set
-                    if 'piff' in psf_path:
+                    if 'piff' in psf_path or psf_path=='missing':
                         psf_obj, psf_flags = self._get_piff_object(psf_path)
                     else:
                         psf_obj, psf_flags = self._get_psfex_object(psf_path)
@@ -1120,6 +1148,27 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
             self._load_psf_map(**kw)
 
         super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
+        self._load_psf_blacklist()
+
+    def _load_psf_blacklist(self):
+        """
+        load the psf blacklist
+        """
+        pc=self.conf['imageio']['psfs']
+        blacklist={}
+        if 'blacklist' in pc:
+            fname=os.path.expandvars(pc['blacklist'])
+            print("reading psf blacklist:",fname)
+            data=fitsio.read(fname)
+            for d in data:
+                if d['bflags'] != 0:
+                    try:
+                        key = str(d['key'],'utf-8')
+                    except:
+                        key = str(d['key'])
+                    blacklist[key] = d
+        self.psf_blacklist=blacklist
+
 
     def get_meta_data_dtype(self):
         """

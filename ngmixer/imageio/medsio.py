@@ -61,6 +61,7 @@ class MEDSImageIO(ImageIO):
 
         self.conf['max_cutouts'] = self.conf.get('max_cutouts',None)
         self.conf['psfs_in_file'] = self.conf.get('psfs_in_file',False)
+        self._load_psf_blacklist()
 
         # indexing of fofs
         self._set_and_check_index_lookups()
@@ -177,6 +178,7 @@ class MEDSImageIO(ImageIO):
                     self.fof_range[1],
                     newf,
                     replace_bad=corrmeds['replace_bad'],
+                    symmetrize_mask=corrmeds['symmetrize_mask'],
                     reject_outliers=corrmeds['reject_outliers'],
                     bad_flags=corrmeds['bad_flags'],
                     min_weight=min_weight,
