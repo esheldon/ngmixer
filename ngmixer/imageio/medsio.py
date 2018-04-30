@@ -60,14 +60,15 @@ class MEDSImageIO(ImageIO):
         self.conf['nband'] = len(self.meds_list)
 
         self.conf['max_cutouts'] = self.conf.get('max_cutouts',None)
-        self.conf['psfs_in_file'] = self.conf.get('psfs_in_file',False)
+
+        pconf=self.conf['imageio']['psfs']
         self._load_psf_blacklist()
 
         # indexing of fofs
         self._set_and_check_index_lookups()
 
         # psfs
-        if not self.conf['psfs_in_file']:
+        if not pconf['type']=='infile':
             self._load_psf_data()
 
         # make sure if we are doing nbrs we have the info we need
@@ -108,7 +109,8 @@ class MEDSImageIO(ImageIO):
         The filename is optional and is just for debugging purposes.
         """
 
-        if not self.conf['psfs_in_file']:
+        pconf=self.conf['imageio']['psfs']
+        if not pconf['type'] == 'infile':
             raise NotImplementedError("only use base class method when "
                                       "psfs are in the MEDS file")
 
