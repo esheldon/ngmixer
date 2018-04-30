@@ -99,7 +99,8 @@ class MegaMixer(dict):
     """
     conf has ngmix config plus
     """
-    def __init__(self, ngmix_config, psf_map_files, meds_files,
+    def __init__(self, ngmix_config, meds_files,
+                 psf_map_files=None,
                  walltime='48:00',
                  walltime_e='4:00',
                  ncores=1,
@@ -109,7 +110,11 @@ class MegaMixer(dict):
                  clobber=False,
                  seed=None):
         self.ngmix_config    = os.path.abspath( ngmix_config )
-        self.psf_map_files   = [os.path.abspath(f) for f in psf_map_files]
+        if psf_map_files is not None:
+            self.psf_map_files=[os.path.abspath(f) for f in psf_map_files]
+        else:
+            self.psf_map_files=None
+        
         self.missing=missing
         self.walltime=walltime
         self.walltime_e=walltime_e
@@ -205,7 +210,12 @@ class MegaMixer(dict):
 
 
         args['ngmix_config'] = self.ngmix_config
-        args['psf_maps']     = ','.join(self.psf_map_files)
+        if self.psf_map_files is not None:
+            psf_maps     = ','.join(self.psf_map_files)
+            args['psf_map_arg'] = '--psf-map="%s"' % psf_maps
+        else:
+            args['psf_map_arg'] = ''
+
         args['meds_files']   = self.meds_string
         args['output_file']  = output_file
         args['logfile']      = logfile
@@ -360,8 +370,6 @@ tmplog=$tmpdir/$logbase
 
 config="{ngmix_config}"
 
-psf_maps="{psf_maps}"
-
 meds="{meds_files}"
 
 outfile="{output_file}"
@@ -371,7 +379,7 @@ stop={stop}
 ngmixit                                   \
     --fof-range=$start,$stop              \
     --work-dir=$tmpdir                    \
-    --psf-map="$psf_maps"                 \
+    {psf_map_arg}                         \
     {models_opt}                          \
     {nbrs_opt}                            \
     {fof_opt}                             \
@@ -754,11 +762,14 @@ def process_meds_files(args, meds_files):
 
     ngmix_config = read_yaml(args.ngmix_config)
     psfs = ngmix_config['imageio']['psfs']
-    if psfs['type']=='piff':
-        piff_run=psfs['piff_run']
-        psf_map_files = [files.get_piff_map_file_fromfile(piff_run,f) for f in meds_files]
+    if psfs['type']=='infile':
+        psf_map_files=None
     else:
-        psf_map_files = [files.get_psfmap_file_fromfile(f) for f in meds_files]
+        if psfs['type']=='piff':
+            piff_run=psfs['piff_run']
+            psf_map_files = [files.get_piff_map_file_fromfile(piff_run,f) for f in meds_files]
+        else:
+            psf_map_files = [files.get_psfmap_file_fromfile(f) for f in meds_files]
 
     # get command
     cmd = args.command
@@ -768,8 +779,8 @@ def process_meds_files(args, meds_files):
     blind = not args.noblind
     ngmm = MMixer(
         args.ngmix_config,
-        psf_map_files,
         meds_files,
+        psf_map_files=psf_map_files,
         seed=args.seed,
         missing=args.missing,
         blind=blind,
