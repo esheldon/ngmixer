@@ -98,9 +98,13 @@ class NGMixBootFitter(BaseFitter):
         pars = [modl+'_max_pars' for modl in self['fit_models']]
         covs = [modl+'_max_pars_cov' for modl in self['fit_models']]
 
-        coadd_models = ['coadd_'+modl for modl in models]
-        coadd_pars = ['coadd_'+modl for modl in pars]
-        coadd_covs = ['coadd_'+modl for modl in covs]
+        if self.get('use_coadd_prefix',True):
+            pre='coadd_'
+        else:
+            pre=''
+        coadd_models = [pre+modl for modl in models]
+        coadd_pars = [pre+modl for modl in pars]
+        coadd_covs = [pre+modl for modl in covs]
 
         return models,pars,covs,coadd_models,coadd_pars,coadd_covs,5+self['nband']
 
