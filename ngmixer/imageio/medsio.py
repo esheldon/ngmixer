@@ -714,8 +714,9 @@ class MEDSImageIO(ImageIO):
         obs.weight_raw = wt_raw
         obs.seg = seg
 
-        #fname = self._get_meds_orig_filename(meds, mindex, icut)
-        #obs.filename=fname
+        nimage=self._get_meds_noise(meds, mindex, icut)
+        if nimage is not None:
+            obs.noise=nimage
 
         if 'trim_image' in self.conf:
             self._trim_obs(obs)
@@ -886,6 +887,14 @@ class MEDSImageIO(ImageIO):
             bmask=None
 
         return bmask, skip
+
+    def _get_meds_noise(self, meds, mindex, icut):
+        if 'noise' in meds._fits:
+            nimage=meds.get_cutout(mindex, icut, type='noise')
+        else:
+            nimage=None
+
+        return nimage
 
     def _get_meds_weight(self, band, meds, mindex, icut, bmask):
         """
