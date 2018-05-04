@@ -889,7 +889,7 @@ class MEDSImageIO(ImageIO):
         return bmask, skip
 
     def _get_meds_noise(self, meds, mindex, icut):
-        if 'noise' in meds._fits:
+        if 'noise_cutouts' in meds._fits:
             nimage=meds.get_cutout(mindex, icut, type='noise')
         else:
             nimage=None
