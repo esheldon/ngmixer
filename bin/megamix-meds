@@ -762,7 +762,7 @@ def process_meds_files(args, meds_files):
 
     ngmix_config = read_yaml(args.ngmix_config)
     psfs = ngmix_config['imageio']['psfs']
-    if psfs['type']=='infile':
+    if psfs['type']=='infile' or psfs['type']=='piff':
         psf_map_files=None
     else:
         if psfs['type']=='piff':

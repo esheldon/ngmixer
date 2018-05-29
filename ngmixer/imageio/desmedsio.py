@@ -322,23 +322,16 @@ class SVDESMEDSImageIO(MEDSImageIO):
         file_id=meds['file_id'][mindex,icut]
 
         psf_obj=self.psf_lists[band][file_id]
-        self.psfname=os.path.basename(psf_obj['filename'])
-        #if icut > 0:
-        #    if self.psfname[0:17] != self.imname[0:17]:
-        #        raise RuntimeError("im and psf mismatch: %s "
-        #                           "vs %s" % (self.psfname,self.imname))
 
         row=meds['orig_row'][mindex,icut]
         col=meds['orig_col'][mindex,icut]
 
         # currently PIFF always centers
-        if self.conf['center_psf']:
-            use_row,use_col=round(row),round(col)
-        else:
-            use_row,use_col=row,col
+        if self.conf['center_psf'] and pconf['type']=='psfex':
+            row,col=round(row),round(col)
 
-        im=psf_obj.get_rec(use_row,use_col)
-        cen=psf_obj.get_center(use_row,use_col)
+        im=psf_obj.get_rec(row,col)
+        cen=psf_obj.get_center(row,col)
 
         im=im.astype('f8', copy=False)
 
@@ -478,34 +471,85 @@ class SVDESMEDSImageIO(MEDSImageIO):
         key='%s-%s' % (exp, ccd)
         return key
 
-    def _get_piff_object(self, psf_path):
+    def _read_piff_exp_info(self, expname):
+        import desmeds
+        pconf=self.conf['imageio']['psfs']
+        expnum = int( expname[1:] )
+        fname=files.get_piff_exp_summary_file(
+            pconf['piff_run'],
+            expnum,
+        )
+        print("reading piff info:",fname)
+        if not os.path.exists(fname):
+            if pconf['allow_missing']:
+                print("    missing exposure:",fname)
+                return None
+            else:
+                raise RuntimeError("Missing piff exposure:",fname)
+        else:
+            return fitsio.read(fname, ext='info')
+
+    def _get_piff_info(self, expname, ccd):
+        if not hasattr(self, '_piff_info'):
+            self._piff_info = {}
+        all_info = self._piff_info
+
+        if expname not in all_info:
+            all_info[expname] = self._read_piff_exp_info(expname)
+
+        expinfo = all_info[expname]
+        if expinfo is None:
+            return None
+
+        ccdnum = int(ccd)
+        w,=numpy.where(expinfo['ccdnum'] == ccdnum)
+        if w.size == 0:
+            raise RuntimeError("piff info for %s %s not found" % (expname,ccd))
+        
+        return expinfo[w[0]]
+
+    def _replace_piff_dir(self, path):
+        """
+        replace actual base path with env variable specifier $PIFF_DATA_DIR
+        """
+        edir = os.environ['PIFF_DATA_DIR']
+        paths = path.split('/')[-3:]
+
+        paths = [edir] + paths
+
+        return '/'.join(paths)
+ 
+    def _get_piff_path(self, info):
+        path = info['piff_file']
+        path = self._replace_piff_dir(path)
+        return path
+
+
+    def _get_piff_object(self, impath):
         """
         read a single PIFF object
         """
+        pconf=self.conf['imageio']['psfs']
+
         flags=0
         psf_obj=None
 
-        if psf_path=="missing":
-            # treat as blacklisted
-            print("skipping PIFF file marked as missing")
+        expname, ccd, key = self._get_expccd_and_key(impath)
+        info = self._get_piff_info(expname, ccd)
+
+        if info is None or info['flag'] != 0:
             flags=PSF_IN_BLACKLIST
         else:
+            psf_path = self._get_piff_path(info)
 
-            key=self._extract_piff_key(psf_path)
-            if key in self.psf_blacklist:
-                flags=PSF_IN_BLACKLIST
-                print("skipping blacklisted PSF:",psf_path)
+            # we expect a well-formed, existing file if there are no flags set
+            if not os.path.exists(psf_path):
+                print("missing piff file: %s" % psf_path)
+                #flags |= PSF_FILE_READ_ERROR
+                raise MissingDataError("missing psf file: %s" % psf_path)
             else:
-
-
-                # we expect a well-formed, existing file if there are no flags set
-                if not os.path.exists(psf_path):
-                    #print("missing psfex: %s" % psf_path)
-                    #flags |= PSF_FILE_READ_ERROR
-                    raise MissingDataError("missing psf file: %s" % psf_path)
-                else:
-                    print_with_verbosity("loading: %s" % psf_path,verbosity=2)
-                    psf_obj = PIFFWrapper(psf_path)
+                print_with_verbosity("loading: %s" % psf_path,verbosity=2)
+                psf_obj = PIFFWrapper(psf_path, pconf['stamp_size'])
 
         return psf_obj, flags
 
@@ -570,6 +614,8 @@ class SVDESMEDSImageIO(MEDSImageIO):
         Load psf objects for all images
         """
 
+        pconf=self.conf['imageio']['psfs']
+
         psf_list=[]
 
         info=meds.get_image_info()
@@ -587,13 +633,14 @@ class SVDESMEDSImageIO(MEDSImageIO):
             else:
                 if (flags & self.conf['image_flags2check']) == 0:
 
-                    impath=info['image_path'][i].strip()
-                    psf_path = self._psf_path_from_image_path(meds, impath)
-
                     # psf_obj might be None with flags set
-                    if 'piff' in psf_path or psf_path=='missing':
-                        psf_obj, psf_flags = self._get_piff_object(psf_path)
+
+                    impath=info['image_path'][i].strip()
+                    if pconf['type']=='piff':
+                        psf_obj, psf_flags = self._get_piff_object(impath)
                     else:
+                        psf_path = self._psf_path_from_image_path(meds, impath)
+
                         psf_obj, psf_flags = self._get_psfex_object(psf_path)
 
                     if psf_flags != 0:
@@ -1163,7 +1210,7 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
         conf=args[0]
         pconf=conf['imageio']['psfs']
 
-        if pconf['type'] == ['infile']:
+        if pconf['type'] != 'piff' and pconf['type'] != 'infile':
             self._load_psf_map(**kw)
 
         super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
@@ -1210,8 +1257,7 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
         map_files=extra_data.get('psf_map',None)
         if map_files is None:
-            raise RuntimeError("for Y3 you must send map files or "
-                               "have psfs in the MEDS file")
+            raise RuntimeError("no psf map found")
 
         psf_map={}
 
@@ -1240,15 +1286,8 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
         self._psf_map=psf_map
 
-    def _psf_path_from_image_path(self, meds, image_path):
-        """
-        infer the psf path from the image path.
-        """
-
+    def _get_expccd_and_key(self, image_path):
         bname = os.path.basename(image_path)
-        # these bnames look like DES0157-3914_r2577p01_D00490381_r_c48_nwgint.fits
-        # D00495879_z_c42_r2377p01_immasked_nullwt.fits
-        # we need the exposure name, e.g. D00490381 and the ccd number, e.g. 48
 
         fs = bname.split('_')
         if bname[0:3] == 'DES':
@@ -1260,10 +1299,17 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
         key='%s-%s' % (expname, ccd)
 
+        return expname, ccd, key
 
+
+    def _psf_path_from_image_path(self, meds, image_path):
+        """
+        infer the psf path from the image path.
+        """
+
+        expname, ccd, key = self._get_expccd_and_key(image_path)
 
         psf_path = self._psf_map[key]
-
 
         psf_path = os.path.expandvars(psf_path)
         return psf_path
@@ -1277,10 +1323,11 @@ class PIFFWrapper(dict):
     """
     provide an interface consistent with the PSFEx class
     """
-    def __init__(self, psf_path):
+    def __init__(self, psf_path, stamp_size):
         import piff
         self.piff_obj=piff.read(psf_path)
         self['filename'] = psf_path
+        self['stamp_size'] = stamp_size
 
         self.center_cache={}
 
@@ -1293,7 +1340,13 @@ class PIFFWrapper(dict):
         #import images
         #print("file:",self['filename'])
         #print("drawing at",row,col)
-        gsim = self.piff_obj.draw(x=col, y=row)
+        #gsim = self.piff_obj.draw(x=col, y=row)
+        # this is how to center the image in PIFF
+        gsim = self.piff_obj.draw(
+            x=int(col+0.5),
+            y=int(row+0.5),
+            stamp_size=self['stamp_size'],
+        )
         im = gsim.array
 
         im *= (1.0/im.sum())

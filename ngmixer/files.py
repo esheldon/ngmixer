@@ -158,6 +158,23 @@ def get_piff_map_file_fromfile(piff_run, meds_file):
         info['band'],
     )
 
+def get_piff_exp_summary_file(piff_run, expnum):
+    """
+    expnum not zero padded
+    """
+    base_dir=os.environ['PIFF_DATA_DIR']
+
+    fname = 'exp_psf_cat_%d.fits' % expnum
+
+    fname = os.path.join(
+        base_dir,
+        piff_run,
+        '%d' % expnum,
+        fname,
+    )
+    return fname
+
+
 
 
 def get_ngmixer_output_dir():
