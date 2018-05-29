@@ -537,7 +537,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
         expname, ccd, key = self._get_expccd_and_key(impath)
         info = self._get_piff_info(expname, ccd)
 
-        if info is None or info['flag'] != 0:
+        if info is None or info['flag'] != 0 or info['ccdnum']==31:
             flags=PSF_IN_BLACKLIST
         else:
             psf_path = self._get_piff_path(info)
