@@ -206,7 +206,7 @@ def get_condor_submit(tile_id, run):
     dir=get_condor_dir(run)
     return os.path.join(dir, '%s.condor' % tile_id)
 
-def get_nbrs_dir(tile_id, run):
+def get_nbrs_dir_old(tile_id, run):
     """
     get the directory holding the nbrs info for the
     indicated meds file
@@ -218,7 +218,7 @@ def get_nbrs_dir(tile_id, run):
     )
 
 
-def get_nbrs_dir_new(run):
+def get_nbrs_dir(run):
     """
     get the directory holding the nbrs info for the
     indicated meds file
@@ -233,7 +233,7 @@ def get_nbrs_file(tile_id, run, ext='.fits'):
     """
     get the path to a nbrs file given a MEDS file
     """
-    dir=get_nbrs_dir(tile_id, run)
+    dir=get_nbrs_dir(run)
 
     info={}
     info['tile_id'] = tile_id
@@ -264,7 +264,7 @@ def get_fof_file(tile_id, run, ext='.fits'):
     """
     get the path to a nbrs FOF file given a MEDS file
     """
-    dir=get_nbrs_dir(tile_id, run)
+    dir=get_nbrs_dir(run)
 
     info={}
     info['tile_id'] = tile_id
