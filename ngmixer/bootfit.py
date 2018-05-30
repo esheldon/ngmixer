@@ -872,12 +872,15 @@ class NGMixBootFitter(BaseFitter):
         psf_pars=self['psf_pars']
         fit_pars=psf_pars['fit_pars']
 
+        min_s2n = self.get('min_psf_model_s2n',None)
+
         boot.fit_psfs(psf_pars['model'],
                       None,
                       Tguess_key='Tguess',
                       ntry=psf_pars['ntry'],
                       fit_pars=fit_pars,
-                      norm_key='psf_norm')
+                      norm_key='psf_norm',
+                      min_s2n=min_s2n)
 
         # check for no obs in a band if PSF fit fails
         for band,obs_list in enumerate(boot.mb_obs_list):
