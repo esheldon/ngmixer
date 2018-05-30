@@ -1372,10 +1372,9 @@ class PIFFWrapper(dict):
         
     def get_sigma(self):
         """
-        fake it for now
+        pixels
         """
-        # in pixels
-        return 4.0
+        return numpy.sqrt(4.0/2.0)
 
     def _cache_center(self, row, col, im):
         """
@@ -1389,3 +1388,4 @@ class PIFFWrapper(dict):
 
     def _get_center_cache_key(self, row, col):
         key = '%.16g-%.16g' % (row, col)
+
