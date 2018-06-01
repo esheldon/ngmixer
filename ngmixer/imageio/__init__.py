@@ -2,6 +2,7 @@ from . import imageio
 from . import medsio
 from . import simpsimmedsio
 from . import desmedsio
+from . import desastrom
 
 from .imageio import ImageIO
 from .medsio import MEDSImageIO
