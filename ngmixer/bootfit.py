@@ -688,9 +688,14 @@ class NGMixBootFitter(BaseFitter):
                     ed['wmax'] = obs.weight.max()
                     ed['psf_counts'] = psf_obs.image.sum()
 
-                    if 'fitter' in psf_obs.meta:
-                        res = obs.get_psf().meta['fitter'].get_result()
+                    pmeta=psf_obs.meta
+
+                    if 'fitter' in pmeta:
+                        res = pmeta['fitter'].get_result()
                         ed['psf_fit_flags'] = res['flags']
+                        if 'flux' in res:
+                            s2n = res['flux']/res['flux_err']
+                            ed['psf_model_s2n'] = s2n
 
                     if psf_obs.has_gmix():
                         used = True
@@ -1129,6 +1134,7 @@ class NGMixBootFitter(BaseFitter):
             ('wsum','f8'),
             ('wmax','f8'),
             ('psf_fit_flags','i4'),
+            ('psf_model_s2n','f8'),
             ('psf_counts','f8'),
             ('psf_fit_g','f8',2),
             ('psf_fit_T','f8'),
@@ -1144,6 +1150,7 @@ class NGMixBootFitter(BaseFitter):
         epoch_data['wsum'] = DEFVAL
         epoch_data['wmax'] = DEFVAL
         epoch_data['psf_fit_flags'] = NO_ATTEMPT
+        epoch_data['psf_model_s2n'] = DEFVAL
         epoch_data['psf_counts'] = DEFVAL
         epoch_data['psf_fit_g'] = DEFVAL
         epoch_data['psf_fit_T'] = DEFVAL
