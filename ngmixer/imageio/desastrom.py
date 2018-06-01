@@ -30,6 +30,7 @@ class AstromReader(dict):
         get the astrometry object for the given identifiers
         """
         import pixmappy
+        import galsim
         ccdname = CCD_NAMES[ccdnum]
 
         zm = self._zone_map
@@ -52,6 +53,9 @@ class AstromReader(dict):
 
             wcs = pixmappy.GalSimWCS(fname, exp=expnum, ccdnum=ccdnum)
             wcs._color = 0.  # For now.  Revisit when doing color-dependent PSF.
+
+            # there seems to be some coordinate convention problem here
+            wcs = wcs.withOrigin(galsim.PositionD(0.5,0.5))
 
         return GalsimWCSWrapper(wcs)
 
@@ -84,6 +88,29 @@ class GalsimWCSWrapper(object):
     def __init__(self, wcs):
         self.wcs=wcs
 
+    def get_jacobian(self,
+                     ra,
+                     dec,
+                     cutout_row,
+                     cutout_col,
+                    ):
+        """
+        get a jacobian with new elements as well as any
+        required shift
+        """
+        gs_jac, _, _ = self._get_gs_jacobian_and_rowcol(ra, dec)
+
+        return ngmix.Jacobian(
+            row=cutout_row,
+            col=cutout_col,
+
+            dudrow = gs_jac.dudy,
+            dudcol = gs_jac.dudx,
+
+            dvdrow = gs_jac.dvdy,
+            dvdcol = gs_jac.dvdx,
+        )
+
     def get_shifted_jacobian(self,
                              ra,
                              dec,
@@ -95,6 +122,9 @@ class GalsimWCSWrapper(object):
         """
         get a jacobian with new elements as well as any
         required shift
+
+        This doesn't work because of the absolute shift between
+        the original coadd RA,DEC and the truth
         """
         gs_jac, row, col = self._get_gs_jacobian_and_rowcol(ra, dec)
 

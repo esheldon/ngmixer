@@ -986,7 +986,7 @@ class MEDSImageIO(ImageIO):
 
         if hasattr(self,'astroms'):
             jacob = self._get_updated_jacobian(band, mindex, icut)
-            if True:
+            if False:
                 jacob_old = self._get_meds_jacobian(
                     band, mindex, icut,
                 )
@@ -1006,11 +1006,9 @@ class MEDSImageIO(ImageIO):
         if wcs is None:
             jacob = None
         else:
-            jacob = wcs.get_shifted_jacobian(
+            jacob = wcs.get_jacobian(
                 meds['ra'][mindex],
                 meds['dec'][mindex],
-                meds['orig_row'][mindex,icut],
-                meds['orig_col'][mindex,icut],
                 meds['cutout_row'][mindex,icut],
                 meds['cutout_col'][mindex,icut],
             )
