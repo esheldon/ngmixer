@@ -755,6 +755,12 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         if 'mof' in self.conf:
             self._load_wcs_data()
 
+        # This is currently separate from the above where the full wcs is
+        # read.  That is partly because the object does not behave the same way,
+        # we would need a wrapper for MOF for example
+        if 'astrom' in self.conf['imageio']:
+            self._load_astrom()
+
     def _set_defaults(self):
         super(Y1DESMEDSImageIO,self)._set_defaults()
         self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
@@ -792,6 +798,44 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
             self._load_wcs_from_files()
         else:
             self._load_wcs_from_meds()
+
+    def _load_astrom(self):
+        """
+        missing entries (probably blacklisted) will get a None
+        entry in the astroms dict
+        """
+        from . import desastrom
+        reader = desastrom.AstromReader(self.conf['imageio']['astrom'])
+
+        astroms = {}
+        for band in self.iband:
+            astroms[band] = {}
+
+            info = self.meds_list[band].get_image_info()
+            nimage = info.size
+
+            # get coadd file ID            
+            # a total hack, but should work!
+            # assumes all objects from the same coadd!
+            coadd_file_id = numpy.max(numpy.unique(self.meds_list[band]['file_id'][:,0]))
+            assert coadd_file_id >= 0,"Could not get coadd_file_id from MEDS file!"
+
+            for file_id in xrange(nimage):
+                if file_id != coadd_file_id:
+                    path=info['image_path'][file_id].strip()
+                    expname, ccds, key = self._get_expccd_and_key(path)
+
+                    if expname[0] == 'D':
+                        expname = expname[1:]
+
+                    expnum=int(expname)
+                    ccdnum=int(ccds)
+
+                    astroms[band][file_id] = reader.get_wcs(expnum, ccdnum)
+                    
+
+        self.astroms = astroms
+
 
     def _load_wcs_from_meds(self):
         from esutil.wcsutil import WCS

@@ -692,8 +692,9 @@ class MEDSImageIO(ImageIO):
 
         im = self._get_meds_image(meds, mindex, icut)
 
-        jacob = self._get_jacobian(meds, mindex, icut)
-
+        jacob = self._get_jacobian(band, mindex, icut)
+        if jacob is None:
+            return None
 
         if self.conf['ignore_zero_images'] and 0.0==im.sum():
             print("    image all zero, skipping")
@@ -978,10 +979,45 @@ class MEDSImageIO(ImageIO):
             if wt_us is not None:
                 wt_us[w] = 0.0
 
-    def _get_jacobian(self, meds, mindex, icut):
+    def _get_jacobian(self, band, mindex, icut):
         """
         Get a Jacobian object for the requested object
         """
+
+        if hasattr(self,'astroms'):
+            jacob = self._get_updated_jacobian(band, mindex, icut)
+            if True:
+                jacob_old = self._get_meds_jacobian(
+                    band, mindex, icut,
+                )
+                print("old jac:",jacob_old)
+                print("new jac:",jacob)
+
+        else:
+            jacob = self._get_meds_jacobian(band, mindex, icut)
+
+        return jacob
+
+    def _get_updated_jacobian(self, band, mindex, icut):
+        meds=self.meds_list[band]
+
+        file_id = meds['file_id'][mindex, icut]
+        wcs = self.astroms[band][file_id]
+        if wcs is None:
+            jacob = None
+        else:
+            jacob = wcs.get_shifted_jacobian(
+                meds['ra'][mindex],
+                meds['dec'][mindex],
+                meds['orig_row'][mindex,icut],
+                meds['orig_col'][mindex,icut],
+                meds['cutout_row'][mindex,icut],
+                meds['cutout_col'][mindex,icut],
+            )
+        return jacob
+
+    def _get_meds_jacobian(self, band, mindex, icut):
+        meds=self.meds_list[band]
         jdict = meds.get_jacobian(mindex, icut)
         jacob = Jacobian(row=jdict['row0'],
                          col=jdict['col0'],
@@ -989,6 +1025,7 @@ class MEDSImageIO(ImageIO):
                          dudcol=jdict['dudcol'],
                          dvdrow=jdict['dvdrow'],
                          dvdcol=jdict['dvdcol'])
+ 
         return jacob
 
     def _get_psf_observation(self, band, mindex, icut, image_jacobian):
