@@ -40,7 +40,7 @@ class AstromReader(dict):
             &
             (zm['detpos']==ccdname)
         )
-        if w[0].size != 1:
+        if w.size != 1:
             mess="%s %s not found in astrometry zone map, returning None"
             mess =mess % (expnum, ccdnum)
             print(mess)
