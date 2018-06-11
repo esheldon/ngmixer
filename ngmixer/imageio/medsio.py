@@ -60,13 +60,15 @@ class MEDSImageIO(ImageIO):
         self.conf['nband'] = len(self.meds_list)
 
         self.conf['max_cutouts'] = self.conf.get('max_cutouts',None)
-        self.conf['psfs_in_file'] = self.conf.get('psfs_in_file',False)
+
+        pconf=self.conf['imageio']['psfs']
+        self._load_psf_blacklist()
 
         # indexing of fofs
         self._set_and_check_index_lookups()
 
         # psfs
-        if not self.conf['psfs_in_file']:
+        if not pconf['type']=='infile':
             self._load_psf_data()
 
         # make sure if we are doing nbrs we have the info we need
@@ -107,7 +109,8 @@ class MEDSImageIO(ImageIO):
         The filename is optional and is just for debugging purposes.
         """
 
-        if not self.conf['psfs_in_file']:
+        pconf=self.conf['imageio']['psfs']
+        if not pconf['type'] == 'infile':
             raise NotImplementedError("only use base class method when "
                                       "psfs are in the MEDS file")
 
@@ -177,6 +180,7 @@ class MEDSImageIO(ImageIO):
                     self.fof_range[1],
                     newf,
                     replace_bad=corrmeds['replace_bad'],
+                    symmetrize_mask=corrmeds['symmetrize_mask'],
                     reject_outliers=corrmeds['reject_outliers'],
                     bad_flags=corrmeds['bad_flags'],
                     min_weight=min_weight,
@@ -688,8 +692,9 @@ class MEDSImageIO(ImageIO):
 
         im = self._get_meds_image(meds, mindex, icut)
 
-        jacob = self._get_jacobian(meds, mindex, icut)
-
+        jacob = self._get_jacobian(band, mindex, icut)
+        if jacob is None:
+            return None
 
         if self.conf['ignore_zero_images'] and 0.0==im.sum():
             print("    image all zero, skipping")
@@ -710,8 +715,9 @@ class MEDSImageIO(ImageIO):
         obs.weight_raw = wt_raw
         obs.seg = seg
 
-        #fname = self._get_meds_orig_filename(meds, mindex, icut)
-        #obs.filename=fname
+        nimage=self._get_meds_noise(meds, mindex, icut)
+        if nimage is not None:
+            obs.noise=nimage
 
         if 'trim_image' in self.conf:
             self._trim_obs(obs)
@@ -883,6 +889,14 @@ class MEDSImageIO(ImageIO):
 
         return bmask, skip
 
+    def _get_meds_noise(self, meds, mindex, icut):
+        if 'noise_cutouts' in meds._fits:
+            nimage=meds.get_cutout(mindex, icut, type='noise')
+        else:
+            nimage=None
+
+        return nimage
+
     def _get_meds_weight(self, band, meds, mindex, icut, bmask):
         """
         Get a weight map from the input MEDS file
@@ -924,7 +938,7 @@ class MEDSImageIO(ImageIO):
         if conf['symmetrize_weight']:
             self._symmetrize_weight_images(wt_raw, wt, wt_us)
 
-        # check raw weight map for zero pixels
+        # check raw (possibly symmetrized) weight map for zero pixels
         wzero=numpy.where(wt_raw == 0.0)
 
         notok=self._badfrac_too_high(
@@ -965,10 +979,43 @@ class MEDSImageIO(ImageIO):
             if wt_us is not None:
                 wt_us[w] = 0.0
 
-    def _get_jacobian(self, meds, mindex, icut):
+    def _get_jacobian(self, band, mindex, icut):
         """
         Get a Jacobian object for the requested object
         """
+
+        if hasattr(self,'astroms'):
+            jacob = self._get_updated_jacobian(band, mindex, icut)
+            if False:
+                jacob_old = self._get_meds_jacobian(
+                    band, mindex, icut,
+                )
+                print("old jac:",jacob_old)
+                print("new jac:",jacob)
+
+        else:
+            jacob = self._get_meds_jacobian(band, mindex, icut)
+
+        return jacob
+
+    def _get_updated_jacobian(self, band, mindex, icut):
+        meds=self.meds_list[band]
+
+        file_id = meds['file_id'][mindex, icut]
+        wcs = self.astroms[band][file_id]
+        if wcs is None:
+            jacob = None
+        else:
+            jacob = wcs.get_jacobian(
+                meds['ra'][mindex],
+                meds['dec'][mindex],
+                meds['cutout_row'][mindex,icut],
+                meds['cutout_col'][mindex,icut],
+            )
+        return jacob
+
+    def _get_meds_jacobian(self, band, mindex, icut):
+        meds=self.meds_list[band]
         jdict = meds.get_jacobian(mindex, icut)
         jacob = Jacobian(row=jdict['row0'],
                          col=jdict['col0'],
@@ -976,6 +1023,7 @@ class MEDSImageIO(ImageIO):
                          dudcol=jdict['dudcol'],
                          dvdrow=jdict['dvdrow'],
                          dvdcol=jdict['dvdcol'])
+ 
         return jacob
 
     def _get_psf_observation(self, band, mindex, icut, image_jacobian):

@@ -65,6 +65,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                  sub_file,
                  reject_outliers=False,
                  replace_bad=False,
+                 symmetrize_mask=True,
                  bad_flags=None,
                  min_weight=0.0,
                  # these are the bands in the mof
@@ -84,6 +85,7 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
 
         self.reject_outliers=reject_outliers
         self.replace_bad=replace_bad
+        self.symmetrize_mask=symmetrize_mask
 
         self._set_bad_flags(bad_flags)
 
@@ -235,6 +237,10 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         Note if NBRS_MASKED  is set, the weight map is already zerod
         """
 
+        if self.symmetrize_mask:
+            self._symmetrize_weight(weight)
+            self._symmetrize_bmask(bmask)
+
         imravel = img.ravel()
         wtravel = weight.ravel()
         bmravel = bmask.ravel()
@@ -246,7 +252,8 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
         logic = weight_logic
         if self.bad_flags is not None:
             bmask_logic  = (bmravel & self.bad_flags) != 0
-            logic = logic & bmask_logic
+            #logic = logic & bmask_logic
+            logic = logic | bmask_logic
 
         wbad,=numpy.where(logic)
 
@@ -294,6 +301,30 @@ class MEDSExtractorCorrector(meds.MEDSExtractor):
                 )
                 noise *= err
                 imravel[wbad] += noise[wbad]
+
+    def _symmetrize_weight(self, wt):
+        """
+        symmetrize zero weight pixels
+        """
+        assert wt.shape[0] == wt.shape[1]
+
+        wt_rot=numpy.rot90(wt)
+        wzero = numpy.where(wt_rot == 0.0)
+
+        if wzero[0].size > 0:
+            wt[wzero] = 0.0
+
+    def _symmetrize_bmask(self, bmask):
+        """
+        symmetrize masked pixels
+        """
+        assert bmask.shape[0] == bmask.shape[1]
+
+        bm_rot = numpy.rot90(bmask)
+
+        wbad = numpy.where( (bm_rot & self.bad_flags) != 0)
+        if wbad[0].size > 0:
+            bmask[wbad] = bm_rot[wbad]
 
 
     def _extract(self):

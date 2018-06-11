@@ -26,7 +26,7 @@ PSF_LOW_S2N=2**3
 PSF_FILE_READ_ERROR=2**4
 
 
-DES_BADPIX_MAP={
+DESY4_BADPIX_MAP={
     "BPM":          1,  #/* set in bpm (hot/dead pixel/column)        */
     "SATURATE":     2,  #/* saturated pixel                           */
     "INTERP":       4,  #/* interpolated pixel                        */
@@ -46,6 +46,24 @@ DES_BADPIX_MAP={
     "TAPEBUMP": 16384,  #/* suspect due to known tape bump            */
 }
 
+DESY3_BADPIX_MAP={
+    "BPM":          1,  #/* set in bpm (hot/dead pixel/column)        */
+    "SATURATE":     2,  #/* saturated pixel                           */
+    "INTERP":       4,  #/* interpolated pixel                        */
+    "BADAMP":       8,  #/* Data from non-functional amplifier        */
+    "CRAY":        16,  #/* cosmic ray pixel                          */
+    "STAR":        32,  #/* bright star pixel                         */
+    "TRAIL":       64,  #/* bleed trail pixel                         */
+    "EDGEBLEED":  128,  #/* edge bleed pixel                          */
+    "SSXTALK":    256,  #/* pixel potentially effected by xtalk from  */
+                        #/*       a super-saturated source            */
+    "EDGE":       512,  #/* pixel flag to exclude CCD glowing edges   */
+    "STREAK":    1024,  #/* pixel associated with streak from a       */
+                        #/*       satellite, meteor, ufo...           */
+    "SUSPECT":   2048,  #/* nominally useful pixel but not perfect    */
+}
+#SUSPECT includes tapebump
+
 
 # SVMEDS
 class SVDESMEDSImageIO(MEDSImageIO):
@@ -58,7 +76,8 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         if conf['use_psf_rerun']:
             rerun=conf['psf_rerun_version']
-            self._load_psfex_blacklist(rerun)
+            raise RuntimeError("old blacklist not supported")
+            self._load_psf_blacklist(rerun)
 
         if 'psf_s2n_checks' in conf:
             self._load_psf_s2n(conf)
@@ -78,7 +97,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
             flags = 0
             for flagname in flag_list:
-                flags += DES_BADPIX_MAP[flagname]
+                flags += DESY3_BADPIX_MAP[flagname]
 
             self.conf['extra_mask_flags'] = flags
 
@@ -168,7 +187,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
     def _get_image_flags(self, band, mindex):
         """
         find images associated with the object and get the image flags
-        Also add in the psfex flags, eventually incorporated into meds
+        Also add in the psf flags, eventually incorporated into meds
         """
         meds=self.meds_list[band]
         ncutout=meds['ncutout'][mindex]
@@ -287,13 +306,14 @@ class SVDESMEDSImageIO(MEDSImageIO):
         obs.meta['meta_data']['image_id'][0]  = image_id
 
     def _load_psf_data(self):
-        self.psfex_lists = self._get_psfex_lists()
+        self.psf_lists = self._get_psf_lists()
 
     def _get_psf_image(self, band, mindex, icut):
         """
         Get an image representing the psf
         """
-        if self.conf['psfs_in_file']:
+        pconf=self.conf['imageio']['psfs']
+        if pconf['type']=='infile':
             return super(SVDESMEDSImageIO,self)._get_psf_image(
                 band, mindex, icut,
             )
@@ -301,32 +321,26 @@ class SVDESMEDSImageIO(MEDSImageIO):
         meds=self.meds_list[band]
         file_id=meds['file_id'][mindex,icut]
 
-        pex=self.psfex_lists[band][file_id]
-        self.psfname=os.path.basename(pex['filename'])
-        #if icut > 0:
-        #    if self.psfname[0:17] != self.imname[0:17]:
-        #        raise RuntimeError("im and psf mismatch: %s "
-        #                           "vs %s" % (self.psfname,self.imname))
+        psf_obj=self.psf_lists[band][file_id]
 
         row=meds['orig_row'][mindex,icut]
         col=meds['orig_col'][mindex,icut]
 
-        if self.conf['center_psf']:
-            use_row,use_col=round(row),round(col)
-        else:
-            use_row,use_col=row,col
+        # currently PIFF always centers
+        if self.conf['center_psf'] and pconf['type']=='psfex':
+            row,col=round(row),round(col)
 
-        im=pex.get_rec(use_row,use_col)
-        cen=pex.get_center(use_row,use_col)
+        im=psf_obj.get_rec(row,col)
+        cen=psf_obj.get_center(row,col)
 
         im=im.astype('f8', copy=False)
 
-        sigma_pix=pex.get_sigma()
+        sigma_pix=psf_obj.get_sigma()
 
         if 'trim_psf' in self.conf and icut > 0:
             im,cen=self._trim_psf(im, cen)
 
-        return im, cen, sigma_pix, pex['filename']
+        return im, cen, sigma_pix, psf_obj['filename']
 
     def _trim_psf(self, im, cen):
         dims=self.conf['trim_psf']['dims']
@@ -358,7 +372,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
         dir='$DESDATA/EXTRA/blacklists'
         return os.path.expandvars(dir)
 
-    def _get_psfex_blacklist_file(self, rerun):
+    def _get_psf_blacklist_file(self, rerun):
         """
         location of DES psfex blacklists for reruns outside
         of DESDM
@@ -367,21 +381,22 @@ class SVDESMEDSImageIO(MEDSImageIO):
         fname='psfex-%s.txt' % rerun
         return os.path.join(dir,fname)
 
-    def _get_psfex_blacklist_key(self, run, expname, ccd):
+    def _get_psf_blacklist_key(self, run, expname, ccd):
         """
         this is our unique key into the blacklist
         """
         key='%s-%s-%02d' % (run,expname,ccd)
         return key
 
-    def _load_psfex_blacklist(self, rerun):
+    '''
+    def _load_psf_blacklist(self, rerun):
         """
         each psfex rerun has an associated blacklist file
         in a standard location.  Read this and make
         a dictionary keyed by the image metadata
         """
-        fname=self._get_psfex_blacklist_file(rerun)
-        print("loading psfex blacklist from:",fname)
+        fname=self._get_psf_blacklist_file(rerun)
+        print("loading psf blacklist from:",fname)
 
         blacklist={}
         with open(fname) as fobj:
@@ -393,65 +408,163 @@ class SVDESMEDSImageIO(MEDSImageIO):
                 ccd     = int(data[2])
                 flags   = int(data[3])
 
-                key=self._get_psfex_blacklist_key(run, expname, ccd)
+                key=self._get_psf_blacklist_key(run, expname, ccd)
 
                 blacklist[key] = flags
 
-        self._psfex_blacklist=blacklist
+        self._psf_blacklist=blacklist
+    '''
 
     def _load_psf_s2n(self, conf):
         fname=conf['psf_s2n_checks']['file']
         print("loading psf s/n:",fname)
         self._psf_s2n = fitsio.read(fname)
 
-    def _get_psfex_lists(self):
+    def _get_psf_lists(self):
         """
-        Load psfex objects for each of the SE images
+        Load psf objects for each of the SE images
         include the coadd so we get  the index right
         """
-        print('loading psfex')
+        print('loading psf')
 
         desdata=files.get_desdata()
 
-        psfex_lists=[]
+        psf_lists=[]
         for band in self.iband:
             meds=self.meds_list[band]
 
-            psfex_list = self._get_psfex_objects(meds,band)
-            psfex_lists.append( psfex_list )
+            psf_list = self._get_psf_objects(meds,band)
+            psf_lists.append( psf_list )
 
-        return psfex_lists
+        return psf_lists
 
-    def _psfex_path_from_image_path(self, meds, image_path):
+    def _psf_path_from_image_path(self, meds, image_path):
         """
-        infer the psfex path from the image path.
+        infer the psf path from the image path.
+
+        old SV code only works for psfex
         """
         desdata=files.get_desdata()
         meds_desdata=meds._meta['DESDATA'][0]
 
-        psfpath=image_path.replace('.fits.fz','_psfcat.psf')
-        if desdata not in psfpath:
-            psfpath=psfpath.replace(meds_desdata,desdata)
+        psf_path=image_path.replace('.fits.fz','_psfcat.psf')
+        if desdata not in psf_path:
+            psf_path=psf_path.replace(meds_desdata,desdata)
 
-        if self.conf['use_psf_rerun'] and 'coadd' not in psfpath:
-            psfparts=psfpath.split('/')
+        if self.conf['use_psf_rerun'] and 'coadd' not in psf_path:
+            psfparts=psf_path.split('/')
             psfparts[-6] = 'EXTRA' # replace 'OPS'
             psfparts[-3] = 'psfex-rerun/%s' % self.conf['psf_rerun_version'] # replace 'red'
-            psfpath='/'.join(psfparts)
+            psf_path='/'.join(psfparts)
 
-        return psfpath
+        return psf_path
 
-    def _get_psfex_object(self, psfpath):
+    def _extract_piff_key(self, psf_path):
+        """
+        D00243626_i_c30_r2363p01_piff.fits
+        """
+        bname=os.path.basename(psf_path)
+        bs=bname.split('_')
+        exp=bs[0]
+        ccd=bs[2].replace('c','')
+
+        key='%s-%s' % (exp, ccd)
+        return key
+
+    def _read_piff_exp_info(self, expname):
+        import desmeds
+        pconf=self.conf['imageio']['psfs']
+        expnum = int( expname[1:] )
+        fname=files.get_piff_exp_summary_file(
+            pconf['piff_run'],
+            expnum,
+        )
+        print("reading piff info:",fname)
+        if not os.path.exists(fname):
+            if pconf['allow_missing']:
+                print("    missing exposure:",fname)
+                return None
+            else:
+                raise RuntimeError("Missing piff exposure:",fname)
+        else:
+            return fitsio.read(fname, ext='info')
+
+    def _get_piff_info(self, expname, ccd):
+        if not hasattr(self, '_piff_info'):
+            self._piff_info = {}
+        all_info = self._piff_info
+
+        if expname not in all_info:
+            all_info[expname] = self._read_piff_exp_info(expname)
+
+        expinfo = all_info[expname]
+        if expinfo is None:
+            return None
+
+        ccdnum = int(ccd)
+        w,=numpy.where(expinfo['ccdnum'] == ccdnum)
+        if w.size == 0:
+            raise RuntimeError("piff info for %s %s not found" % (expname,ccd))
+        
+        return expinfo[w[0]]
+
+    def _replace_piff_dir(self, path):
+        """
+        replace actual base path with env variable specifier $PIFF_DATA_DIR
+        """
+        edir = os.environ['PIFF_DATA_DIR']
+        paths = path.split('/')[-3:]
+
+        paths = [edir] + paths
+
+        return '/'.join(paths)
+ 
+    def _get_piff_path(self, info):
+        path = info['piff_file']
+        path = self._replace_piff_dir(path)
+        return path
+
+
+    def _get_piff_object(self, impath):
+        """
+        read a single PIFF object
+        """
+        pconf=self.conf['imageio']['psfs']
+
+        flags=0
+        psf_obj=None
+
+        expname, ccd, key = self._get_expccd_and_key(impath)
+        info = self._get_piff_info(expname, ccd)
+
+        if info is None or info['flag'] != 0 or info['ccdnum']==31:
+            flags=PSF_IN_BLACKLIST
+        else:
+            psf_path = self._get_piff_path(info)
+
+            # we expect a well-formed, existing file if there are no flags set
+            if not os.path.exists(psf_path):
+                print("missing piff file: %s" % psf_path)
+                #flags |= PSF_FILE_READ_ERROR
+                raise MissingDataError("missing psf file: %s" % psf_path)
+            else:
+                print_with_verbosity("loading: %s" % psf_path,verbosity=2)
+                psf_obj = PIFFWrapper(psf_path, pconf['stamp_size'])
+
+        return psf_obj, flags
+
+
+    def _get_psfex_object(self, psf_path):
         """
         read a single PSFEx object
         """
         from psfex import PSFExError, PSFEx
         flags=0
-        pex=None
-        if self.conf['use_psf_rerun'] and 'coadd' not in psfpath:
+        psf_obj=None
+        if self.conf['use_psf_rerun'] and 'coadd' not in psf_path:
             # in Mike's reruns, sometimes the files are corrupted or missing,
             # but these should all be in the blacklist
-            fs=psfpath.split('/')
+            fs=psf_path.split('/')
             run=fs[-5]
             expname=fs[-2]
             bname=fs[-1]
@@ -460,8 +573,8 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
             key=self._get_psfex_blacklist_key(run, expname, ccd)
 
-            if key in self._psfex_blacklist:
-                print("   psfex in blacklist, flagging:",psfpath)
+            if key in self._psf_blacklist:
+                print("   psfex in blacklist, flagging:",psf_path)
                 flags |= PSF_IN_BLACKLIST
 
             if flags == 0 and 'psf_s2n_checks' in self.conf:
@@ -469,7 +582,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
                 pkey=self._psf_s2n['key']
                 w,=numpy.where(key==pkey)
                 if w.size == 0:
-                    print("   psfex bad s2n, flagging:",psfpath)
+                    print("   psfex bad s2n, flagging:",psf_path)
                     flags |= PSF_MISSING_S2N
                 else:
                     s2n_key=pc['key']
@@ -480,34 +593,36 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         if flags == 0:
             # we expect a well-formed, existing file if there are no flags set
-            if not os.path.exists(psfpath):
-                #print("missing psfex: %s" % psfpath)
+            if not os.path.exists(psf_path):
+                #print("missing psfex: %s" % psf_path)
                 #flags |= PSF_FILE_READ_ERROR
-                raise MissingDataError("missing psfex: %s" % psfpath)
+                raise MissingDataError("missing psfex: %s" % psf_path)
             else:
-                print_with_verbosity("loading: %s" % psfpath,verbosity=2)
+                print_with_verbosity("loading: %s" % psf_path,verbosity=2)
                 try:
-                    pex=PSFEx(psfpath)
+                    psf_obj=PSFEx(psf_path)
                 except (PSFExError,IOError) as err:
                     #print("problem with psfex file "
-                    #      "'%s': %s " % (psfpath,str(err)))
+                    #      "'%s': %s " % (psf_path,str(err)))
                     #flags |= PSF_FILE_READ_ERROR
                     raise MissingDataError("problem with psfex file "
-                                           "'%s': %s " % (psfpath,str(err)))
-        return pex, flags
+                                           "'%s': %s " % (psf_path,str(err)))
+        return psf_obj, flags
 
-    def _get_psfex_objects(self, meds, band):
+    def _get_psf_objects(self, meds, band):
         """
-        Load psfex objects for all images
+        Load psf objects for all images
         """
 
-        psfex_list=[]
+        pconf=self.conf['imageio']['psfs']
+
+        psf_list=[]
 
         info=meds.get_image_info()
         nimage=info.size
         nflagged=0
         for i in xrange(nimage):
-            pex=None
+            psf_obj=None
 
             # don't even bother if we are going to skip this image
             flags = self.all_image_flags[band][i]
@@ -518,20 +633,25 @@ class SVDESMEDSImageIO(MEDSImageIO):
             else:
                 if (flags & self.conf['image_flags2check']) == 0:
 
-                    impath=info['image_path'][i].strip()
-                    psfpath = self._psfex_path_from_image_path(meds, impath)
+                    # psf_obj might be None with flags set
 
-                    # pex might be None with flags set
-                    pex, psf_flags = self._get_psfex_object(psfpath)
+                    impath=info['image_path'][i].strip()
+                    if pconf['type']=='piff':
+                        psf_obj, psf_flags = self._get_piff_object(impath)
+                    else:
+                        psf_path = self._psf_path_from_image_path(meds, impath)
+
+                        psf_obj, psf_flags = self._get_psfex_object(psf_path)
+
                     if psf_flags != 0:
                         self.all_image_flags[band][i] |= psf_flags
                         nflagged += 1
 
 
-            psfex_list.append(pex)
+            psf_list.append(psf_obj)
 
-        print("    flagged %d/%d psfex for band %s" % (nflagged,nimage,band))
-        return psfex_list
+        print("    flagged %d/%d psf for band %s" % (nflagged,nimage,band))
+        return psf_list
 
     def _get_replacement_flags(self, filenames):
         from .util import CombinedImageFlags
@@ -635,6 +755,12 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         if 'mof' in self.conf:
             self._load_wcs_data()
 
+        # This is currently separate from the above where the full wcs is
+        # read.  That is partly because the object does not behave the same way,
+        # we would need a wrapper for MOF for example
+        if 'astrom' in self.conf['imageio']:
+            self._load_astrom()
+
     def _set_defaults(self):
         super(Y1DESMEDSImageIO,self)._set_defaults()
         self.conf['read_me_wcs'] = self.conf.get('read_me_wcs',False)
@@ -661,7 +787,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
                 flag_list = pconf['ignore_when_set']
                 mask = 0
                 for flag in flag_list:
-                    mask += DES_BADPIX_MAP[flag]
+                    mask += DESY3_BADPIX_MAP[flag]
 
                 pconf['ignore_when_set_mask'] = mask
 
@@ -672,6 +798,44 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
             self._load_wcs_from_files()
         else:
             self._load_wcs_from_meds()
+
+    def _load_astrom(self):
+        """
+        missing entries (probably blacklisted) will get a None
+        entry in the astroms dict
+        """
+        from . import desastrom
+        reader = desastrom.AstromReader(self.conf['imageio']['astrom'])
+
+        astroms = {}
+        for band in self.iband:
+            astroms[band] = {}
+
+            info = self.meds_list[band].get_image_info()
+            nimage = info.size
+
+            # get coadd file ID            
+            # a total hack, but should work!
+            # assumes all objects from the same coadd!
+            coadd_file_id = numpy.max(numpy.unique(self.meds_list[band]['file_id'][:,0]))
+            assert coadd_file_id >= 0,"Could not get coadd_file_id from MEDS file!"
+
+            for file_id in xrange(nimage):
+                if file_id != coadd_file_id:
+                    path=info['image_path'][file_id].strip()
+                    expname, ccds, key = self._get_expccd_and_key(path)
+
+                    if expname[0] == 'D':
+                        expname = expname[1:]
+
+                    expnum=int(expname)
+                    ccdnum=int(ccds)
+
+                    astroms[band][file_id] = reader.get_wcs(expnum, ccdnum)
+                    
+
+        self.astroms = astroms
+
 
     def _load_wcs_from_meds(self):
         from esutil.wcsutil import WCS
@@ -892,9 +1056,9 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
         msk = self.conf['propagate_star_flags']['ignore_when_set_mask']
 
         is_sat_or_interp = (
-            (im1 & DES_BADPIX_MAP['SATURATE'] != 0) | (im1 & DES_BADPIX_MAP['INTERP'] != 0)
+            (im1 & DESY3_BADPIX_MAP['SATURATE'] != 0) | (im1 & DESY3_BADPIX_MAP['INTERP'] != 0)
         )
-        is_bright_star = (im1 & DES_BADPIX_MAP['STAR'] != 0)
+        is_bright_star = (im1 & DESY3_BADPIX_MAP['STAR'] != 0)
         not_other_bits = (im1 & msk == 0)
 
         q = numpy.where(
@@ -1030,7 +1194,7 @@ class Y1DESMEDSImageIO(SVDESMEDSImageIO):
 
     def _flag_y1_stellarhalo_masked_one(self,mb_obs_list):
 
-        starflag = DES_BADPIX_MAP['STAR']
+        starflag = DESY3_BADPIX_MAP['STAR']
 
         mindex = mb_obs_list.meta['meds_index']
         seg_number = self.meds_list[0]['number'][mindex]
@@ -1088,12 +1252,33 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
     def __init__(self, *args, **kw):
 
         conf=args[0]
-        conf['psfs_in_file'] = conf.get('psfs_in_file',False)
+        pconf=conf['imageio']['psfs']
 
-        if not conf['psfs_in_file']:
+        if pconf['type'] != 'piff' and pconf['type'] != 'infile':
             self._load_psf_map(**kw)
 
         super(Y3DESMEDSImageIO,self).__init__(*args, **kw)
+        self._load_psf_blacklist()
+
+    def _load_psf_blacklist(self):
+        """
+        load the psf blacklist
+        """
+        pconf=self.conf['imageio']['psfs']
+        blacklist={}
+        if 'blacklist' in pconf:
+            fname=os.path.expandvars(pconf['blacklist'])
+            print("reading psf blacklist:",fname)
+            data=fitsio.read(fname)
+            for d in data:
+                if d['bflags'] != 0:
+                    try:
+                        key = str(d['key'],'utf-8')
+                    except:
+                        key = str(d['key'])
+                    blacklist[key] = d
+        self.psf_blacklist=blacklist
+
 
     def get_meta_data_dtype(self):
         """
@@ -1116,8 +1301,7 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
         map_files=extra_data.get('psf_map',None)
         if map_files is None:
-            raise RuntimeError("for Y3 you must send map files or "
-                               "have psfs in the MEDS file")
+            raise RuntimeError("no psf map found")
 
         psf_map={}
 
@@ -1146,15 +1330,8 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
         self._psf_map=psf_map
 
-    def _psfex_path_from_image_path(self, meds, image_path):
-        """
-        infer the psfex path from the image path.
-        """
-
+    def _get_expccd_and_key(self, image_path):
         bname = os.path.basename(image_path)
-        # these bnames look like DES0157-3914_r2577p01_D00490381_r_c48_nwgint.fits
-        # D00495879_z_c42_r2377p01_immasked_nullwt.fits
-        # we need the exposure name, e.g. D00490381 and the ccd number, e.g. 48
 
         fs = bname.split('_')
         if bname[0:3] == 'DES':
@@ -1166,10 +1343,17 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
         key='%s-%s' % (expname, ccd)
 
+        return expname, ccd, key
 
+
+    def _psf_path_from_image_path(self, meds, image_path):
+        """
+        infer the psf path from the image path.
+        """
+
+        expname, ccd, key = self._get_expccd_and_key(image_path)
 
         psf_path = self._psf_map[key]
-
 
         psf_path = os.path.expandvars(psf_path)
         return psf_path
@@ -1178,4 +1362,74 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
         dt = super(SVDESMEDSImageIO, self).get_epoch_meta_data_dtype()
         dt += [('image_id','S49')]  # image_id specified in meds creation, e.g. for image table
         return dt
+
+class PIFFWrapper(dict):
+    """
+    provide an interface consistent with the PSFEx class
+    """
+    def __init__(self, psf_path, stamp_size):
+        import piff
+        self.piff_obj=piff.read(psf_path)
+        self['filename'] = psf_path
+        self['stamp_size'] = stamp_size
+
+        self.center_cache={}
+
+    def get_rec(self, row, col):
+        """
+        get the psf reconstruction as a numpy array
+
+        image is normalized
+        """
+        #import images
+        #print("file:",self['filename'])
+        #print("drawing at",row,col)
+        #gsim = self.piff_obj.draw(x=col, y=row)
+        # this is how to center the image in PIFF
+        gsim = self.piff_obj.draw(
+            x=int(col+0.5),
+            y=int(row+0.5),
+            stamp_size=self['stamp_size'],
+        )
+        im = gsim.array
+
+        im *= (1.0/im.sum())
+
+        self._cache_center(row, col, im)
+
+        #images.multiview(im, file='test.png')
+        #stop
+        return im
+    
+    def get_center(self, row, col):
+        """
+        get the center location
+        """
+
+        key = self._get_center_cache_key(row, col)
+
+        if key not in self.center_cache:
+            # this will force a cache
+            im = self.get_rec(row, col)
+
+        return self.center_cache[key]
+        
+    def get_sigma(self):
+        """
+        pixels
+        """
+        return numpy.sqrt(4.0/2.0)
+
+    def _cache_center(self, row, col, im):
+        """
+        cache the center for the get_center call
+        """
+        key = self._get_center_cache_key(row, col)
+
+        cen = (numpy.array(im.shape)-1.0)/2.0
+
+        self.center_cache[key] = cen
+
+    def _get_center_cache_key(self, row, col):
+        key = '%.16g-%.16g' % (row, col)
 

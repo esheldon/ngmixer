@@ -145,6 +145,37 @@ def get_psfmap_file_fromfile(meds_file):
         info['band'],
     )
 
+def get_piff_map_file_fromfile(piff_run, meds_file):
+    """
+    get the psfmap file from a meds file input
+    """
+    import desmeds
+    info=get_meds_info(meds_file)
+    return desmeds.files.get_piff_map_file(
+        info['medsconf'],
+        piff_run,
+        info['tile_id'],
+        info['band'],
+    )
+
+def get_piff_exp_summary_file(piff_run, expnum):
+    """
+    expnum not zero padded
+    """
+    base_dir=os.environ['PIFF_DATA_DIR']
+
+    fname = 'exp_psf_cat_%d.fits' % expnum
+
+    fname = os.path.join(
+        base_dir,
+        piff_run,
+        '%d' % expnum,
+        fname,
+    )
+    return fname
+
+
+
 
 def get_ngmixer_output_dir():
     """
@@ -192,8 +223,7 @@ def get_condor_submit(tile_id, run):
     dir=get_condor_dir(run)
     return os.path.join(dir, '%s.condor' % tile_id)
 
-
-def get_nbrs_dir(tile_id, run):
+def get_nbrs_dir_old(tile_id, run):
     """
     get the directory holding the nbrs info for the
     indicated meds file
@@ -204,11 +234,23 @@ def get_nbrs_dir(tile_id, run):
         tile_id,
     )
 
+
+def get_nbrs_dir(run):
+    """
+    get the directory holding the nbrs info for the
+    indicated meds file
+    """
+    return os.path.join(
+        get_ngmixer_output_dir(),
+        run,
+        'output-nbrs',
+    )
+
 def get_nbrs_file(tile_id, run, ext='.fits'):
     """
     get the path to a nbrs file given a MEDS file
     """
-    dir=get_nbrs_dir(tile_id, run)
+    dir=get_nbrs_dir(run)
 
     info={}
     info['tile_id'] = tile_id
@@ -239,7 +281,7 @@ def get_fof_file(tile_id, run, ext='.fits'):
     """
     get the path to a nbrs FOF file given a MEDS file
     """
-    dir=get_nbrs_dir(tile_id, run)
+    dir=get_nbrs_dir(run)
 
     info={}
     info['tile_id'] = tile_id

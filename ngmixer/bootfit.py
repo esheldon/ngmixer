@@ -98,9 +98,13 @@ class NGMixBootFitter(BaseFitter):
         pars = [modl+'_max_pars' for modl in self['fit_models']]
         covs = [modl+'_max_pars_cov' for modl in self['fit_models']]
 
-        coadd_models = ['coadd_'+modl for modl in models]
-        coadd_pars = ['coadd_'+modl for modl in pars]
-        coadd_covs = ['coadd_'+modl for modl in covs]
+        if self.get('use_coadd_prefix',True):
+            pre='coadd_'
+        else:
+            pre=''
+        coadd_models = [pre+modl for modl in models]
+        coadd_pars = [pre+modl for modl in pars]
+        coadd_covs = [pre+modl for modl in covs]
 
         return models,pars,covs,coadd_models,coadd_pars,coadd_covs,5+self['nband']
 
@@ -684,9 +688,14 @@ class NGMixBootFitter(BaseFitter):
                     ed['wmax'] = obs.weight.max()
                     ed['psf_counts'] = psf_obs.image.sum()
 
-                    if 'fitter' in psf_obs.meta:
-                        res = obs.get_psf().meta['fitter'].get_result()
+                    pmeta=psf_obs.meta
+
+                    if 'fitter' in pmeta:
+                        res = pmeta['fitter'].get_result()
                         ed['psf_fit_flags'] = res['flags']
+                        if 'flux' in res:
+                            s2n = res['flux']/res['flux_err']
+                            ed['psf_model_s2n'] = s2n
 
                     if psf_obs.has_gmix():
                         used = True
@@ -868,12 +877,15 @@ class NGMixBootFitter(BaseFitter):
         psf_pars=self['psf_pars']
         fit_pars=psf_pars['fit_pars']
 
+        min_s2n = self.get('min_psf_model_s2n',None)
+
         boot.fit_psfs(psf_pars['model'],
                       None,
                       Tguess_key='Tguess',
                       ntry=psf_pars['ntry'],
                       fit_pars=fit_pars,
-                      norm_key='psf_norm')
+                      norm_key='psf_norm',
+                      min_s2n=min_s2n)
 
         # check for no obs in a band if PSF fit fails
         for band,obs_list in enumerate(boot.mb_obs_list):
@@ -1122,6 +1134,7 @@ class NGMixBootFitter(BaseFitter):
             ('wsum','f8'),
             ('wmax','f8'),
             ('psf_fit_flags','i4'),
+            ('psf_model_s2n','f8'),
             ('psf_counts','f8'),
             ('psf_fit_g','f8',2),
             ('psf_fit_T','f8'),
@@ -1137,6 +1150,7 @@ class NGMixBootFitter(BaseFitter):
         epoch_data['wsum'] = DEFVAL
         epoch_data['wmax'] = DEFVAL
         epoch_data['psf_fit_flags'] = NO_ATTEMPT
+        epoch_data['psf_model_s2n'] = DEFVAL
         epoch_data['psf_counts'] = DEFVAL
         epoch_data['psf_fit_g'] = DEFVAL
         epoch_data['psf_fit_T'] = DEFVAL

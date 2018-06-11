@@ -19,9 +19,14 @@ class DESConcat(Concat):
         assert 'bands' in kwargs,"band names must be supplied to DESConcat"
         self.bands = kwargs.pop('bands')
         self.nbands = len(self.bands)
-        self.blind = kwargs.pop('blind',True)
+
 
         super(DESConcat,self).__init__(*args,**kwargs)
+
+        if 'blinding' not in self.config['collate']:
+            raise ValueError("a blinding entry must be present in the collate "
+                             "of the configuration")
+
         #self.config['fit_models'] = list(self.config['model_pars'].keys())
 
     def read_chunk(self, fname):
@@ -30,7 +35,7 @@ class DESConcat(Concat):
         """
         d,ed,nd,m = super(DESConcat,self).read_chunk(fname)
 
-        if self.blind:
+        if self.config['collate']['blinding'] is not None:
             self.blind_data(d)
 
         return d,ed,nd,m
@@ -45,7 +50,7 @@ class DESConcat(Concat):
         This also includes the Q values from B&A
         """
 
-        blinding = self.config['collate']['blinding']
+        blinding = self.config['collate']['blinding']['type']
         if blinding =='y3':
             from blind_des_catalog_y3 import blind_arrays
         else:
