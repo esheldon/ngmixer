@@ -1,5 +1,7 @@
 #######################################################
 # imports
+__version__="v0.9.6"
+
 from . import files
 from . import ngmixing
 from . import priors
