@@ -1,5 +1,5 @@
 from __future__ import print_function
-import os
+import os, sys
 import numpy
 import copy
 import fitsio
@@ -627,6 +627,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
             # don't even bother if we are going to skip this image
             flags = self.all_image_flags[band][i]
 
+            # assuming coadd is first
             if (i==0) and not self.conf['fit_coadd_galaxy']:
                 print("skipping coadd psf")
                 self.all_image_flags[band][i] |= 1
@@ -639,7 +640,10 @@ class SVDESMEDSImageIO(MEDSImageIO):
                     if pconf['type']=='piff':
                         psf_obj, psf_flags = self._get_piff_object(impath)
                     else:
-                        psf_path = self._psf_path_from_image_path(meds, impath)
+                        if i==0:
+                            psf_path=self._coadd_psf_map[band]
+                        else:
+                            psf_path = self._psf_path_from_image_path(meds, impath)
 
                         psf_obj, psf_flags = self._get_psfex_object(psf_path)
 
@@ -1304,6 +1308,7 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
             raise RuntimeError("no psf map found")
 
         psf_map={}
+        coadd_psf_map=[]
 
         for map_file in map_files:
             print("reading psf map:",map_file)
@@ -1314,24 +1319,31 @@ class Y3DESMEDSImageIO(Y1DESMEDSImageIO):
 
                     if len(ls) == 2:
                         # standard style
-                        exp_ccd_name=ls[0]
+                        key=ls[0]
                         pattern=ls[1]
                     elif len(ls)==3:
                         # DESDM style
                         expnum=int(ls[0])
                         ccdnum=int(ls[1])
                         pattern=ls[2]
-                        exp_ccd_name = 'D%08d-%02d' % (expnum,ccdnum)
+                        if expnum==-9999:
+                            # coadd psf entry
+                            coadd_psf_map.append(pattern)
+                            continue
+                        else:
+                            key = 'D%08d-%02d' % (expnum,ccdnum)
 
                     else:
                         raise ValueError("badly formatted psf map line: '%s'" % line.strip())
 
-                    psf_map[exp_ccd_name] = pattern
+                    psf_map[key] = pattern
 
+        assert len(coadd_psf_map)==len(map_files)
         self._psf_map=psf_map
+        self._coadd_psf_map=coadd_psf_map
 
     def _get_expccd_and_key(self, image_path):
-        bname = os.path.basename(image_path)
+        bname = mks(os.path.basename(image_path))
 
         fs = bname.split('_')
         if bname[0:3] == 'DES':
@@ -1432,4 +1444,19 @@ class PIFFWrapper(dict):
 
     def _get_center_cache_key(self, row, col):
         key = '%.16g-%.16g' % (row, col)
+
+def mks(val):
+    """
+    make sure the value is a string, paying mind to python3 vs 2
+    """
+    if sys.version_info > (3,0,0):
+        if isinstance(val, bytes):
+            sval = str(val, 'utf-8')
+        else:
+            sval = str(val)
+    else:
+        sval = str(val)
+    
+    return sval
+
 
