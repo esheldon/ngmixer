@@ -109,10 +109,12 @@ def get_gauss_aper_flux_cat(cat,
     tpars=cat[pname][0]
     nband=len(tpars)-6+1
     dt=[
+        ('id','i8'),
         (gap_flags_name,'i4'),
         (gap_flux_name,'f8',nband),
     ]
     output=np.zeros(cat.size, dtype=dt)
+    output['id']=cat['id']
     output[gap_flags_name] = defaults.NO_ATTEMPT
     output[gap_flux_name] = defaults.DEFVAL
 
@@ -127,19 +129,23 @@ def get_gauss_aper_flux_cat(cat,
             bsize=cat['box_size'][i]
             dims=[bsize,bsize]
 
+            pars=cat[pname][i].copy()
+            pars[4] = pars[4].clip(min=0.0001)
             if model=='cm':
                 output[gap_flux_name][i] = gapmeas.get_aper_flux(
                     cat[fracdev_name][i],
                     cat[TdByTe_name][i],
-                    cat[pname][i],
+                    pars,
                     dims,
                 )
             else:
                 output[gap_flux_name][i] = gapmeas.get_aper_flux(
-                    cat[pname][i],
+                    pars,
                     model,
                     dims,
                 )
+
+            output[gap_flags_name][i] = 0
 
         except ngmix.GMixRangeError as err:
             print(str(err))
