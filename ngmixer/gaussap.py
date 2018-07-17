@@ -9,8 +9,8 @@ from . import defaults
 
 def add_gauss_aper_flux_cat(cat,
                             model,
-                            pixel_scale=0.263,
-                            weight_fwhm=2.5,
+                            pixel_scale,
+                            weight_fwhm,
                             psf_fwhm=None):
     """
     Measure synthesized gaussian weighted apertures for a simple ngmix model,
@@ -24,11 +24,11 @@ def add_gauss_aper_flux_cat(cat,
         Output array from an ngmixer run.
     model: string
         e.g. exp,dev,gauss,cm
-    pixel_scale: float, optional
-        Pixel scale, default 0.263 arcsec/pixel
-    weight_fwhm: float, optional
-        FWHM of the weight function in the same units as the
-        pixel scale.  Default 2.5 arcsec
+    pixel_scale: float
+        Pixel scale for images
+    weight_fwhm: float
+        FWHM of the gaussian weight function in the same units as the pixel
+        scale.
     psf_fwhm: float, optional
         Size of the small psf with which to convolve the profile. Default
         is the pixel scale.  This psf helps avoid issues with resolution
@@ -36,8 +36,8 @@ def add_gauss_aper_flux_cat(cat,
 
 
     output=get_gauss_aper_flux_cat(
-        cat,
-        model,
+        cat=cat,
+        model=model,
         pixel_scale=pixel_scale,
         weight_fwhm=weight_fwhm,
         psf_fwhm=psf_fwhm,
@@ -65,8 +65,8 @@ def add_gauss_aper_flux_cat(cat,
 
 def get_gauss_aper_flux_cat(cat,
                             model,
-                            pixel_scale=0.263,
-                            weight_fwhm=2.5,
+                            pixel_scale,
+                            weight_fwhm,
                             psf_fwhm=None):
     """
     Measure synthesized gaussian weighted apertures for a simple ngmix
@@ -78,11 +78,11 @@ def get_gauss_aper_flux_cat(cat,
         Output array from an ngmixer run.
     model: string
         e.g. exp,dev,gauss,cm
-    pixel_scale: float, optional
-        Pixel scale, default 0.263 arcsec/pixel
-    weight_fwhm: float, optional
+    pixel_scale: float
+        Pixel scale for the images.
+    weight_fwhm: float
         FWHM of the weight function in the same units as the
-        pixel scale.  Default 2.5 arcsec
+        pixel scale.
     psf_fwhm: float, optional
         Size of the small psf with which to convolve the profile. Default
         is the pixel scale.  This psf helps avoid issues with resolution
@@ -149,18 +149,18 @@ def get_gauss_aper_flux_cat(cat,
 
 
 class GaussAperSimple(object):
-    def __init__(self, pixel_scale=0.263, weight_fwhm=2.5, psf_fwhm=None):
+    def __init__(self, pixel_scale, weight_fwhm, psf_fwhm=None):
         """
         measure synthesized gaussian weighted apertures for a simple ngmix
         model
 
         parameters
         ----------
-        pixel_scale: float, optional
-            Pixel scale, default 0.263 arcsec/pixel
-        weight_fwhm: float, optional
+        pixel_scale: float
+            Pixel scale for images.
+        weight_fwhm: float
             FWHM of the weight function in the same units as the
-            pixel scale.  Default 2.5 arcsec
+            pixel scale.
         psf_fwhm: float, optional
             Size of the small psf with which to convolve the profile. Default
             is the pixel scale.  This psf helps avoid issues with resolution
