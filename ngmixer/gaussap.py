@@ -11,7 +11,8 @@ def add_gauss_aper_flux_cat(cat,
                             model,
                             pixel_scale,
                             weight_fwhm,
-                            psf_fwhm=None):
+                            psf_fwhm=None,
+                            verbose=True):
     """
     Measure synthesized gaussian weighted apertures for a simple ngmix model,
     and add entries to the input ngmixer output catalog.  If the entries
@@ -67,7 +68,8 @@ def get_gauss_aper_flux_cat(cat,
                             model,
                             pixel_scale,
                             weight_fwhm,
-                            psf_fwhm=None):
+                            psf_fwhm=None,
+                            verbose=True):
     """
     Measure synthesized gaussian weighted apertures for a simple ngmix
     model, for all entries in an ngmixer output catalog
@@ -119,7 +121,7 @@ def get_gauss_aper_flux_cat(cat,
     output[gap_flux_name] = defaults.DEFVAL
 
     for i in range(cat.size):
-        if ((i+1) % 10) == 0:
+        if verbose and ((i+1) % 10) == 0:
             print("%d/%d" % (i+1,cat.size))
 
         if cat['flags'][i] != 0:
@@ -148,7 +150,8 @@ def get_gauss_aper_flux_cat(cat,
             output[gap_flags_name][i] = 0
 
         except ngmix.GMixRangeError as err:
-            print(str(err))
+            if verbose:
+                print(str(err))
             output[gap_flags_name][i] = defaults.GAL_FIT_FAILURE
 
     return output
