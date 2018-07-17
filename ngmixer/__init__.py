@@ -14,6 +14,7 @@ from . import render_ngmix_nbrs
 from .render_ngmix_nbrs import RenderNGmixNbrs, DESRenderNGmixNbrs
 
 from . import forcephot
+from . import gaussap
 
 #######################################################
 # setup fitter dict

@@ -94,9 +94,6 @@ parser.add_argument("--seed", default=None,type=int,
                   help=("random seed to make seeds for jobs.  "
                         "If not sent, is gotten from the config file"))
 
-parser.add_argument('--desdm',action='store_true',
-                  help="the MEDS files, psf maps are DESDM style")
-
 class MegaMixer(dict):
     """
     conf has ngmix config plus

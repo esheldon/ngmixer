@@ -663,6 +663,7 @@ class NGMixer(dict):
 
         print('checkpointing at %f minutes' % (tm/60))
         print(self.checkpoint_file)
+        files.makedir_fromfile(self.checkpoint_file)
 
         # make checkpoint data
         cd = numpy.zeros(1,dtype=[('curr_fofindex','i8'),('random_state','|S16384')])

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from __future__ import print_function
+from __future__ import print_function, division
 import os
 import sys
 import copy
@@ -56,7 +56,7 @@ class MedsNbrs(object):
 
         for band,m in enumerate(self.meds_list):
             #expand the stamps and get edges
-            dsize = (self.conf['new_maxsize']-self.conf['maxsize_to_replace'])/2
+            dsize = (self.conf['new_maxsize']-self.conf['maxsize_to_replace'])//2
             self.sze[band] = m['box_size'].copy()
             self.l[band] = m['orig_start_row'][:,0].copy()
             self.r[band] = m['orig_start_row'][:,0].copy()
