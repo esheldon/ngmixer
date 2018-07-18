@@ -17,6 +17,7 @@ import shutil
 import errno
 
 import esutil as eu
+import ngmixer
 from ngmixer import files
 from ngmixer.nbrsfofs import MedsNbrs,NbrsFoF
 
@@ -80,6 +81,11 @@ def main():
             clobber=True,
         )
         
+        plotfile=fof_file.replace('.fits','.png')
+        assert plotfile != fof_file
+        ngmixer.nbrsfofs.plot_fofs(m, fof_data, plotfile)
+
+
     return None
 
     

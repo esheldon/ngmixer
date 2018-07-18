@@ -305,3 +305,112 @@ class NbrsFoFExtractor(object):
 
         if self.start > self.end:
             raise ValueError("one must extract at least one object")
+
+def plot_fofs(m, fof, plotfile, minsize=2):
+    """
+    make an ra,dec plot of the FOF groups
+
+    Only groups with at least two members ares shown
+    """
+    try:
+        import biggles
+        import esutil as eu
+        have_biggles=True
+    except ImportError:
+        have_biggles=False
+        
+    if not have_biggles:
+        print("skipping FOF plot because biggles is not "
+              "available")
+        return
+
+    hd=eu.stat.histogram(fof['fofid'], more=True)
+    wlarge,=numpy.where(hd['hist'] >= minsize)
+    ngroup=wlarge.size
+    colors=rainbow(ngroup)
+
+    ffront=os.path.basename(plotfile)
+    name=ffront.split('-mof-')[0]
+    title='%s FOF groups' % name
+    #aspect_ratio=ysize/xsize
+    aratio = (m['dec'].max()-m['dec'].min())/(m['ra'].max()-m['ra'].min())
+    plt=biggles.FramedPlot(
+        xlabel='RA',
+        ylabel='DEC',
+        title=title,
+        aspect_ratio=aratio,
+    )
+    allpts=biggles.Points(
+        m['ra'], m['dec'],
+        type='dot',
+    )
+    plt.add(allpts)
+
+    rev=hd['rev']
+    icolor=0
+    for i in xrange(hd['hist'].size):
+        if rev[i] != rev[i+1]:
+            w=rev[ rev[i]:rev[i+1] ]
+            if w.size >= minsize:
+                indices=fof['number'][w]-1
+
+                color=colors[icolor]
+                pts = biggles.Points(
+                    m['ra'][indices], m['dec'][indices],
+                    type='circle',
+                    size=1,
+                    color=color,
+                )
+
+                plt.add(pts)
+                icolor += 1
+
+    print("writing:",plotfile)
+    #plt.write(plotfile, dpi=150)
+    # xsize, ysize, filename
+    plt.write_img(1500,int(1500*aratio),plotfile)
+
+def rainbow(num, type='hex'):
+    """
+    make rainbow colors
+
+    parameters
+    ----------
+    num: integer
+        number of colors
+    type: string, optional
+        'hex' or 'rgb', default hex
+    """
+    import colorsys
+
+    def rgb_to_hex(rgb):
+        return '#%02x%02x%02x' % rgb
+
+    # not going to 360
+    minh = 0.0
+    # 270 would go to pure blue
+    #maxh = 270.0
+    maxh = 285.0
+
+    hstep = (maxh-minh)/(num-1)
+    colors=[]
+    for i in xrange(num):
+        h = minh + i*hstep
+
+        # just change the hue
+        r,g,b = colorsys.hsv_to_rgb(h/360.0, 1.0, 1.0)
+        r *= 255
+        g *= 255
+        b *= 255
+        if type == 'rgb':
+            colors.append( (r,g,b) )
+        elif type == 'hex':
+
+            rgb = (int(r), int(g), int(b))
+            colors.append( rgb_to_hex(rgb) )
+        else:
+            raise ValueError("color type should be 'rgb' or 'hex'")
+
+    return colors
+
+
