@@ -332,7 +332,6 @@ def plot_fofs(m, fof, plotfile, minsize=2):
     ffront=os.path.basename(plotfile)
     name=ffront.split('-mof-')[0]
     title='%s FOF groups' % name
-    #aspect_ratio=ysize/xsize
     aratio = (m['dec'].max()-m['dec'].min())/(m['ra'].max()-m['ra'].min())
     plt=biggles.FramedPlot(
         xlabel='RA',
@@ -366,8 +365,6 @@ def plot_fofs(m, fof, plotfile, minsize=2):
                 icolor += 1
 
     print("writing:",plotfile)
-    #plt.write(plotfile, dpi=150)
-    # xsize, ysize, filename
     plt.write_img(1500,int(1500*aratio),plotfile)
 
 def rainbow(num, type='hex'):
