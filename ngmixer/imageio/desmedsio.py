@@ -645,6 +645,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
                         else:
                             psf_path = self._psf_path_from_image_path(meds, impath)
 
+                        psf_path=os.path.expandvars(psf_path)
                         psf_obj, psf_flags = self._get_psfex_object(psf_path)
 
                     if psf_flags != 0:
