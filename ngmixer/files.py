@@ -38,40 +38,54 @@ def read_config(fname):
     return data
 
 
-def get_meds_info(meds_file):
+def get_meds_info(meds_file, tile_id=None):
     """
     extract information from a Y3+ meds file path
     """
 
     bname=os.path.basename(meds_file)
 
-    fs = bname.split('_')
-
-    if len(fs)==4:
-        # this is a desdm MEDS file
-
-        tilename = fs[0]
-        reqatt   = fs[1]
-        band     = fs[2]
-
-        # use underscore for consistency
-        tile_id='%s_%s' % (tilename,reqatt)
-
+    if tile_id is not None:
+        if tile_id not in bname:
+            raise ValueError("provided tile_id '%s' not in "
+                             "filename '%s'" % (tile_id,bname))
+        tilename=tile_id
+        bname=bname.replace(tile_id,'')
+        fs = bname.split('_')
+        band = fs[1]
+        reqatt=None
         end = bname.split('-')[-1]
         medsconf = end.replace('.fits.fz','').replace('.fits','')
 
     else:
 
-        # tile id and tilename are the same
-        tilename=fs[0]
-        tile_id=tilename
-        reqatt=None
-        band=fs[1]
-        
-        end=fs[-1]
+        fs = bname.split('_')
 
-        # this is actually the meds configuration
-        medsconf = end.replace('.fits.fz','').replace('meds-','')
+        if len(fs)==4:
+            # this is a desdm MEDS file
+
+            tilename = fs[0]
+            reqatt   = fs[1]
+            band     = fs[2]
+
+            # use underscore for consistency
+            tile_id='%s_%s' % (tilename,reqatt)
+
+            end = bname.split('-')[-1]
+            medsconf = end.replace('.fits.fz','').replace('.fits','')
+
+        else:
+
+            # tile id and tilename are the same
+            tilename=fs[0]
+            tile_id=tilename
+            reqatt=None
+            band=fs[1]
+            
+            end=fs[-1]
+
+            # this is actually the meds configuration
+            medsconf = end.replace('.fits.fz','').replace('meds-','')
 
     return {
         'medsconf':medsconf,
