@@ -58,6 +58,9 @@ parser.add_argument(
     help=('the meds files to process, or a yaml file '
           'describing the tile set to use'),
 )
+parser.add_argument("--tile-id",
+                  help=("must be sent when meds files rather "
+                        "than a tile list is sent"))
 
 parser.add_argument("--walltime",default='48:00',
                   help=("wall time for queue determination (e.g. in lsf)"))
@@ -98,7 +101,10 @@ class MegaMixer(dict):
     """
     conf has ngmix config plus
     """
-    def __init__(self, ngmix_config, meds_files,
+    def __init__(self,
+                 ngmix_config,
+                 meds_files,
+                 tile_id, # can be provided if not in standard form
                  psf_map_files=None,
                  walltime='48:00',
                  walltime_e='4:00',
@@ -133,7 +139,7 @@ class MegaMixer(dict):
 
         self.meds_string=' '.join(self.meds_files)
 
-        self.info= files.get_meds_info(meds_files[0])
+        self.info= files.get_meds_info(meds_files[0],tile_id=tile_id)
 
         self._set_files()
 
@@ -171,11 +177,17 @@ class MegaMixer(dict):
             fname = self._get_chunk_file(chunk,rng,ext='.fits')
             flist.append(fname)
 
-        collated_file=files.get_collated_file_fromfile(
-            self.meds_files[0],
+        #collated_file=files.get_collated_file_fromfile(
+        #    self.meds_files[0],
+        #    self.conf['run'],
+        #    blind=self.blind,
+        #)
+        collated_file=files.get_collated_file(
+            self.info['tile_id'],
             self.conf['run'],
             blind=self.blind,
         )
+
 
         concatter = cls(
             self.ngmix_config,
@@ -301,7 +313,7 @@ class MegaMixer(dict):
                 args['mof_opt'] = '--mof-file=%s' % mof_file
 
         if 'forced_photometry' in self.conf:
-            models_file = files.get_collated_file_fromfile(
+            models_file = files.get_collated_file(
                 self.meds_files[0],
                 self.conf['forced_photometry']['models_run'],
             )
@@ -344,7 +356,9 @@ class MegaMixer(dict):
 
         args['ngmix_config'] = self.ngmix_config
         args['meds_file']    = self.meds_files[0]
-        args['logfile']      = logfile
+        args['logfile']      = self._get_nbrs_file(ext='.log')
+        args['nbrs_file']    = self._get_nbrs_file()
+        args['fof_file']    = self._get_fof_file()
 
         scr = fmt.format(**args)
 
@@ -362,8 +376,12 @@ class MegaMixer(dict):
         mof file used for subtracting neighbor light
         """
 
-        mof_file = files.get_collated_file_fromfile(
-            self.meds_files[0],
+        #mof_file = files.get_collated_file_fromfile(
+        #    self.meds_files[0],
+        #    self.conf['correct_meds']['mof_run'],
+        #)
+        mof_file = files.get_collated_file(
+            self.info['tile_id'],
             self.conf['correct_meds']['mof_run'],
         )
         return mof_file
@@ -380,34 +398,57 @@ class MegaMixer(dict):
 
 
     def _make_chunk_dir(self, chunk, rng):
-        f=files.get_chunk_file_fromfile(
-            self.meds_files[0],
+        #f=files.get_chunk_file_fromfile(
+        #    self.meds_files[0],
+        #    self.conf['run'],
+        #    rng,
+        #)
+        #files.makedirs_fromfile(f)
+        d=files.get_chunk_dir(
+            self.info['tile_id'],
             self.conf['run'],
             rng,
         )
-        files.makedirs_fromfile(f)
+        files.try_makedir(d)
+
 
     def _get_chunk_file(self, chunk, rng, ext='.fits'):
-        fname = files.get_chunk_file_fromfile(
-            self.meds_files[0],
+        #fname = files.get_chunk_file_fromfile(
+        #    self.meds_files[0],
+        #    self.conf['run'],
+        #    rng,
+        #    missing=self.missing,
+        #    ext=ext,
+        #)
+        fname = files.get_chunk_file(
+            self.info['tile_id'],
             self.conf['run'],
             rng,
-            missing=self.missing,
             ext=ext,
         )
         return expand_path(fname)
 
     def _get_nbrs_file(self, ext='.fits'):
-        fname = files.get_nbrs_file_fromfile(
-            self.meds_files[0],
+        #fname = files.get_nbrs_file_fromfile(
+        #    self.meds_files[0],
+        #    self.conf['run'],
+        #    ext=ext,
+        #)
+        fname = files.get_nbrs_file(
+            self.info['tile_id'],
             self.conf['run'],
             ext=ext,
         )
         return expand_path(fname)
 
     def _get_fof_file(self, ext='.fits'):
-        fname = files.get_fof_file_fromfile(
-            self.meds_files[0],
+        #fname = files.get_fof_file_fromfile(
+        #    self.meds_files[0],
+        #    self.conf['run'],
+        #    ext=ext,
+        #)
+        fname = files.get_fof_file(
+            self.info['tile_id'],
             self.conf['run'],
             ext=ext,
         )
@@ -481,6 +522,8 @@ fi
 
 
 logfile="{logfile}"
+nbrs_file="{nbrs_file}"
+fof_file="{fof_file}"
 
 logbase=$(basename $logfile)
 tmplog=$tmpdir/$logbase
@@ -488,7 +531,11 @@ tmplog=$tmpdir/$logbase
 config="{ngmix_config}"
 meds="{meds_file}"
 
-ngmixer-meds-make-nbrs-data $config $meds &> $tmplog
+ngmixer-meds-make-nbrs-data \
+        --nbrs-file=$nbrs_file \
+        --fof-file=$fof_file \
+        $config \
+        $meds &> $tmplog
 mv -vf $tmplog $logfile
 """
 
@@ -830,10 +877,7 @@ def get_megamixer(system):
 
     return MMixer
 
-def process_meds_files(args, meds_files):
-
-    ngmix_config = read_yaml(args.ngmix_config)
-    psfs = ngmix_config['imageio']['psfs']
+def get_psf_map_files(psfs, meds_files, tile_id):
     if psfs['type']=='infile' or psfs['type']=='piff':
         psf_map_files=None
     else:
@@ -841,7 +885,25 @@ def process_meds_files(args, meds_files):
             piff_run=psfs['piff_run']
             psf_map_files = [files.get_piff_map_file_fromfile(piff_run,f) for f in meds_files]
         else:
-            psf_map_files = [files.get_psfmap_file_fromfile(f) for f in meds_files]
+            import desmeds
+            psf_map_files=[]
+            for f in meds_files:
+                info = files.get_meds_info(f,tile_id=tile_id)
+                mf = desmeds.files.get_psfmap_file(
+                    info['medsconf'],
+                    info['tile_id'],
+                    info['band'],
+                )
+                mf=os.path.expandvars(mf)
+                psf_map_files.append(mf)
+
+    return psf_map_files
+
+def process_meds_files(args, meds_files, tile_id):
+
+    ngmix_config = read_yaml(args.ngmix_config)
+    psfs = ngmix_config['imageio']['psfs']
+    psf_map_files = get_psf_map_files(psfs, meds_files, tile_id)
 
     # get command
     cmd = args.command
@@ -852,6 +914,7 @@ def process_meds_files(args, meds_files):
     ngmm = MMixer(
         args.ngmix_config,
         meds_files,
+        tile_id,
         psf_map_files=psf_map_files,
         seed=args.seed,
         missing=args.missing,
@@ -912,7 +975,7 @@ def process_tile_list(args):
         )
 
         try:
-            process_meds_files(args, meds_files)
+            process_meds_files(args, meds_files, tile_id=tile_id)
         except ngmixer.util.MissingDataError as err:
             if ntiles==1 and not args.skip_errors:
                 raise
@@ -935,7 +998,10 @@ def main():
     if 'yaml' in args.meds_files[0]:
         process_tile_list(args)
     else:
-        process_meds_files(args, args.meds_files)
+        if args.tile_id is None:
+            raise ValueError("you must send --tile-id when meds files are sent "
+                             "rather than a tile list")
+        process_meds_files(args, args.meds_files, args.tile_id)
 
 if __name__ == '__main__':
     main()
