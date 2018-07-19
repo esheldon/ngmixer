@@ -37,17 +37,60 @@ class MedsNbrs(object):
         check_seg - use object's seg map to get nbrs in addition to postage stamp overlap
     """
 
-    def __init__(self,meds_list,conf):
+    def __init__(self,meds_list,conf,cat=None):
 
         if isinstance(meds_list, meds.MEDS):
             meds_list=[meds_list]
 
         self.meds_list = meds_list
         self.conf = conf
+        self.cat = cat
 
         self._init_bounds()
 
     def _init_bounds(self):
+        if self.cat is not None:
+            return self._init_bounds_by_radius()
+        else:
+            return self._init_bounds_by_stamps()
+
+    def _init_bounds_by_radius(self):
+        self.l = {}
+        self.r = {}
+        self.t = {}
+        self.b = {}
+        self.sze = {}
+
+        min_radius=self.conf.get('min_radius',None)
+        if min_radius is None:
+            min_radius=0.0
+
+        max_radius=self.conf.get('max_radius',None)
+        if max_radius is None:
+            max_radius=numpy.inf
+
+        for band,m in enumerate(self.meds_list):
+            r=numpy.sqrt(self.cat['isoarea_image'].clip(min=1)/3.14)
+
+            r *= self.conf['radius_mult']
+            r.clip(min=min_radius, max=max_radius, out=r)
+
+            r += self.conf['padding']
+
+
+            rowcen = m['orig_row'][:,0]
+            colcen = m['orig_col'][:,0]
+
+            # factor of 2 because this should be a diameter as it is used later
+            diameter = r*2
+            self.sze[band] = diameter
+
+            self.l[band] = rowcen - r
+            self.r[band] = rowcen + r
+            self.b[band] = colcen - r
+            self.t[band] = colcen + r
+
+    def _init_bounds_by_stamps(self):
         self.l = {}
         self.r = {}
         self.t = {}
@@ -71,6 +114,7 @@ class MedsNbrs(object):
 
             self.r[band] += self.sze[band]
             self.t[band] += self.sze[band]
+
 
     def get_nbrs(self,verbose=True):
         #data types
@@ -117,21 +161,30 @@ class MedsNbrs(object):
         nbr_numbers = []
 
         #box intersection test and exclude yourself
-        #use buffer of 1/4 of smaller of pair of stamps
-        buff = self.sze[band].copy()
-        if self.conf['buff_type'] == 'min':
-            q, = numpy.where(buff[mindex] < buff)
-            if len(q) > 0:
-                buff[q[:]] = buff[mindex]
-        elif self.conf['buff_type'] == 'max':
-            q, = numpy.where(buff[mindex] > buff)
-            if len(q) > 0:
-                buff[q[:]] = buff[mindex]
-        elif self.conf['buff_type'] == 'tot':
-            buff = buff[mindex] + buff
+        #use buffer of 1/4 of smaller of pair
+        # sze is a diameter
+
+        if self.cat is not None:
+            # we don't add any additional buffering when calculating
+            # overlap by radius
+            buff = self.sze[band]*0
         else:
-            assert False, "buff_type '%s' not supported!" % self.conf['buff_type']
-        buff = buff*self.conf['buff_frac']
+            buff = self.sze[band].copy()
+            if self.conf['buff_type'] == 'min':
+                q, = numpy.where(buff[mindex] < buff)
+                if len(q) > 0:
+                    buff[q[:]] = buff[mindex]
+            elif self.conf['buff_type'] == 'max':
+                q, = numpy.where(buff[mindex] > buff)
+                if len(q) > 0:
+                    buff[q[:]] = buff[mindex]
+            elif self.conf['buff_type'] == 'tot':
+                buff = buff[mindex] + buff
+            else:
+                assert False, "buff_type '%s' not supported!" % self.conf['buff_type']
+
+            buff = buff*self.conf['buff_frac']
+
         q, = numpy.where((~((self.l[band][mindex] > self.r[band]-buff) | (self.r[band][mindex] < self.l[band]+buff) |
                             (self.t[band][mindex] < self.b[band]+buff) | (self.b[band][mindex] > self.t[band]-buff))) &
                          (m['number'][mindex] != m['number']) &
@@ -312,6 +365,7 @@ def plot_fofs(m, fof, plotfile, minsize=2):
 
     Only groups with at least two members ares shown
     """
+    import random
     try:
         import biggles
         import esutil as eu
@@ -328,6 +382,10 @@ def plot_fofs(m, fof, plotfile, minsize=2):
     wlarge,=numpy.where(hd['hist'] >= minsize)
     ngroup=wlarge.size
     colors=rainbow(ngroup)
+    random.shuffle(colors)
+
+    print("unique groups >= 2:",wlarge.size)
+    print("largest fof:",hd['hist'].max())
 
     ffront=os.path.basename(plotfile)
     name=ffront.split('-mof-')[0]
@@ -365,7 +423,7 @@ def plot_fofs(m, fof, plotfile, minsize=2):
                 icolor += 1
 
     print("writing:",plotfile)
-    plt.write_img(1500,int(1500*aratio),plotfile)
+    plt.write_img(2000,int(2000*aratio),plotfile)
 
 def rainbow(num, type='hex'):
     """
