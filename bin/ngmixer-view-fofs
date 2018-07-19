@@ -1,0 +1,279 @@
+#!/usr/bin/env python
+from __future__ import print_function, division
+import os
+import numpy as np
+import fitsio
+import biggles
+import images
+import meds
+import argparse
+
+parser=argparse.ArgumentParser()
+parser.add_argument('meds_file',help='any meds file from the set')
+parser.add_argument('fof_file',help='fof group file')
+parser.add_argument('g_coadd_file',help='g coadd file')
+parser.add_argument('r_coadd_file',help='r coadd file')
+parser.add_argument('i_coadd_file',help='i coadd file')
+parser.add_argument('seg_file',help='a segmap file')
+
+parser.add_argument('--fof-range',help='start,end inclusive')
+parser.add_argument('--fof-id-file',help='ids to view, on per line')
+
+parser.add_argument('--html-file',help='ids to view, on per line')
+
+RELATIVE_SCALES=np.array([1.00, 1.2, 2.0])
+
+NOMINAL_EXPTIME=900.0
+NONLINEAR=.12
+PADDING=10
+
+class ImageTooSmallError(Exception):
+    """
+    Some number was out of range
+    """
+    def __init__(self, value):
+         super(ImageTooSmallError, self).__init__(value)
+         self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
+class Viewer(object):
+    def __init__(self, args):
+        self.args=args
+
+        self._load_fofs()
+        self._load_seg()
+        self._load_meds()
+        self._load_images()
+
+    def view_fofs(self):
+
+        if self.args.html_file is not None:
+            html_fobj = self._start_html()
+            dohtml=True
+        else:
+            dohtml=False
+
+        num=self.fofs_to_view.size
+        for i,fof_index in enumerate(self.fofs_to_view):
+            print("-"*70)
+            print("%d/%d" % (i+1, num))
+            try:
+                impng, segpng = self.view_fof(fof_index)
+
+                if dohtml:
+                    self._html_begin_line(html_fobj)
+                    for name in [impng, segpng]:
+                        self._html_add_item(html_fobj, name)
+                    self._html_end_line(html_fobj)
+            except ImageTooSmallError as err:
+                print(str(err))
+
+        if dohtml:
+            self._end_html(html_fobj)
+
+    def view_fof(self, fof_index):
+        w,=np.where(self.fofs['fofid']==fof_index)
+        print("found",w.size,"in fof group",fof_index)
+
+        imsub, segsub, rd = self._get_sub_images(w)
+
+        implt=images.view(imsub, show=False)
+        segplt=images.view(segsub, show=False)
+
+        self._mark_objects(implt, rd)
+        self._mark_objects(segplt, rd)
+
+        name=self._get_name(fof_index)
+        implt.title=name
+        segplt.title=name
+
+        impng = name+'-im.png'
+        segpng = name+'-seg.png'
+        print("writing:",impng)
+        implt.write_img(1000, 1000, impng)
+        print("writing:",segpng)
+        segplt.write_img(1000, 1000, segpng)
+
+        return impng, segpng
+    
+    def _get_name(self, fofid):
+        return '%s-%06d' % (self.name_base, fofid)
+
+    def _mark_objects(self, plt, rd):
+        num=rd['row_starts'].size
+
+        # note images have been transposed!
+        rows=rd['rows']
+        cols=rd['cols']
+
+        #color='red'
+        styles=(
+            ('black','filled circle',1),
+            ('white','circle',1.5),
+        )
+        for color,type,size in styles:
+            plt.add(
+                biggles.Points(cols, rows, type=type, color=color,size=size)
+            )
+
+    def _load_meds(self):
+        print("loading:",self.args.meds_file)
+        self.m=meds.MEDS(self.args.meds_file)
+
+        nb=os.path.basename(self.args.meds_file)
+        self.name_base=nb.replace('.fits.fz','').replace('.fits','')
+
+
+    def _load_fofs(self):
+        print("reading:",self.args.fof_file)
+        self.fofs = fitsio.read(self.args.fof_file)
+        self.all_fof_ids = np.unique(self.fofs['fofid'])
+
+        if self.args.fof_range is not None:
+            fr=self.args.fof_range.split(',')
+            fr=[int(ff) for ff in fr]
+            self.fofs_to_view=np.arange(fr[0], fr[1]+1)
+        elif self.args.fof_id_file is not None:
+            self.fofs_to_view=np.fromfile(self.args.fof_id_file,sep='\n',dtype='i8')
+        else:
+            self.fofs_to_view=np.arange(self.all_fof_ids.size)
+
+
+    def _load_images(self):
+        print("reading:",self.args.g_coadd_file)
+        self.g_coadd = fitsio.read(self.args.g_coadd_file,ext='sci')
+        print("reading:",self.args.r_coadd_file)
+        self.r_coadd = fitsio.read(self.args.r_coadd_file,ext='sci')
+        print("reading:",self.args.i_coadd_file)
+        self.i_coadd = fitsio.read(self.args.i_coadd_file,ext='sci')
+
+        self.images=[
+            self.g_coadd,
+            self.r_coadd,
+            self.i_coadd,
+        ]
+
+        exptimes=np.array([
+            fitsio.read_header(self.args.g_coadd_file,ext='sci')['exptime'],
+            fitsio.read_header(self.args.r_coadd_file,ext='sci')['exptime'],
+            fitsio.read_header(self.args.i_coadd_file,ext='sci')['exptime'],
+        ])
+        self.scales = RELATIVE_SCALES*np.sqrt(NOMINAL_EXPTIME/exptimes)
+
+    def _load_seg(self):
+        print("reading:",self.args.seg_file)
+        self.seg = fitsio.read(self.args.seg_file,ext='sci')
+
+    def _get_image_box(self, w):
+
+        orig_rows = self.m['orig_row'][w,0]
+        orig_cols = self.m['orig_col'][w,0]
+
+        row_starts = self.m['orig_start_row'][w,0]
+        col_starts = self.m['orig_start_col'][w,0]
+
+        # plus 1 for slices
+        row_ends = row_starts + self.m['box_size'][w] + 1
+        col_ends = col_starts + self.m['box_size'][w] + 1
+
+        row_min = row_starts.min() - PADDING
+        row_max = row_ends.max() + PADDING
+        col_min = col_starts.min() - PADDING
+        col_max = col_ends.max() + PADDING
+
+        return dict(
+            rows=orig_rows - row_min,
+            cols=orig_cols - col_min,
+
+            row_starts=row_starts,
+            row_ends=row_ends,
+            col_starts=col_starts,
+            col_ends=col_ends,
+
+            row_min=row_min,
+            row_max=row_max,
+            col_min=col_min,
+            col_max=col_max,
+        )
+
+
+
+    def _get_sub_im(self, rd, band):
+        im=self.images[band]
+        return im[
+            rd['row_min']:rd['row_max'],
+            rd['col_min']:rd['col_max'],
+        ]
+
+    def _get_sub_images(self, w):
+        rd = self._get_image_box(w)
+        gsub = self._get_sub_im(rd, 0)
+        rsub = self._get_sub_im(rd, 1)
+        isub = self._get_sub_im(rd, 2)
+
+        if gsub.size == 0:
+            raise ImageTooSmallError("image too small")
+
+        rgbim = images.get_color_image(
+            isub.transpose(),
+            rsub.transpose(),
+            gsub.transpose(),
+            nonlinear=NONLINEAR,
+            scales=self.scales,
+        )
+        #print("dividing by max:",rgbim.max())
+        #rgbim *= 1.0/rgbim.max()
+
+        segsub = self.seg[
+            rd['row_min']:rd['row_max'],
+            rd['col_min']:rd['col_max'],
+        ]
+
+        return rgbim, segsub, rd
+
+    def _html_add_item(self, fobj, fname):
+        fobj.write("<td><img src=\"%s\"></td>" % fname)
+
+    def _html_begin_line(self, fobj):
+        fobj.write("        <tr>")
+
+    def _html_end_line(self, fobj):
+        fobj.write("</tr>\n")
+
+    def _start_html(self):
+        print("writing to:",self.args.html_file)
+        fobj = open(self.args.html_file,'w')
+        fobj.write(_html_head)
+        return fobj
+
+    def _end_html(self, fobj):
+        print("closing:",self.args.html_file)
+        fobj.write(_html_foot)
+
+
+
+_html_head="""
+<html>
+    <body bgcolor=black>
+
+    <table>
+"""
+_html_foot="""
+    </table>
+    </body>
+</html>
+"""
+
+
+
+def main():
+    args=parser.parse_args()
+
+    viewer=Viewer(args)
+    viewer.view_fofs()
+
+if __name__=="__main__":
+    main()
