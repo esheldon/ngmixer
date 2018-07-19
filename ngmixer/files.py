@@ -113,7 +113,6 @@ def get_meds_files(medsconf, tile_id, bands):
     fnames = []
     for band in bands:
         fname=desmeds.files.get_meds_file(medsconf, tile_id, band)
-        fname = os.path.join(dir, fname)
         fnames.append(fname)
 
     return fnames
