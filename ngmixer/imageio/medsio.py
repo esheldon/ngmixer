@@ -479,9 +479,17 @@ class MEDSImageIO(ImageIO):
             ('number','i4'), # 1-n as in sextractor
             ('band_num','i2'),
             ('cutout_index','i4'), # this is the index in meds
+
             ('orig_row','f8'),
             ('orig_col','f8'),
+            ('cutout_row','f8'),
+            ('cutout_col','f8'),
+
             ('file_id','i4'),
+            ('dudrow','f8'),
+            ('dudcol','f8'),
+            ('dvdrow','f8'),
+            ('dvdcol','f8'),
             ('pixel_scale','f8')]   # id in meds file
         return dt
 
@@ -781,11 +789,23 @@ class MEDSImageIO(ImageIO):
         meta_row['number'][0] = meds['number'][mindex]
         meta_row['band_num'][0] = band
         meta_row['cutout_index'][0] = icut
+
         meta_row['orig_row'][0] = meds['orig_row'][mindex,icut]
         meta_row['orig_col'][0] = meds['orig_col'][mindex,icut]
+        meta_row['cutout_row'][0] = meds['cutout_row'][mindex,icut]
+        meta_row['cutout_col'][0] = meds['cutout_col'][mindex,icut]
+
         file_id  = meds['file_id'][mindex,icut].astype('i4')
         meta_row['file_id'][0]  = file_id
-        meta_row['pixel_scale'][0] = obs.get_jacobian().get_scale()
+
+        jac=obs.get_jacobian()
+        meta_row['pixel_scale'][0] = jac.scale
+
+        meta_row['dudrow'][0] = jac.dudrow
+        meta_row['dudcol'][0] = jac.dudcol
+        meta_row['dvdrow'][0] = jac.dvdrow
+        meta_row['dvdcol'][0] = jac.dvdcol
+
         meta={'icut':icut,
               'cutout_index':icut,
               'orig_start_row':meds['orig_start_row'][mindex, icut],
