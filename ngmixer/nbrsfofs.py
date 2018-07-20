@@ -44,17 +44,19 @@ class MedsNbrs(object):
 
         self.meds_list = meds_list
         self.conf = conf
-        self.cat = cat
 
         self._init_bounds()
 
     def _init_bounds(self):
-        if self.cat is not None:
+        if self.conf['method'] == 'radius':
             return self._init_bounds_by_radius()
         else:
             return self._init_bounds_by_stamps()
 
     def _init_bounds_by_radius(self):
+
+        radius_name=self.conf['radius_column']
+
         self.l = {}
         self.r = {}
         self.t = {}
@@ -63,20 +65,21 @@ class MedsNbrs(object):
 
         min_radius=self.conf.get('min_radius',None)
         if min_radius is None:
-            min_radius=0.0
+            min_radius=1.0
 
         max_radius=self.conf.get('max_radius',None)
         if max_radius is None:
             max_radius=numpy.inf
 
         for band,m in enumerate(self.meds_list):
-            r=numpy.sqrt(self.cat['isoarea_image'].clip(min=1)/3.14)
+
+            r = m[radius_name].copy()
 
             r *= self.conf['radius_mult']
+
             r.clip(min=min_radius, max=max_radius, out=r)
 
             r += self.conf['padding']
-
 
             rowcen = m['orig_row'][:,0]
             colcen = m['orig_col'][:,0]
@@ -164,7 +167,7 @@ class MedsNbrs(object):
         #use buffer of 1/4 of smaller of pair
         # sze is a diameter
 
-        if self.cat is not None:
+        if self.conf['method'] == 'radius':
             # we don't add any additional buffering when calculating
             # overlap by radius
             buff = self.sze[band]*0

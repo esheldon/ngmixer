@@ -29,7 +29,6 @@ parser.add_argument('meds_file',help='a meds file path')
 
 parser.add_argument('--nbrs-file',help='file name for nbrs')
 parser.add_argument('--fof-file',help='file name for fofs')
-parser.add_argument('--cat-file',help='file name for reference catalog')
 
 def main():
     """
@@ -38,11 +37,6 @@ def main():
 
     args=parser.parse_args()
     conf = files.read_config(args.config)
-
-    if args.cat_file is not None:
-        cat=fitsio.read(args.cat_file,lower=True)
-    else:
-        cat=None
 
     nbrs_file = args.nbrs_file
     if nbrs_file is None:
@@ -55,7 +49,7 @@ def main():
     files.makedirs_fromfile(fof_file)
 
     m=meds.MEDS(args.meds_file)
-    nbrs = MedsNbrs(m, conf['nbrs'], cat=cat)
+    nbrs = MedsNbrs(m, conf['nbrs'])
 
     nbrs_data = nbrs.get_nbrs()
 
