@@ -69,13 +69,13 @@ class Viewer(object):
             print("-"*70)
             print("%d/%d" % (i+1, num))
             try:
-                impng, segpng = self.view_fof(fof_index)
+                impng = self.view_fof(fof_index)
 
                 if dohtml:
                     self._html_begin_line(html_fobj)
-                    for name in [impng, segpng]:
-                        self._html_add_item(html_fobj, name)
+                    self._html_add_item(html_fobj, impng)
                     self._html_end_line(html_fobj)
+
             except ImageTooSmallError as err:
                 print(str(err))
 
@@ -91,44 +91,56 @@ class Viewer(object):
         do_resids=[False]
         if self.args.models_file is not None:
             make_resid_plots=True
-            do_resids += [True]
-            tab=biggles.Table(1,2)
-            dims=[2000,1000]
+            nrow,ncol=2,2
+            aspect_ratio=1.0
+            #dims=[2000,2000]
         else:
             make_resid_plots=False
-            dims=[1000,1000]
+            nrow,ncol=1,2
+            #dims=[2000,1000]
+            aspect_ratio=0.5
+            tab=biggles.Table(2,2)
 
-        for i,do_resid in enumerate(do_resids):
-            imsub, segsub, rd = self._get_sub_images(w, resid=do_resid)
+        tab=biggles.Table(
+            nrow,
+            ncol,
+            #aspect_ratio=aspect_ratio,
+            title=name,
+        )
+        imsub, segsub, rd = self._get_sub_images(w)
 
-            implt=images.view(imsub, show=False)
-            self._mark_objects(implt, rd)
-            if i==0:
-                segplt=images.view(segsub, show=False)
-                self._mark_objects(segplt, rd)
+        implt=images.view(imsub, show=False)
+        self._mark_objects(implt, rd)
 
-            if make_resid_plots:
-                if do_resid:
-                    label=biggles.PlotLabel(0.9,0.9,'residuals',
-                                            halign='right')
-                    implt.add(label)
+        segplt=images.view(segsub, show=False)
+        self._mark_objects(segplt, rd)
 
-                tab[0,i] = implt
+        tab[0,0] = implt
+        tab[0,1] = segplt
 
         if make_resid_plots:
-            implt = tab
+            imsub_resid, _, _ = self._get_sub_images(w, resid=True)
+            implt_resid=images.view(imsub_resid, show=False)
+            self._mark_objects(implt_resid, rd)
+            label=biggles.PlotLabel(0.9,0.9,'residuals',
+                                    halign='right')
+            implt_resid.add(label)
+            tab[1,0] = implt_resid
 
-        implt.title=name
-        segplt.title=name
-
-        impng = name+'-im.png'
-        segpng = name+'-seg.png'
+        impng = name+'.png'
         print("writing:",impng)
-        implt.write_img(dims[0], dims[1], impng)
-        print("writing:",segpng)
-        segplt.write_img(1000, 1000, segpng)
+        imaspect=float(segsub.shape[0])/segsub.shape[1]
+        dims=[
+            2000,
+            int(2000*imaspect),
+        ]
+        tab.write_img(
+            dims[0],
+            dims[1],
+            impng,
+        )
 
-        return impng, segpng
+        return impng
     
     def _get_name(self, fofid):
         return '%s-%06d' % (self.name_base, fofid)
@@ -376,6 +388,12 @@ _html_foot="""
 
 
 def main():
+    biggles.configure(
+        '_PlotContainer',
+        'title_style',
+        {'fontsize':2.0},
+    )
+
     args=parser.parse_args()
 
     viewer=Viewer(args)
