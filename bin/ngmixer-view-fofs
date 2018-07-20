@@ -7,6 +7,7 @@ import biggles
 import images
 import meds
 import argparse
+import ngmix
 
 parser=argparse.ArgumentParser()
 parser.add_argument('meds_file',help='any meds file from the set')
@@ -20,6 +21,13 @@ parser.add_argument('--fof-range',help='start,end inclusive')
 parser.add_argument('--fof-id-file',help='ids to view, on per line')
 
 parser.add_argument('--html-file',help='ids to view, on per line')
+
+parser.add_argument(
+    '--models-file',
+    help=('if sent, a residuals image for the coadd is '
+          'also shown.  This requires that the run was on the coadd. '
+          'Currently assumes bands are g,r,i,z in the file')
+)
 
 RELATIVE_SCALES=np.array([1.00, 1.2, 2.0])
 
@@ -43,10 +51,10 @@ class Viewer(object):
     def __init__(self, args):
         self.args=args
 
+        self._load_images()
         self._load_fofs()
         self._load_seg()
         self._load_meds()
-        self._load_images()
 
     def view_fofs(self):
 
@@ -75,25 +83,48 @@ class Viewer(object):
             self._end_html(html_fobj)
 
     def view_fof(self, fof_index):
+        name=self._get_name(fof_index)
+
         w,=np.where(self.fofs['fofid']==fof_index)
         print("found",w.size,"in fof group",fof_index)
 
-        imsub, segsub, rd = self._get_sub_images(w)
+        do_resids=[False]
+        if self.args.models_file is not None:
+            make_resid_plots=True
+            do_resids += [True]
+            tab=biggles.Table(1,2)
+            dims=[2000,1000]
+        else:
+            make_resid_plots=False
+            dims=[1000,1000]
 
-        implt=images.view(imsub, show=False)
-        segplt=images.view(segsub, show=False)
+        for i,do_resid in enumerate(do_resids):
+            imsub, segsub, rd = self._get_sub_images(w, resid=do_resid)
 
-        self._mark_objects(implt, rd)
-        self._mark_objects(segplt, rd)
+            implt=images.view(imsub, show=False)
+            self._mark_objects(implt, rd)
+            if i==0:
+                segplt=images.view(segsub, show=False)
+                self._mark_objects(segplt, rd)
 
-        name=self._get_name(fof_index)
+            if make_resid_plots:
+                if do_resid:
+                    label=biggles.PlotLabel(0.9,0.9,'residuals',
+                                            halign='right')
+                    implt.add(label)
+
+                tab[0,i] = implt
+
+        if make_resid_plots:
+            implt = tab
+
         implt.title=name
         segplt.title=name
 
         impng = name+'-im.png'
         segpng = name+'-seg.png'
         print("writing:",impng)
-        implt.write_img(1000, 1000, impng)
+        implt.write_img(dims[0], dims[1], impng)
         print("writing:",segpng)
         segplt.write_img(1000, 1000, segpng)
 
@@ -141,6 +172,11 @@ class Viewer(object):
         else:
             self.fofs_to_view=np.arange(self.all_fof_ids.size)
 
+        if self.args.models_file is not None:
+            print("reading:",self.args.models_file)
+            self.models = fitsio.read(self.args.models_file, ext='model_fits')
+            self.models_ed = fitsio.read(self.args.models_file, ext='epoch_data')
+
 
     def _load_images(self):
         print("reading:",self.args.g_coadd_file)
@@ -185,6 +221,8 @@ class Viewer(object):
         col_max = col_ends.max() + PADDING
 
         return dict(
+            orig_rows=orig_rows,
+            orig_cols=orig_cols,
             rows=orig_rows - row_min,
             cols=orig_cols - col_min,
 
@@ -208,7 +246,69 @@ class Viewer(object):
             rd['col_min']:rd['col_max'],
         ]
 
-    def _get_sub_images(self, w):
+    def _subtract_models(self, rd, im, w, band):
+        """
+        im is the subset image
+
+        here band is indexed with the input models file, which
+        is currently assumed to be g,r,i,z
+
+        the model is assumed to be cm
+        """
+
+        resid_im = im.copy()
+
+        models=self.models
+        models_ed=self.models_ed
+        band_pars=np.zeros(6)
+        for wi,i in enumerate(w):
+            flags=models['flags'][i]
+            if flags != 0:
+                print("skipping bad fit:",flags)
+                continue
+
+            id=models['id'][i]
+            we,=np.where(
+                (models_ed['id']==id)
+                &
+                (models_ed['band_num']==band)
+            )
+            assert we.size==1
+
+            jac = ngmix.Jacobian(
+                row=rd['rows'][wi],
+                col=rd['cols'][wi],
+                dudrow=models_ed['dudrow'][we],
+                dudcol=models_ed['dudcol'][we],
+                dvdrow=models_ed['dvdrow'][we],
+                dvdcol=models_ed['dvdcol'][we],
+            )
+
+            fracdev=models['cm_fracdev'][i]
+            TdByTe=models['cm_TdByTe'][i]
+            pars=models['cm_pars'][i,:]
+            band_pars[0:5] = pars[0:5]
+            band_pars[5] = pars[5+band]*jac.scale**2
+
+            #ngmix.print_pars(band_pars, front='    pars: ')
+            gm0 = ngmix.gmix.GMixCM(
+                fracdev,
+                TdByTe,
+                band_pars,
+            )
+            # assuming we only ran the coadd
+            psf_pars=models_ed['psf_fit_pars'][we[0]]
+            #ngmix.print_pars(psf_pars, front='    psf pars: ')
+            psf = ngmix.GMix(pars=psf_pars)
+            gm = gm0.convolve(psf)
+
+
+            model_im=gm.make_image(im.shape, jacobian=jac)
+            resid_im -= model_im
+
+        return resid_im
+            
+    def _get_sub_images(self, w, resid=False):
         rd = self._get_image_box(w)
         gsub = self._get_sub_im(rd, 0)
         rsub = self._get_sub_im(rd, 1)
@@ -216,6 +316,12 @@ class Viewer(object):
 
         if gsub.size == 0:
             raise ImageTooSmallError("image too small")
+
+        # assuming models have g,r,i,z order of bands
+        if resid:
+            gsub = self._subtract_models(rd, gsub, w, 0)
+            rsub = self._subtract_models(rd, rsub, w, 1)
+            isub = self._subtract_models(rd, isub, w, 2)
 
         rgbim = images.get_color_image(
             isub.transpose(),
