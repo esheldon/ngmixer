@@ -182,8 +182,15 @@ class Concat(object):
         if not numpy.array_equal(numpy.sort(numpy.unique(data['number'])),numpy.sort(data['number'])):
             print("object 'number' field is not unique!")
 
+        data = self._sort_data(data)
+
         # note using meta from last file
         self._write_data(data, epoch_data, nbrs_data, meta)
+
+    def _sort_data(self, data, field='number'):
+        s=numpy.argsort(data[field])
+        data = data[s]
+        return data
 
     def _write_data(self, data, epoch_data, nbrs_data, meta):
         """
