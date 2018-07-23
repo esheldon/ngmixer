@@ -35,6 +35,8 @@ NOMINAL_EXPTIME=900.0
 NONLINEAR=.12
 PADDING=10
 
+BANDS=['g','r','i','z']
+
 class ImageTooSmallError(Exception):
     """
     Some number was out of range
@@ -52,9 +54,9 @@ class Viewer(object):
         self.args=args
 
         self._load_images()
+        self._load_meds()
         self._load_fofs()
         self._load_seg()
-        self._load_meds()
 
     def view_fofs(self):
 
@@ -88,7 +90,6 @@ class Viewer(object):
         w,=np.where(self.fofs['fofid']==fof_index)
         print("found",w.size,"in fof group",fof_index)
 
-        do_resids=[False]
         if self.args.models_file is not None:
             make_resid_plots=True
             nrow,ncol=2,2
@@ -189,6 +190,12 @@ class Viewer(object):
             self.models = fitsio.read(self.args.models_file, ext='model_fits')
             self.models_ed = fitsio.read(self.args.models_file, ext='epoch_data')
 
+            self.resid_images=[
+                self._subtract_models_full(0),
+                self._subtract_models_full(1),
+                self._subtract_models_full(2),
+            ]
+
 
     def _load_images(self):
         print("reading:",self.args.g_coadd_file)
@@ -211,6 +218,84 @@ class Viewer(object):
         ])
         self.scales = RELATIVE_SCALES*np.sqrt(NOMINAL_EXPTIME/exptimes)
 
+    def _subtract_models_full(self, band):
+        """
+        subtract models for all objects in the full image
+        """
+
+        bstr=BANDS[band]
+
+        im=self.images[band].copy()
+
+        models=self.models
+        models_ed=self.models_ed
+        band_pars=np.zeros(6)
+        for i in xrange(models.size):
+            #print('%d/%d' % (i+1,models.size))
+            if (i % 1000) == 0:
+                print('    %s %d/%d' % (bstr,i+1,models.size))
+
+            flags=models['flags'][i]
+            if flags != 0:
+                print("        skipping bad fit:",flags)
+                continue
+
+            id=models['id'][i]
+            we,=np.where(
+                (models_ed['id']==id)
+                &
+                (models_ed['band_num']==band)
+            )
+            assert we.size==1
+
+            wm,=np.where(self.m['id']==id)
+            assert wm.size==1
+            wm=wm[0]
+
+            bsize=self.m['box_size'][wm]
+            orow=self.m['orig_start_row'][wm,0]
+            ocol=self.m['orig_start_col'][wm,0]
+
+            jac = ngmix.Jacobian(
+                row=self.m['cutout_row'][wm,0],
+                col=self.m['cutout_col'][wm,0],
+                dudrow=models_ed['dudrow'][we],
+                dudcol=models_ed['dudcol'][we],
+                dvdrow=models_ed['dvdrow'][we],
+                dvdcol=models_ed['dvdcol'][we],
+            )
+
+            fracdev=models['cm_fracdev'][i]
+            TdByTe=models['cm_TdByTe'][i]
+            pars=models['cm_pars'][i,:]
+            band_pars[0:5] = pars[0:5]
+            band_pars[5] = pars[5+band]*jac.scale**2
+
+            #ngmix.print_pars(band_pars, front='    pars: ')
+            gm0 = ngmix.gmix.GMixCM(
+                fracdev,
+                TdByTe,
+                band_pars,
+            )
+            # assuming we only ran the coadd
+            psf_pars=models_ed['psf_fit_pars'][we[0]]
+            #ngmix.print_pars(psf_pars, front='    psf pars: ')
+            psf = ngmix.GMix(pars=psf_pars)
+            gm = gm0.convolve(psf)
+
+
+            model_im=gm.make_image([bsize,bsize], jacobian=jac)
+
+            row_end=orow+bsize
+            col_end=ocol+bsize
+            #print(orow,orow+bsize)
+            #print(ocol,ocol+bsize)
+
+            t=im[orow:orow+bsize, ocol:ocol+bsize]
+            im[orow:orow+bsize, ocol:ocol+bsize] -= model_im[0:t.shape[0],0:t.shape[1]]
+
+        return im
+ 
     def _load_seg(self):
         print("reading:",self.args.seg_file)
         self.seg = fitsio.read(self.args.seg_file,ext='sci')
@@ -251,8 +336,12 @@ class Viewer(object):
 
 
 
-    def _get_sub_im(self, rd, band):
-        im=self.images[band]
+    def _get_sub_im(self, rd, band, resid=False):
+        if resid:
+            im=self.resid_images[band]
+        else:
+            im=self.images[band]
+
         return im[
             rd['row_min']:rd['row_max'],
             rd['col_min']:rd['col_max'],
@@ -322,18 +411,18 @@ class Viewer(object):
             
     def _get_sub_images(self, w, resid=False):
         rd = self._get_image_box(w)
-        gsub = self._get_sub_im(rd, 0)
-        rsub = self._get_sub_im(rd, 1)
-        isub = self._get_sub_im(rd, 2)
+        gsub = self._get_sub_im(rd, 0, resid=resid)
+        rsub = self._get_sub_im(rd, 1, resid=resid)
+        isub = self._get_sub_im(rd, 2, resid=resid)
 
         if gsub.size == 0:
             raise ImageTooSmallError("image too small")
 
         # assuming models have g,r,i,z order of bands
-        if resid:
-            gsub = self._subtract_models(rd, gsub, w, 0)
-            rsub = self._subtract_models(rd, rsub, w, 1)
-            isub = self._subtract_models(rd, isub, w, 2)
+        #if resid:
+        #    gsub = self._subtract_models(rd, gsub, w, 0)
+        #    rsub = self._subtract_models(rd, rsub, w, 1)
+        #    isub = self._subtract_models(rd, isub, w, 2)
 
         rgbim = images.get_color_image(
             isub.transpose(),
