@@ -75,7 +75,7 @@ class NGMixBootFitter(BaseFitter):
         # whether to use the coadd_ prefix for names when no me fit was done
         self['use_coadd_prefix'] = self.get('use_coadd_prefix',True)
 
-        # add in estimate for intrinsic profile variance 
+        # add in estimate for intrinsic profile variance
         self['intr_prof_var_fac'] = self.get('intr_prof_var_fac',0.0)
 
         # this actually means calculating things like
@@ -153,7 +153,7 @@ class NGMixBootFitter(BaseFitter):
                     noise_image = normal(loc=0.0, scale=1.0, size=im.shape)
                     noise_image *= extra_noise_values
                     im += noise_image
-                
+
                     wt[w] = target_ivar
 
                     obs.image = im
@@ -172,7 +172,7 @@ class NGMixBootFitter(BaseFitter):
         new_mb_obs_list = self._get_good_mb_obs_list(mb_obs_list)
         self.new_mb_obs_list = new_mb_obs_list
         self.mb_obs_list = mb_obs_list
-        
+
         # FIXME - removed if, this might have sid effects?
         #if 'fit_data' not in mb_obs_list.meta:
         mb_obs_list.update_meta_data({'fit_data':self._make_struct(coadd)})
@@ -191,7 +191,7 @@ class NGMixBootFitter(BaseFitter):
                 # put back nbrs info if needed
                 if nbrs_meta_data is not None:
                     self._restore_nbrs_meta_data(mb_obs_list,nbrs_meta_data,coadd=coadd)
-                    
+
                 # render nbrs
                 self._render_nbrs(model,new_mb_obs_list,coadd,nbrs_fit_data)
 
@@ -352,32 +352,32 @@ class NGMixBootFitter(BaseFitter):
         restore the nbrs info - reverse of _fill_nbrs_data function
         """
         nd = len(mb_obs_list.meta['nbrs_ids'])
-        
+
         # if no nbrs, return
         if nd == 0:
             return
-        
+
         cen_id = mb_obs_list.meta['id']
 
         for band,obs_list in enumerate(mb_obs_list):
             band_num = obs_list.meta['band_num']
-            
+
             for obs in obs_list:
                 cutout_index = obs.meta['cutout_index']
-                
+
                 # if we use this obs, grab nbrs
                 if obs.meta['flags'] == 0:
                     # do central
                     q, = numpy.where((nbrs_meta_data['id'] == cen_id) &
                                      (nbrs_meta_data['nbr_id'] == cen_id) &
                                      (nbrs_meta_data['band_num'] == band_num) &
-                                     (nbrs_meta_data['cutout_index'] == cutout_index))                    
-                    
+                                     (nbrs_meta_data['cutout_index'] == cutout_index))
+
                     if len(q) != 1:
                         raise ValueError('cen not found in nbrs_meta_data during restore!'\
                                              ' - cen_id = %d, band = %d, cutout_index = %d' \
                                              % (cen_id,band_num,cutout_index))
-                    
+
                     cen_flags = nbrs_meta_data['nbr_flags'][q[0]]
                     if cen_flags == 0:
                         cen_jac = Jacobian(row=nbrs_meta_data['nbr_jac_row0'][q[0]],
@@ -391,11 +391,11 @@ class NGMixBootFitter(BaseFitter):
                     else:
                         cen_psf_obs = Observation(numpy.zeros((1,1)))
                         cen_jac = None
-                        
+
                     obs.update_meta_data({'cen_flags':cen_flags,
                                           'cen_jac':cen_jac,
                                           'cen_psf':cen_psf_obs})
-                        
+
                     # do nbrs
                     nbrs_flags = []
                     nbrs_psfs = []
@@ -403,18 +403,18 @@ class NGMixBootFitter(BaseFitter):
                     for i in xrange(nd):
                         # get
                         nbrs_id = mb_obs_list.meta['nbrs_ids'][i]
-                        
+
                         # find the nbr
                         q, = numpy.where((nbrs_meta_data['id'] == cen_id) &
                                          (nbrs_meta_data['nbr_id'] == nbrs_id) &
                                          (nbrs_meta_data['band_num'] == band_num) &
                                          (nbrs_meta_data['cutout_index'] == cutout_index))
-                        
+
                         if len(q) != 1:
                             raise ValueError('more than one nbr or no nbr found in nbrs_meta_data during restore!'\
                                                  ' - cen_id = %d, nbrs_id = %d, band = %d, cutout_index = %d' \
                                                  % (cen_id,nbrs_id,band_num,cutout_index))
-                        
+
                         nbrs_flags.append(nbrs_meta_data['nbr_flags'][q[0]])
                         if nbrs_meta_data['nbr_flags'][q[0]] == 0:
                             jac = Jacobian(row=nbrs_meta_data['nbr_jac_row0'][q[0]],
@@ -430,11 +430,11 @@ class NGMixBootFitter(BaseFitter):
                         else:
                             nbrs_psfs.append(Observation(numpy.zeros((1,1))))
                             nbrs_jacs.append(None)
-                            
+
                     obs.update_meta_data({'nbrs_jacs':nbrs_jacs,
                                           'nbrs_psfs':nbrs_psfs,
                                           'nbrs_flags':nbrs_flags})
-                        
+
     def _render_nbrs(self,model,mb_obs_list,coadd,nbrs_fit_data):
         """
         render nbrs
@@ -471,8 +471,8 @@ class NGMixBootFitter(BaseFitter):
             for obs in obs_list:
                 if obs.meta['flags'] != 0:
                     continue
-                
-                # get properties of cen 
+
+                # get properties of cen
                 if 'cen_flags' in obs.meta and obs.meta['cen_flags'] == 0:
                     cen_jac = obs.meta['cen_jac']
                     if obs.meta['cen_psf'].has_gmix():
@@ -483,10 +483,10 @@ class NGMixBootFitter(BaseFitter):
                     if obs.has_psf_gmix():
                         cen_psf_gmix = obs.get_psf_gmix()
                     else:
-                        cen_psf_gmix = None                    
+                        cen_psf_gmix = None
                     cen_jac = obs.get_jacobian()
                 cen_seg = obs.seg
-                
+
                 # get props of nbrs
                 nbrs_inds = mb_obs_list.meta['nbrs_inds']
                 nbrs_flags = obs.meta['nbrs_flags']
@@ -497,9 +497,9 @@ class NGMixBootFitter(BaseFitter):
                     else:
                         nbrs_psf_gmixes.append(None)
                 nbrs_jacs = obs.meta['nbrs_jacs']
-                
+
                 # call the nbrs code
-                cenim, nbrs_imgs, nbrs_masks = RenderNGmixNbrs._render_nbrs(model, band, 
+                cenim, nbrs_imgs, nbrs_masks = RenderNGmixNbrs._render_nbrs(model, band,
                                                                             obs.image.shape,
                                                                             cen_ind, cen_psf_gmix, cen_jac, cen_seg,
                                                                             nbrs_inds, nbrs_flags,
@@ -508,16 +508,16 @@ class NGMixBootFitter(BaseFitter):
                                                                             unmodeled_nbrs_masking_type=self['unmodeled_nbrs_masking_type'],
                                                                             verbose=True,
                                                                             fracdev_tag=fracdev_tag,TdByTe_tag=TdByTe_tag)
-                
+
                 # do central
                 if cenim is not None:
                     sub_nbrs_from_cenim = False
-                else:                
+                else:
                     cenim = obs.image_orig.copy()
                     sub_nbrs_from_cenim = True
 
                 if self['intr_prof_var_fac'] > 0.0:
-                    varim = numpy.zeros_like(cenim)  
+                    varim = numpy.zeros_like(cenim)
                     if not sub_nbrs_from_cenim:
                         varim += self['intr_prof_var_fac']*cenim*cenim
 
@@ -526,7 +526,7 @@ class NGMixBootFitter(BaseFitter):
                 for curr_nbrsim in nbrs_imgs:
                     if curr_nbrsim is not None:
                         nbrsim += curr_nbrsim
-                        
+
                         if self['intr_prof_var_fac'] > 0.0:
                             varim += self['intr_prof_var_fac']*curr_nbrsim*curr_nbrsim
 
@@ -535,12 +535,12 @@ class NGMixBootFitter(BaseFitter):
                 for msk in nbrs_masks:
                     if msk is not None:
                         masked_pix *= msk
-                            
+
                 # get total image and adjust central if needed
                 if sub_nbrs_from_cenim:
-                    cenim -= nbrsim                    
+                    cenim -= nbrsim
                 totim = cenim + nbrsim
-                
+
                 if self['model_nbrs_method'] == 'subtract':
                     obs.image = obs.image_orig - nbrsim
                 elif self['model_nbrs_method'] == 'frac':
@@ -551,7 +551,7 @@ class NGMixBootFitter(BaseFitter):
                     obs.image = obs.image_orig*frac
                 else:
                     assert False,'nbrs model method %s not implemented!' % self['model_nbrs_method']
-                    
+
                 # mask unmodeled nbrs
                 new_weight = obs.weight_orig.copy()
                 new_weight *= masked_pix
@@ -562,7 +562,7 @@ class NGMixBootFitter(BaseFitter):
                         new_weight[qnz] = 1.0/(1.0/new_weight[qnz] + varim[qnz])
 
                 obs.weight = new_weight
-                    
+
                 if self['make_plots']:
                     self._plot_nbrs_model(band,model,obs,nbrsim,cenim,coadd)
 
@@ -597,9 +597,9 @@ class NGMixBootFitter(BaseFitter):
             return seg_new
 
         icut_cen = obs.meta['icut']
-        
+
         totim = nbrsim + cenim
-        
+
         import images
         import biggles
         width = 1920
@@ -629,7 +629,7 @@ class NGMixBootFitter(BaseFitter):
                 fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-icut%d.png' % (ptype,band,icut_cen))
             else:
                 fname = os.path.join(self.plot_dir,'%s-nbrs-band%d-coadd.png' % (ptype,band))
-            fname=fname.replace('.png','.eps')
+            # fname=fname.replace('.png','.eps')
             print("        making plot %s" % fname)
             #tab.write_img(1920,1200,fname)
             tab.write(fname)
@@ -766,7 +766,7 @@ class NGMixBootFitter(BaseFitter):
         """
         get the bootstrapper for fitting psf through galaxy
         """
-        
+
         find_cen=self.get('pre_find_center',False)
         if model == 'cm':
             fracdev_prior=self['model_pars']['cm']['fracdev_prior']
@@ -982,16 +982,16 @@ class NGMixBootFitter(BaseFitter):
                 pdict=fitter.make_plots(title=title)
             else:
                 pdict=fitter.make_plots(title=title,weights=wgts)
-        
+
             pdict['trials'].aspect_ratio=1.5
             pdict['wtrials'].aspect_ratio=1.5
-            
+
             trials_png=os.path.join(self.plot_dir,'%d-%s-trials.png' % (obj_id,ptype))
             wtrials_png=os.path.join(self.plot_dir,'%d-%s-wtrials.png' % (obj_id,ptype))
-            
+
             print("        making plot %s" % trials_png)
             pdict['trials'].write_img(1200,1200,trials_png)
-            
+
             print("        making plot %s" % wtrials_png)
             pdict['wtrials'].write_img(1200,1200,wtrials_png)
         except:
@@ -1095,7 +1095,7 @@ class NGMixBootFitter(BaseFitter):
 
         mres=self.boot.get_fitter().get_result()
         if 's2n_w' in mres:
-            rres=self.boot.get_round_result()            
+            rres=self.boot.get_round_result()
             tup=(mres['s2n_w'],
                  rres['s2n_r'],
                  mres['chi2per'],
@@ -1235,7 +1235,7 @@ class NGMixBootFitter(BaseFitter):
 
             if 'cm' in model:
                 dt += [(n('fracdev'),'f4'),
-                       (n('fracdev_noclip'),'f4'),                       
+                       (n('fracdev_noclip'),'f4'),
                        (n('fracdev_err'),'f4'),
                        (n('TdByTe'),'f4'),
                        (n('TdByTe_noclip'),'f4')]
@@ -1332,9 +1332,9 @@ class NGMixBootFitter(BaseFitter):
               ('nbr_jac_dvdcol','f8'),
               ('nbr_psf_fit_pars','f8',(npars,)),
               ]
-        
+
         return dt
-        
+
     def get_default_nbrs_data(self,n=1):
         dt = self.get_nbrs_data_dtype()
         d = numpy.zeros(n,dtype=dt)
@@ -1874,7 +1874,7 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
             d[n('flux')][dindex]    = res['flux']
             d[n('flux_s2n')][dindex]    = res['flux_s2n']
 
-        
+
             d['mcal_flags'][dindex] = res['mcal_flags']
             types=ngmix.bootstrap.AdmomMetacalBootstrapper._default_metacal_pars['types']
             for type in types:
@@ -1970,7 +1970,7 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
             fcov_shape=(nband,)
         else:
             fcov_shape=(nband,nband)
-        
+
         models=self._get_all_models(coadd)
         for model in models:
             n=Namer(model)
@@ -2027,4 +2027,3 @@ class MetacalAdmomBootFitter(MetacalNGMixBootFitter):
         self.mcal_flist = [d[0] for d in dt]
 
         return dt
-
