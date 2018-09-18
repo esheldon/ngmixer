@@ -78,13 +78,13 @@ class MOFNGMixer(NGMixer):
         for fofind in xrange(foflen):
             print_with_verbosity('    fof obj: %ld' % (fofind+1),verbosity=1)
 
-            for _model,_pars_model,_model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
-                if self['fit_coadd_galaxy'] and not self['fit_me_galaxy']:
-                    model = _model.replace('coadd_', '')
+            for model,_pars_model,_model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
+                if (self['fit_coadd_galaxy'] and
+                        not self['use_coadd_prefix'] and
+                        'coadd_' in model):
                     pars_model = _pars_model.replace('coadd_', '')
                     model_cov = _model_cov.replace('coadd_', '')
                 else:
-                    model = _model
                     pars_model = _pars_model
                     model_cov = _model_cov
 
@@ -92,15 +92,14 @@ class MOFNGMixer(NGMixer):
                     print('    skipping model %s parameters' % pars_model)
                     continue
 
-                n = Namer(model)
-                nc = Namer(_model)
+                n = Namer(model)  # the old namer still gets used for flags
 
-                self.curr_data[nc('mof_flags')][fofind] = 0
-                self.curr_data[nc('mof_num_itr')][fofind] = itr+1
+                self.curr_data[n('mof_flags')][fofind] = 0
+                self.curr_data[n('mof_num_itr')][fofind] = itr+1
 
                 if self.curr_data['flags'][fofind] or self.prev_data['flags'][fofind]:
                     print('    skipping fof obj %s in convergence check' % (fofind+1))
-                    self.curr_data[nc('mof_flags')][fofind] = MOF_SKIPPED_IN_CONV_CHECK
+                    self.curr_data[n('mof_flags')][fofind] = MOF_SKIPPED_IN_CONV_CHECK
                     continue
 
                 old = self.prev_data[pars_model][fofind]
@@ -109,16 +108,16 @@ class MOFNGMixer(NGMixer):
                 absfracdiff = numpy.abs(new/old-1.0)
                 abserr = numpy.abs((old-new)/numpy.sqrt(numpy.diag(self.curr_data[model_cov][fofind])))
 
-                self.curr_data[nc('mof_abs_diff')][fofind] = absdiff
-                self.curr_data[nc('mof_frac_diff')][fofind] = absfracdiff
-                self.curr_data[nc('mof_err_diff')][fofind] = abserr
+                self.curr_data[n('mof_abs_diff')][fofind] = absdiff
+                self.curr_data[n('mof_frac_diff')][fofind] = absfracdiff
+                self.curr_data[n('mof_err_diff')][fofind] = abserr
 
                 if numpy.all((absdiff <= maxabs_conv)      | \
                              (absfracdiff <= maxfrac_conv) | \
                              (abserr <= self['mof']['maxerr_conv'])):
-                    self.curr_data[nc('mof_flags')][fofind] = 0
+                    self.curr_data[n('mof_flags')][fofind] = 0
                 else:
-                    self.curr_data[nc('mof_flags')][fofind] = MOF_NOT_CONVERGED
+                    self.curr_data[n('mof_flags')][fofind] = MOF_NOT_CONVERGED
 
 
                 for i in xrange(npars):
@@ -158,8 +157,16 @@ class MOFNGMixer(NGMixer):
     def _set_nbr_mof_flags(self,foflen,coadd_mb_obs_lists,mb_obs_lists):
         models_to_check,pars_models_to_check,cov_models_to_check,npars = self._get_models_to_check()
 
-        for model,pars_model,model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
+        for model,_pars_model,_model_cov in zip(models_to_check,pars_models_to_check,cov_models_to_check):
+            if (self['fit_coadd_galaxy'] and
+                    not self['use_coadd_prefix'] and
+                    'coadd_' in model):
+                pars_model = _pars_model.replace('coadd_', '')
+            else:
+                pars_model = _pars_model
+
             if pars_model not in self.curr_data.dtype.names:
+                print('    skipping mof flags for model %s' % model)
                 continue
 
             n = Namer(model)
