@@ -9,6 +9,7 @@ import fitsio
 import meds
 from ngmix import Jacobian
 from ngmix import Observation, ObsList, MultiBandObsList
+from ngmix.gexceptions import GMixFatalError
 
 # local imports
 from .imageio import ImageIO
@@ -703,11 +704,19 @@ class MEDSImageIO(ImageIO):
 
         psf_obs = self._get_psf_observation(band, mindex, icut, jacob)
 
-        obs=Observation(im,
-                        weight=wt,
-                        bmask=bmask,
-                        jacobian=jacob,
-                        psf=psf_obs)
+        try:
+            obs=Observation(
+                im,
+                weight=wt,
+                bmask=bmask,
+                jacobian=jacob,
+                psf=psf_obs,
+            )
+        except GMixFatalError as err:
+            # this happends for all zero weight images
+            print(str(err))
+            return None
+
         if wt_us is not None:
             obs.weight_us = wt_us
         else:
