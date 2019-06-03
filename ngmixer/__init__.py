@@ -1,6 +1,6 @@
 #######################################################
 # imports
-__version__="v0.9.7"
+__version__="v0.9.8"
 
 from . import files
 from . import ngmixing
