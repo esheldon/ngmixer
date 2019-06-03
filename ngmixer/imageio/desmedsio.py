@@ -263,7 +263,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
             for olist in [coadd_obs_list,obs_list]:
                 for obs in olist:
                     if obs.meta['flags'] == 0:
-                        pixel_scale2 = obs.jacobian.get_det()
+                        pixel_scale2 = obs.jacobian.scale**2
                         pixel_scale4 = pixel_scale2*pixel_scale2
                         obs.image *= pixel_scale2
                         obs.weight /= pixel_scale4
@@ -279,7 +279,7 @@ class SVDESMEDSImageIO(MEDSImageIO):
             for olist in [coadd_obs_list,obs_list]:
                 for obs in olist:
                     if obs.meta['flags'] == 0:
-                        pixel_scale2 = obs.jacobian.get_det()
+                        pixel_scale2 = obs.jacobian.scale**2
                         pixel_scale4 = pixel_scale2*pixel_scale2
                         obs.image /= pixel_scale2
                         obs.weight *= pixel_scale4

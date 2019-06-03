@@ -630,7 +630,7 @@ class MEDSImageIO(ImageIO):
         coadd_obs_list = ObsList()
         obs_list       = ObsList()
 
-        fake=numpy.zeros((0,0))
+        fake=numpy.zeros((10,10))
         for icut in xrange(ncutout):
 
             flags=0
@@ -640,6 +640,7 @@ class MEDSImageIO(ImageIO):
             else:
                 iflags = image_flags[icut]
                 if iflags != 0:
+                    print('band:',band,'mindex:',mindex,'icut:',icut,'got image flags:',iflags)
                     flags = IMAGE_FLAGS
                     obs = Observation(fake)
                 else:
