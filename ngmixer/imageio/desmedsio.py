@@ -250,9 +250,11 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
         galsim fitters are never surface brightness fitters
         """
+        from ngmix.gexceptions import GMixFatalError
+
         coadd_obs_list, obs_list = \
-          super(SVDESMEDSImageIO, self)._get_band_observations(band,mindex)
-        
+            super(SVDESMEDSImageIO, self)._get_band_observations(band, mindex)
+
         imtype = self.conf['imageio']['image_type']
         fitter_type = self.conf['fitter_type']
 
@@ -260,29 +262,56 @@ class SVDESMEDSImageIO(MEDSImageIO):
 
             # multiply by jacobian scale^2 to change from surface brightness
             # flux image type
-            for olist in [coadd_obs_list,obs_list]:
+            for olist in [coadd_obs_list, obs_list]:
                 for obs in olist:
                     if obs.meta['flags'] == 0:
                         pixel_scale2 = obs.jacobian.scale**2
                         pixel_scale4 = pixel_scale2*pixel_scale2
-                        obs.image *= pixel_scale2
-                        obs.weight /= pixel_scale4
+
+                        image = obs.image * pixel_scale2
+                        weight = obs.weight / pixel_scale4
+
+                        try:
+                            obs.set_image(image, update_pixels=False)
+                            obs.set_weight(weight)
+                        except GMixFatalError as err:
+                            print(str(err))
+                            # we never should have got here, because this
+                            # error was caught in get_band_obserrvation.
+                            # but it is happening in real code, so lets deal
+                            # with it using a hack
+                            weight[0, 0] = 1.0
+                            obs.set_weight(weight)
+
                         if obs.weight_raw is not None:
                             obs.weight_raw /= pixel_scale4
                         if obs.weight_us is not None:
                             obs.weight_us /= pixel_scale4
 
-
         elif imtype != 'surface_brightness' and 'galsim' not in fitter_type:
 
             # divide by jacobian scale^2 to convert to surface brightness
-            for olist in [coadd_obs_list,obs_list]:
+            for olist in [coadd_obs_list, obs_list]:
                 for obs in olist:
                     if obs.meta['flags'] == 0:
                         pixel_scale2 = obs.jacobian.scale**2
                         pixel_scale4 = pixel_scale2*pixel_scale2
-                        obs.image /= pixel_scale2
-                        obs.weight *= pixel_scale4
+
+                        image = obs.image / pixel_scale2
+                        weight = obs.weight * pixel_scale4
+
+                        try:
+                            obs.set_image(image, update_pixels=False)
+                            obs.set_weight(weight)
+                        except GMixFatalError as err:
+                            print(str(err))
+                            # we never should have got here, because this
+                            # error was caught in get_band_obserrvation.
+                            # but it is happening in real code, so lets deal
+                            # with it using a hack
+                            weight[0, 0] = 1.0
+                            obs.set_weight(weight)
+
                         if obs.weight_raw is not None:
                             obs.weight_raw *= pixel_scale4
                         if obs.weight_us is not None:
