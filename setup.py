@@ -26,7 +26,7 @@ except ImportError:
 
 setup(
     name="ngmixer",
-    version="v0.9.8",
+    version="v0.9.9",
     description="Run ngmix on data",
     license = "GPL",
     author="Matthew R. Becker, Erin Scott Sheldon",
